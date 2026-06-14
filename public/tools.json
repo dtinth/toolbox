@@ -12,6 +12,11 @@
       "id": "notes",
       "name": "Notes",
       "description": "A simple notepad, auto-saved to localStorage."
+    },
+    {
+      "id": "multi-window",
+      "name": "Multi-window",
+      "description": "A tool that opens a second window."
     }
   ]
 }
