@@ -18,6 +18,7 @@ console.log(`Building ${entries.length} tool(s): ${entries.join(", ")}`);
 await build({
   configFile: false,
   root,
+  publicDir: false,
   build: {
     outDir: "public/tools",
     emptyOutDir: false,

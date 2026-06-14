@@ -19,6 +19,7 @@ console.log(`Watching ${entries.length} tool(s): ${entries.join(", ")}`);
 const server = await createServer({
   configFile: false,
   root,
+  publicDir: false,
   server: {
     watch: {
       ignored: ["!**/tools/**"],
