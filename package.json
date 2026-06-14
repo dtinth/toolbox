@@ -1,5 +1,5 @@
 {
-  "name": "fresh-app",
+  "name": "dtinth-toolbox",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,6 +10,8 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.1",
+    "tailwindcss": "^4.3.1",
     "typescript": "~6.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:"
