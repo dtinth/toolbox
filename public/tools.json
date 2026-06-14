@@ -1,3 +1,6 @@
 {
-  "tools": [{ "id": "hello-world", "name": "Hello, world", "description": "The simplest tool." }]
+  "tools": [
+    { "id": "hello-world", "name": "Hello, world", "description": "The simplest tool." },
+    { "id": "counter", "name": "Counter", "description": "Click + and - to change the count." }
+  ]
 }

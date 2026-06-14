@@ -56,4 +56,22 @@ describe("collector", () => {
     const tree = collect((_ui: Ui) => {});
     expect(tree).toEqual([]);
   });
+
+  it("collects a row of children into a horizontal container", () => {
+    const tree = collect((ui) => {
+      ui.window("Main", () => {
+        ui.row(() => {
+          ui.label("left");
+          ui.button("right", {});
+        });
+      });
+    });
+    expect(tree[0]!.children[0]).toEqual({
+      kind: "row",
+      children: [
+        { kind: "label", text: "left" },
+        { kind: "button", label: "right", onClick: undefined },
+      ],
+    });
+  });
 });

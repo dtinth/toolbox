@@ -1,4 +1,4 @@
-import { collect, type Node, type Ui, type WindowNode } from "./collector.ts";
+import { collect, type ChildNode, type Node, type Ui, type WindowNode } from "./collector.ts";
 import { toPreact } from "./renderer.tsx";
 import type { VNode } from "preact";
 
@@ -19,10 +19,11 @@ export interface Runtime {
 
 function findLastButton(windows: WindowNode[]): Extract<Node, { kind: "button" }> | null {
   let last: Extract<Node, { kind: "button" }> | null = null;
-  function walk(nodes: Node[]) {
-    for (const node of nodes) {
-      if (node.kind === "button") last = node;
-      else if (node.kind === "window") walk(node.children);
+  function walk(nodes: ChildNode[]) {
+    for (const child of nodes) {
+      if (child.kind === "button") last = child;
+      else if (child.kind === "window") walk(child.children);
+      else if (child.kind === "row") walk(child.children);
     }
   }
   walk(windows);
@@ -72,6 +73,7 @@ export function createRuntime(): Runtime {
     window() {},
     label() {},
     button() {},
+    row() {},
   };
 
   return {

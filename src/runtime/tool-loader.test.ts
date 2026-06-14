@@ -14,7 +14,7 @@ describe("loadTool", () => {
     const tool = await loadTool("hello", importer);
     const api: Api = {
       onRender: () => {},
-      ui: { window() {}, label() {}, button() {} },
+      ui: { window() {}, label() {}, button() {}, row() {} },
       requestUpdate: () => {},
     };
     tool(api);

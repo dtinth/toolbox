@@ -1,10 +1,10 @@
-import { h, type ComponentChildren } from "preact";
-import type { Node, WindowNode } from "./collector.ts";
+import { h, type ComponentChildren, type VNode } from "preact";
+import type { ChildNode, Node, WindowNode } from "./collector.ts";
 
-function nodeToPreact(node: Node) {
+function nodeToPreact(node: Node): VNode {
   switch (node.kind) {
     case "label":
-      return h("div", { class: "text-base" }, node.text);
+      return h("div", { class: "text-base" }, node.text) as VNode;
     case "button":
       return h(
         "button",
@@ -13,11 +13,22 @@ function nodeToPreact(node: Node) {
           onClick: node.onClick,
         },
         node.label,
-      );
+      ) as VNode;
+    case "row":
+      return h(
+        "div",
+        { class: "flex flex-row items-center gap-2" },
+        ...node.children.map(childToPreact),
+      ) as VNode;
   }
 }
 
-function windowToPreact(w: WindowNode) {
+function childToPreact(child: ChildNode): VNode {
+  if (child.kind === "window") return windowToPreact(child);
+  return nodeToPreact(child);
+}
+
+function windowToPreact(w: WindowNode): VNode {
   return h(
     "div",
     {
@@ -25,11 +36,15 @@ function windowToPreact(w: WindowNode) {
       "data-toolbox-window": w.title,
     },
     h("div", { class: "text-sm font-semibold mb-2 text-neutral-700" }, w.title),
-    h("div", { class: "flex flex-col gap-1" }, ...w.children.map(nodeToPreact)),
-  );
+    h("div", { class: "flex flex-col gap-1" }, ...w.children.map(childToPreact)),
+  ) as VNode;
 }
 
-export function toPreact(windows: WindowNode[]) {
+export function toPreact(windows: WindowNode[]): VNode {
   const children: ComponentChildren[] = windows.map(windowToPreact);
-  return h("div", { class: "fixed inset-0 p-4 flex flex-wrap gap-4 items-start" }, ...children);
+  return h(
+    "div",
+    { class: "fixed inset-0 p-4 flex flex-wrap gap-4 items-start" },
+    ...children,
+  ) as VNode;
 }
