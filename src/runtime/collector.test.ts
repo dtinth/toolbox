@@ -74,4 +74,25 @@ describe("collector", () => {
       ],
     });
   });
+
+  it("collects a textInput with value, placeholder, and onChange", () => {
+    let received: string | null = null;
+    const tree = collect((ui) => {
+      ui.window("Main", () => {
+        ui.textInput("hi", {
+          placeholder: "type here",
+          onChange: (v) => {
+            received = v;
+          },
+        });
+      });
+    });
+    const input = tree[0]!.children[0] as Extract<Node, { kind: "textInput" }>;
+    expect(input.kind).toBe("textInput");
+    expect(input.value).toBe("hi");
+    expect(input.placeholder).toBe("type here");
+    expect(typeof input.onChange).toBe("function");
+    input.onChange!("world");
+    expect(received).toBe("world");
+  });
 });

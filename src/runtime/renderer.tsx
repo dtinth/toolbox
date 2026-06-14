@@ -20,6 +20,17 @@ function nodeToPreact(node: Node): VNode {
         { class: "flex flex-row items-center gap-2" },
         ...node.children.map(childToPreact),
       ) as VNode;
+    case "textInput":
+      return h("input", {
+        type: "text",
+        value: node.value,
+        placeholder: node.placeholder,
+        onInput: (e: Event) => {
+          const target = e.currentTarget as HTMLInputElement;
+          node.onChange?.(target.value);
+        },
+        class: "rounded border px-2 py-1",
+      }) as VNode;
   }
 }
 

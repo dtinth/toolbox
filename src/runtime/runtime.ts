@@ -74,6 +74,7 @@ export function createRuntime(): Runtime {
     label() {},
     button() {},
     row() {},
+    textInput() {},
   };
 
   return {
