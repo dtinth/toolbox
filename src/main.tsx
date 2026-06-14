@@ -37,7 +37,16 @@ async function bootstrap() {
       const unsubscribe = runtime.subscribe(() => {
         setVnode(runtime.render());
       });
-      return unsubscribe;
+      let rafId: number | null = null;
+      const loop = () => {
+        runtime.tick();
+        rafId = requestAnimationFrame(loop);
+      };
+      rafId = requestAnimationFrame(loop);
+      return () => {
+        unsubscribe();
+        if (rafId !== null) cancelAnimationFrame(rafId);
+      };
     }, []);
     return <div class="toolbox-host">{vnode}</div>;
   }

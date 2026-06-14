@@ -6,6 +6,7 @@ export interface Api {
   onRender: () => void;
   ui: Ui;
   requestUpdate: () => void;
+  tick: (cb: () => void) => () => void;
 }
 
 export interface Runtime {
@@ -14,6 +15,7 @@ export interface Runtime {
   requestUpdate(): void;
   subscribe(onChange: () => void): () => void;
   lastButton(): Extract<Node, { kind: "button" }>;
+  tick(): void;
   updateCount: number;
 }
 
@@ -37,6 +39,7 @@ export function createRuntime(): Runtime {
   let updates = 0;
   let pendingRender = false;
   const subscribers = new Set<() => void>();
+  const tickSubscribers = new Set<() => void>();
 
   function notify() {
     for (const sub of subscribers) sub();
@@ -69,6 +72,15 @@ export function createRuntime(): Runtime {
     });
   }
 
+  function fireTicks() {
+    for (const cb of tickSubscribers) cb();
+  }
+
+  function tickSubscribe(cb: () => void): () => void {
+    tickSubscribers.add(cb);
+    return () => tickSubscribers.delete(cb);
+  }
+
   const noopUi: Ui = {
     window() {},
     label() {},
@@ -79,10 +91,12 @@ export function createRuntime(): Runtime {
 
   return {
     loadTool(loader) {
+      tickSubscribers.clear();
       api = {
         onRender: () => {},
         ui: noopUi,
         requestUpdate,
+        tick: tickSubscribe,
       };
       lastTree = [];
       loader(api);
@@ -96,6 +110,10 @@ export function createRuntime(): Runtime {
     lastButton: () => {
       if (!lastButtonRef) throw new Error("no button was rendered");
       return lastButtonRef;
+    },
+    tick: () => {
+      fireTicks();
+      requestUpdate();
     },
     get updateCount() {
       return updates;

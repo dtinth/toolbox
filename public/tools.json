@@ -2,6 +2,11 @@
   "tools": [
     { "id": "hello-world", "name": "Hello, world", "description": "The simplest tool." },
     { "id": "counter", "name": "Counter", "description": "Click + and - to change the count." },
-    { "id": "echo", "name": "Echo", "description": "Type and see the input echoed back." }
+    { "id": "echo", "name": "Echo", "description": "Type and see the input echoed back." },
+    {
+      "id": "tap-bpm",
+      "name": "Tap BPM",
+      "description": "Tap a button to a beat and read the BPM."
+    }
   ]
 }

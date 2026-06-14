@@ -16,6 +16,7 @@ describe("loadTool", () => {
       onRender: () => {},
       ui: { window() {}, label() {}, button() {}, row() {}, textInput() {} },
       requestUpdate: () => {},
+      tick: () => () => {},
     };
     tool(api);
     expect(importer).toHaveBeenCalledWith("/tools/hello/index.js");
