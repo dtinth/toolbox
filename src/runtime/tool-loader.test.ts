@@ -17,6 +17,7 @@ describe("loadTool", () => {
       ui: { window() {}, label() {}, button() {}, row() {}, textInput() {}, textarea() {} },
       requestUpdate: () => {},
       tick: () => () => {},
+      toast: { show: () => ({ update() {}, dismiss() {} }) },
     };
     tool(api);
     expect(importer).toHaveBeenCalledWith("/tools/hello/index.js");

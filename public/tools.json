@@ -17,6 +17,11 @@
       "id": "multi-window",
       "name": "Multi-window",
       "description": "A tool that opens a second window."
+    },
+    {
+      "id": "save-demo",
+      "name": "Save demo",
+      "description": "Demonstrates toasts with loading state."
     }
   ]
 }

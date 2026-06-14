@@ -103,4 +103,30 @@ describe("runtime", () => {
     await new Promise<void>((r) => queueMicrotask(r));
     expect(redraws).toBe(2);
   });
+
+  it("api.toast.show returns a handle with update and dismiss", () => {
+    const runtime = createRuntime();
+    let handle: unknown = null;
+    runtime.loadTool((api) => {
+      handle = api.toast.show("Hello", { loading: true });
+    });
+    const h = handle as { update: (o: object) => void; dismiss: () => void };
+    expect(typeof h.update).toBe("function");
+    expect(typeof h.dismiss).toBe("function");
+    h.dismiss();
+  });
+
+  it("toasts are tracked in the runtime and can be enumerated", () => {
+    const runtime = createRuntime();
+    runtime.loadTool((api) => {
+      api.toast.show("one", { loading: true });
+      api.toast.show("two");
+    });
+    const toasts = runtime.toasts();
+    expect(toasts).toHaveLength(2);
+    expect(toasts[0]!.message).toBe("one");
+    expect(toasts[0]!.loading).toBe(true);
+    expect(toasts[1]!.message).toBe("two");
+    expect(toasts[1]!.loading).toBe(false);
+  });
 });
