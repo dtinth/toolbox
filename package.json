@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vp dev",
-    "build": "tsc && vp build",
+    "dev:tools": "node scripts/dev-tools.mjs",
+    "build": "tsc && vp build && node scripts/build-tools.mjs",
+    "build:tools": "node scripts/build-tools.mjs",
     "preview": "vp preview",
     "prepare": "vp config"
   },

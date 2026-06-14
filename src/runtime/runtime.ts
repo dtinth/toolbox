@@ -12,6 +12,7 @@ export interface Runtime {
   loadTool(init: (api: Api) => void): void;
   render(): VNode;
   requestUpdate(): void;
+  subscribe(onChange: () => void): () => void;
   lastButton(): Extract<Node, { kind: "button" }>;
   updateCount: number;
 }
@@ -34,6 +35,11 @@ export function createRuntime(): Runtime {
   let lastButtonRef: Extract<Node, { kind: "button" }> | null = null;
   let updates = 0;
   let pendingRender = false;
+  const subscribers = new Set<() => void>();
+
+  function notify() {
+    for (const sub of subscribers) sub();
+  }
 
   function renderOnce(): VNode {
     if (!api) throw new Error("no tool loaded");
@@ -55,7 +61,10 @@ export function createRuntime(): Runtime {
     pendingRender = true;
     queueMicrotask(() => {
       pendingRender = false;
-      if (api) renderOnce();
+      if (api) {
+        renderOnce();
+        notify();
+      }
     });
   }
 
@@ -77,6 +86,10 @@ export function createRuntime(): Runtime {
     },
     render: renderOnce,
     requestUpdate,
+    subscribe(onChange) {
+      subscribers.add(onChange);
+      return () => subscribers.delete(onChange);
+    },
     lastButton: () => {
       if (!lastButtonRef) throw new Error("no button was rendered");
       return lastButtonRef;
