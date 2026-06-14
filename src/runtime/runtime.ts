@@ -87,6 +87,7 @@ export function createRuntime(): Runtime {
     button() {},
     row() {},
     textInput() {},
+    textarea() {},
   };
 
   return {

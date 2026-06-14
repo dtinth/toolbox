@@ -2,7 +2,14 @@ export type Node =
   | { kind: "label"; text: string }
   | { kind: "button"; label: string; onClick?: () => void }
   | { kind: "row"; children: ChildNode[] }
-  | { kind: "textInput"; value: string; placeholder?: string; onChange?: (v: string) => void };
+  | { kind: "textInput"; value: string; placeholder?: string; onChange?: (v: string) => void }
+  | {
+      kind: "textarea";
+      value: string;
+      placeholder?: string;
+      onChange?: (v: string) => void;
+      rows?: number;
+    };
 
 export type ChildNode = Node | WindowNode;
 
@@ -14,6 +21,10 @@ export interface Ui {
   button(label: string, opts?: { onClick?: () => void }): void;
   row(cb: () => void): void;
   textInput(value: string, opts?: { placeholder?: string; onChange?: (v: string) => void }): void;
+  textarea(
+    value: string,
+    opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
+  ): void;
 }
 
 export function collect(declarator: (ui: Ui) => void): WindowNode[] {
@@ -50,6 +61,15 @@ export function collect(declarator: (ui: Ui) => void): WindowNode[] {
         value,
         placeholder: opts?.placeholder,
         onChange: opts?.onChange,
+      });
+    },
+    textarea(value, opts) {
+      stack[stack.length - 1]!.children.push({
+        kind: "textarea",
+        value,
+        placeholder: opts?.placeholder,
+        onChange: opts?.onChange,
+        rows: opts?.rows,
       });
     },
   };

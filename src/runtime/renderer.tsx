@@ -31,6 +31,17 @@ function nodeToPreact(node: Node): VNode {
         },
         class: "rounded border px-2 py-1",
       }) as VNode;
+    case "textarea":
+      return h("textarea", {
+        value: node.value,
+        placeholder: node.placeholder,
+        rows: node.rows ?? 6,
+        onInput: (e: Event) => {
+          const target = e.currentTarget as HTMLTextAreaElement;
+          node.onChange?.(target.value);
+        },
+        class: "rounded border px-2 py-1 font-mono text-sm w-full",
+      }) as VNode;
   }
 }
 

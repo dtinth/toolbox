@@ -95,4 +95,25 @@ describe("collector", () => {
     input.onChange!("world");
     expect(received).toBe("world");
   });
+
+  it("collects a textarea with value, placeholder, and onChange", () => {
+    let received: string | null = null;
+    const tree = collect((ui) => {
+      ui.window("Main", () => {
+        ui.textarea("hi", {
+          placeholder: "longer",
+          onChange: (v) => {
+            received = v;
+          },
+        });
+      });
+    });
+    const ta = tree[0]!.children[0] as Extract<Node, { kind: "textarea" }>;
+    expect(ta.kind).toBe("textarea");
+    expect(ta.value).toBe("hi");
+    expect(ta.placeholder).toBe("longer");
+    expect(typeof ta.onChange).toBe("function");
+    ta.onChange!("\n\nworld\n");
+    expect(received).toBe("\n\nworld\n");
+  });
 });
