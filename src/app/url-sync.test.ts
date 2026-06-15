@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { buildUrlForTools, parseToolsFromSearch } from "./url-sync.ts";
+import { buildUrlForTools, parseToolsFromSearch, reconcileActions } from "./url-sync.ts";
 
 describe("parseToolsFromSearch", () => {
   it("returns an empty array for empty search", () => {
@@ -46,5 +46,11 @@ describe("buildUrlForTools", () => {
 
   it("URL-encodes ids that contain special characters", () => {
     expect(buildUrlForTools(["a b"])).toBe("/?tool=a%20b");
+  });
+});
+
+describe("reconcileActions", () => {
+  it("is a no-op when both running and desired are empty", () => {
+    expect(reconcileActions([], [])).toEqual({ toClose: [], toLaunch: [] });
   });
 });
