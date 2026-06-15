@@ -389,6 +389,40 @@ describe("runtime", () => {
       expect(active).toBeTruthy();
       expect(active).toMatch(/^inst-\d+::__main__$/);
     });
+
+    it("toasts from two instances aggregate and can be dismissed", () => {
+      const runtime = createRuntime();
+      let handleA: { dismiss: () => void } | null = null;
+      let handleB: { dismiss: () => void } | null = null;
+      runtime.launchTool({
+        manifestId: "a",
+        name: "A",
+        loader: (api) => {
+          api.onRender = () => {};
+          handleA = api.toast.show("from A", { loading: true });
+        },
+      });
+      runtime.launchTool({
+        manifestId: "b",
+        name: "B",
+        loader: (api) => {
+          api.onRender = () => {};
+          handleB = api.toast.show("from B", { loading: true });
+        },
+      });
+      const toasts = runtime.toasts();
+      expect(toasts).toHaveLength(2);
+      const messages = toasts.map((t) => t.message).sort();
+      expect(messages).toEqual(["from A", "from B"]);
+      const ids = toasts.map((t) => t.id);
+      expect(new Set(ids).size).toBe(2);
+      runtime.dismissToast(ids[0]!);
+      expect(runtime.toasts()).toHaveLength(1);
+      runtime.dismissToast(ids[1]!);
+      expect(runtime.toasts()).toHaveLength(0);
+      void handleA;
+      void handleB;
+    });
   });
 
   describe("dispose", () => {
