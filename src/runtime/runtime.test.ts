@@ -456,6 +456,37 @@ describe("runtime", () => {
       expect(runtime.toolInstances()).toHaveLength(1);
       expect(runtime.windowStates.size).toBe(1);
     });
+
+    it("per-instance api.dispose() removes that instance; last disposal flips disposed true", () => {
+      const runtime = createRuntime();
+      let firstApi: { dispose: () => void } | null = null;
+      let secondApi: { dispose: () => void } | null = null;
+      runtime.launchTool({
+        manifestId: "a",
+        name: "A",
+        loader: (api) => {
+          api.onRender = () => {};
+          firstApi = api;
+        },
+      });
+      runtime.launchTool({
+        manifestId: "b",
+        name: "B",
+        loader: (api) => {
+          api.onRender = () => {};
+          secondApi = api;
+        },
+      });
+      runtime.render();
+      expect(runtime.toolInstances()).toHaveLength(2);
+      firstApi!.dispose();
+      expect(runtime.toolInstances()).toHaveLength(1);
+      expect(runtime.disposed).toBe(false);
+      secondApi!.dispose();
+      expect(runtime.toolInstances()).toHaveLength(0);
+      expect(runtime.isEmpty).toBe(true);
+      expect(runtime.disposed).toBe(true);
+    });
   });
 
   describe("dispose", () => {
