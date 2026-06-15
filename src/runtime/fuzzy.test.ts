@@ -49,4 +49,19 @@ describe("searchTools", () => {
   it("returns an empty array when no entry matches", () => {
     expect(searchTools("xyz", entries)).toEqual([]);
   });
+
+  it("orders multiple matches with the best score first", () => {
+    const result = searchTools("col", [
+      { id: "recol", name: "Recolic" },
+      { id: "collection", name: "Collection" },
+      { id: "color-picker", name: "Color Picker" },
+    ]);
+    expect(result[result.length - 1]!.id).toBe("recol");
+    expect(
+      result
+        .slice(0, 2)
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual(["collection", "color-picker"]);
+  });
 });
