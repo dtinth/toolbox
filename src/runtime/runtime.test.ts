@@ -303,6 +303,40 @@ describe("runtime", () => {
       expect(hasA).toBe(true);
       expect(hasB).toBe(true);
     });
+
+    it("closeTool removes the instance and its windows; isEmpty flips back to true", () => {
+      const runtime = createRuntime();
+      const a = runtime.launchTool({
+        manifestId: "a",
+        name: "A",
+        loader: (api) => {
+          api.onRender = () => {
+            api.ui.label("A");
+          };
+        },
+      });
+      const b = runtime.launchTool({
+        manifestId: "b",
+        name: "B",
+        loader: (api) => {
+          api.onRender = () => {
+            api.ui.label("B");
+          };
+        },
+      });
+      runtime.render();
+      expect(runtime.isEmpty).toBe(false);
+      runtime.closeTool(a.instanceId);
+      expect(runtime.toolInstances()).toHaveLength(1);
+      expect(runtime.toolInstances()[0]!.instanceId).toBe(b.instanceId);
+      expect(Array.from(runtime.windowStates.keys()).some((k) => k.startsWith("inst-1::"))).toBe(
+        false,
+      );
+      runtime.closeTool(b.instanceId);
+      expect(runtime.toolInstances()).toHaveLength(0);
+      expect(runtime.windowStates.size).toBe(0);
+      expect(runtime.isEmpty).toBe(true);
+    });
   });
 
   describe("dispose", () => {
