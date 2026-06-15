@@ -545,6 +545,66 @@ describe("runtime", () => {
     });
   });
 
+  describe("main window close", () => {
+    it("attaches a default onClose to the main window that disposes the instance", () => {
+      const runtime = createRuntime();
+      runtime.loadTool((api) => {
+        api.onRender = () => {
+          api.ui.window.setTitle("Counter");
+          api.ui.label("count: 0");
+        };
+      });
+      runtime.render();
+      const tree = runtime.windowTree;
+      const main = tree.find((w) => w.id.endsWith("::__main__"));
+      expect(main).toBeTruthy();
+      expect(main!.onClose).toBeTypeOf("function");
+      expect(runtime.toolInstances()).toHaveLength(1);
+      main!.onClose!();
+      expect(runtime.toolInstances()).toHaveLength(0);
+      expect(runtime.disposed).toBe(true);
+    });
+
+    it("does not override an explicit onClose set via ui.window.onClose", () => {
+      const runtime = createRuntime();
+      let calls = 0;
+      runtime.loadTool((api) => {
+        api.onRender = () => {
+          api.ui.window.setTitle("Counter");
+          api.ui.window.onClose(() => {
+            calls++;
+          });
+          api.ui.label("hi");
+        };
+      });
+      runtime.render();
+      const main = runtime.windowTree.find((w) => w.id.endsWith("::__main__"));
+      expect(main).toBeTruthy();
+      main!.onClose!();
+      expect(calls).toBe(1);
+      expect(runtime.toolInstances()).toHaveLength(1);
+    });
+
+    it("only attaches the default to the main window, not sub-windows", () => {
+      const runtime = createRuntime();
+      runtime.loadTool((api) => {
+        api.onRender = () => {
+          api.ui.window.setTitle("Counter");
+          api.ui.label("main");
+          api.ui.window("sub1", "Sub", () => {
+            api.ui.label("sub");
+          });
+        };
+      });
+      runtime.render();
+      const tree = runtime.windowTree;
+      const main = tree.find((w) => w.id.endsWith("::__main__"));
+      const sub = tree.find((w) => w.id.endsWith("::sub1"));
+      expect(main!.onClose).toBeTypeOf("function");
+      expect(sub!.onClose).toBeUndefined();
+    });
+  });
+
   describe("dispose", () => {
     it("api.dispose() marks the runtime as disposed", () => {
       const runtime = createRuntime();

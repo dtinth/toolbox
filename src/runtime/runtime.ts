@@ -59,6 +59,7 @@ export interface Runtime {
   focusWindow(id: string): void;
   moveWindow(id: string, x: number, y: number): void;
   activeWindowId: string | null;
+  windowTree: ReadonlyArray<WindowNode>;
   dispose(): void;
   readonly disposed: boolean;
 }
@@ -97,6 +98,7 @@ export function createRuntime(): Runtime {
   const instances = new Map<string, ToolInstance>();
   const instanceOrder: string[] = [];
   let lastButtonRef: Extract<Node, { kind: "button" }> | null = null;
+  let lastTree: WindowNode[] = [];
   let updates = 0;
   let pendingRender = false;
   let nextToastId = 1;
@@ -216,9 +218,14 @@ export function createRuntime(): Runtime {
         }
       });
       for (const w of instanceWindows) {
-        allWindows.push({ ...w, id: scopeId(instanceId, w.id) });
+        const scoped: WindowNode = { ...w, id: scopeId(instanceId, w.id) };
+        if (w.id === "__main__" && !scoped.onClose) {
+          scoped.onClose = () => instance.api.dispose();
+        }
+        allWindows.push(scoped);
       }
     }
+    lastTree = allWindows;
     lastButtonRef = findLastButton(allWindows);
     for (let i = 0; i < allWindows.length; i++) {
       const w = allWindows[i];
@@ -365,6 +372,7 @@ export function createRuntime(): Runtime {
       zCounter = 0;
       instanceCounter = 0;
       nextToastId = 1;
+      lastTree = [];
       launchTool({
         manifestId: "__loaded__",
         name: "Loaded",
@@ -403,6 +411,9 @@ export function createRuntime(): Runtime {
     moveWindow,
     get activeWindowId() {
       return getActiveWindowId();
+    },
+    get windowTree() {
+      return lastTree as ReadonlyArray<WindowNode>;
     },
     dispose: () => {
       for (const id of Array.from(instances.keys())) {
