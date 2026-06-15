@@ -35,4 +35,8 @@ describe("buildUrlForTools", () => {
   it("returns '/' (no query) when the list is empty", () => {
     expect(buildUrlForTools([])).toBe("/");
   });
+
+  it("returns '/?tool=counter' for a single id", () => {
+    expect(buildUrlForTools(["counter"])).toBe("/?tool=counter");
+  });
 });
