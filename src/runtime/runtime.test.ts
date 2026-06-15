@@ -531,6 +531,18 @@ describe("runtime", () => {
       expect(runtime.toolInstances()).toHaveLength(0);
       expect(runtime.isEmpty).toBe(true);
     });
+
+    it("launching the same manifestId twice creates two separate instances", () => {
+      const runtime = createRuntime();
+      const mod: ToolModule = { default: () => {} };
+      const entry = { id: "counter", name: "Counter" };
+      const a = launchToolFromModule(runtime, entry, mod);
+      const b = launchToolFromModule(runtime, entry, mod);
+      expect(a.instanceId).not.toBe(b.instanceId);
+      expect(runtime.toolInstances()).toHaveLength(2);
+      const ids = runtime.toolInstances().map((i) => i.instanceId);
+      expect(new Set(ids).size).toBe(2);
+    });
   });
 
   describe("dispose", () => {
