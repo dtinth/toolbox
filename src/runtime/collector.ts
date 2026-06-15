@@ -13,10 +13,21 @@ export type Node =
 
 export type ChildNode = Node | WindowNode;
 
-export type WindowNode = { kind: "window"; title: string; children: ChildNode[] };
+export type WindowNode = {
+  kind: "window";
+  id: string;
+  title: string;
+  children: ChildNode[];
+  onClose?: () => void;
+};
 
 export interface Ui {
-  window(title: string, cb: () => void): void;
+  window: {
+    (id: string, cb: () => void): void;
+    (id: string, title: string, cb: () => void): void;
+    setTitle(newTitle: string): void;
+    onClose(handler: () => void): void;
+  };
   label(text: string): void;
   button(label: string, opts?: { onClick?: () => void }): void;
   row(cb: () => void): void;
@@ -28,16 +39,45 @@ export interface Ui {
 }
 
 export function collect(declarator: (ui: Ui) => void): WindowNode[] {
-  const root: { children: WindowNode[] } = { children: [] };
-  const stack: { children: ChildNode[] }[] = [root];
-  const ui: Ui = {
-    window(title, cb) {
-      const node: WindowNode = { kind: "window", title, children: [] };
+  const mainWindow: WindowNode = { kind: "window", id: "__main__", title: "", children: [] };
+  const stack: { children: ChildNode[] }[] = [mainWindow];
+  const subWindows: WindowNode[] = [];
+
+  const windowFn = Object.assign(
+    (id: string, titleOrCb: string | (() => void), cb?: () => void) => {
+      let title: string;
+      let callback: () => void;
+      if (typeof titleOrCb === "function") {
+        title = id;
+        callback = titleOrCb;
+      } else {
+        title = titleOrCb;
+        callback = cb!;
+      }
+      const node: WindowNode = { kind: "window", id, title, children: [] };
       stack.push(node);
-      cb();
+      callback();
       stack.pop();
-      root.children.push(node);
+      subWindows.push(node);
     },
+    {
+      setTitle(newTitle: string) {
+        const current = stack[stack.length - 1];
+        if ("kind" in current) {
+          (current as WindowNode).title = newTitle;
+        }
+      },
+      onClose(handler: () => void) {
+        const current = stack[stack.length - 1];
+        if ("kind" in current) {
+          (current as WindowNode).onClose = handler;
+        }
+      },
+    },
+  );
+
+  const ui: Ui = {
+    window: windowFn,
     label(text) {
       stack[stack.length - 1]!.children.push({ kind: "label", text });
     },
@@ -74,5 +114,5 @@ export function collect(declarator: (ui: Ui) => void): WindowNode[] {
     },
   };
   declarator(ui);
-  return root.children;
+  return [mainWindow, ...subWindows];
 }

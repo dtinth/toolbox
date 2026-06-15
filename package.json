@@ -7,7 +7,7 @@
     "dev": "vp dev",
     "dev:tools": "node scripts/dev-tools.mjs",
     "prebuild": "vp lint --deny-warnings --max-warnings=0",
-    "build": "tsc && vp build && node scripts/build-tools.mjs",
+    "build": "tsc && node scripts/build-tools.mjs && vp build",
     "build:tools": "node scripts/build-tools.mjs",
     "check": "vp check",
     "preview": "vp preview",

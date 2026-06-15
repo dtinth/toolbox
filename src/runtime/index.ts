@@ -1,5 +1,5 @@
 export { createRuntime } from "./runtime.ts";
-export type { Api, Runtime, Toast, ToastHandle } from "./runtime.ts";
+export type { Api, Runtime, Toast, ToastHandle, WindowState } from "./runtime.ts";
 export type { Node, WindowNode, Ui } from "./collector.ts";
 export { collect } from "./collector.ts";
 export { toPreact } from "./renderer.tsx";

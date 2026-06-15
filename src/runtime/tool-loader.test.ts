@@ -14,10 +14,18 @@ describe("loadTool", () => {
     const tool = await loadTool("hello", importer);
     const api: Api = {
       onRender: () => {},
-      ui: { window() {}, label() {}, button() {}, row() {}, textInput() {}, textarea() {} },
+      ui: {
+        window: Object.assign(() => {}, { setTitle() {}, onClose() {} }),
+        label() {},
+        button() {},
+        row() {},
+        textInput() {},
+        textarea() {},
+      },
       requestUpdate: () => {},
       tick: () => () => {},
       toast: { show: () => ({ update() {}, dismiss() {} }) },
+      dispose: () => {},
     };
     tool(api);
     expect(importer).toHaveBeenCalledWith("/tools/hello/index.js");

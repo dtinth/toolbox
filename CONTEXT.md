@@ -77,8 +77,9 @@ _Avoid_: mirror, replica, child window
 ## Relationships
 
 - A **Runtime** hosts zero or more **Tools**
-- A **Tool** instance has zero or more **Windows**; a window exists iff the
-  tool's current **Declarator** includes a matching `ui.window(title, cb)` call
+- A **Tool** instance has at least one **Window** (the implicit main window).
+  A window exists iff the tool's current **Declarator** includes a matching
+  `ui.window(id, cb)` call, or it is the implicit main window.
 - A **Tool source** under `tools/<id>/` compiles to `public/tools/<id>/` for the
   runtime to import at runtime
 - A **Manifest** entry references a **Tool** by `id` (the import specifier)
@@ -93,15 +94,16 @@ _Avoid_: mirror, replica, child window
 > out."
 >
 > **Dev:** "How does a tool open a sub-window?"
-> **Domain expert:** "It just calls `api.ui.window('Sub', () => { ... })` in
-> its declarator. As long as that call is made, the sub-window exists. Stop
+> **Domain expert:** "It just calls `api.ui.window('sub', 'Sub', () => { ... })`
+> in its declarator. As long as that call is made, the sub-window exists. Stop
 > calling it, and the window disappears. The runtime handles position and
-> size across frames."
+> size across frames. The main window is always there — no need to call
+> `ui.window` for it."
 >
 > **Dev:** "What happens if I open `/?tool=qr-code-reader`?"
 > **Domain expert:** "The runtime loads, sees the query param, skips the
 > launcher, and runs the QR reader's `init(api)`. The tool's first declarator
-> declares its main window via `ui.window(...)`."
+> runs, populating the implicit main window."
 >
 > **Dev:** "If a tool is in the source tree but not in `tools.json`, does it
 > still build?"
@@ -138,13 +140,11 @@ _Avoid_: mirror, replica, child window
   preservation across edits is not a goal in v1.
 - "openWindow returns a handle" was considered for sub-window creation —
   resolved: there is no `openWindow` and no handle. The tool declares a
-  sub-window by calling `api.ui.window(title, cb)` in its declarator. The
-  window exists iff that call is made this frame. Lifetime is implicit
+  sub-window by calling `api.ui.window(id, cb)` in its declarator. The
+  sub-window exists iff that call is made this frame. Lifetime is implicit
   (driven by tool state, not by a separate open/close API). The runtime
   tracks position/size/focus across frames, but the tool controls
-  existence. The launcher is the only entry point that implicitly
-  "opens" a tool's main window — it does so by calling the tool's `init`
-  and letting the tool's first declarator declare its window.
+  sub-window existence. The main window is implicit and always exists.
 - "per-window API or sub-API" was considered — resolved: a single `api`
   is passed to `init` and used everywhere. The current window is
   determined by which `ui.window(title, cb)` callback is currently
@@ -160,26 +160,32 @@ trees being built. Before invoking the tool's declarator, the runtime
 pushes an empty root. The declarator calls `api.ui.window(title, cb)`:
 
 ```
-ui.window("Main", () => {
-  ui.button("OK", { onClick: doThing });   // <-- collected into "Main"'s tree
+ui.window("settings", "Settings", () => {
+  ui.button("OK", { onClick: doThing });     // <-- collected into "settings"'s tree
+  ui.window.setTitle("Preferences");       // <-- override title at runtime
   ui.menu("File", () => {
-    ui.menuItem("New", { onClick: ... });  // <-- collected into the menu
+    ui.menuItem("New", { onClick: ... });    // <-- collected into the menu
   });
 });
 ```
 
 Mechanically:
 
-1. `ui.window(title, cb)` pushes a new window-node onto the collector
-   and synchronously invokes `cb`. The cb's `ui.*` calls append to that
-   window-node. When `cb` returns, the window-node is popped and
-   attached to the root.
-2. `ui.button("OK", { onClick })` appends a button-node to the
+1. The declarator runs inside an implicit **main window** scope. Any
+   `ui.*` calls at the top level (outside a `ui.window(...)` callback)
+   are collected into the main window.
+2. `ui.window(id, cb)` or `ui.window(id, title, cb)` pushes a new
+   sub-window node onto the collector and synchronously invokes `cb`.
+   The cb's `ui.*` calls append to that sub-window. When `cb` returns,
+   the sub-window node is popped and attached to the root.
+3. `ui.window.setTitle(newTitle)` overrides the display title of the
+   current window (whether main window or a sub-window) for this frame.
+4. `ui.button("OK", { onClick })` appends a button-node to the
    current window's tree, with `onClick` stored as a closure.
-3. `ui.menu("File", cb)` appends a menu-node to the current window
+5. `ui.menu("File", cb)` appends a menu-node to the current window
    and synchronously invokes `cb`. Inside, `ui.menuItem(...)` calls
    append to the menu.
-4. The runtime, after the declarator returns, takes the root tree and
+6. The runtime, after the declarator returns, takes the root tree and
    diffs it against the previous frame's tree, mutating the DOM in
    place. On click, the runtime looks up the handler id, retrieves
    the stored closure, and invokes it.
@@ -202,7 +208,9 @@ api = {
   // IMGUI primitives; calls are collected by the runtime
   ui: {
     // windows
-    window(title, cb),                       // declare a window this frame
+    window(id, cb),                          // declare a sub-window this frame
+    window(id, title, cb),                   // declare a sub-window with explicit title
+    window.setTitle(newTitle),               // override current window's display title
     // layout
     row, column, spacer,
     // text
@@ -234,16 +242,20 @@ api = {
 
 ### Window lifecycle
 
-- A window exists iff the tool's current declarator includes a call to
-  `ui.window(title, cb)` with that title this frame.
-- The tool controls existence via its own state (e.g. a `let subOpen = false`
-  flag flipped by a button click). The runtime remembers the window's
-  position, size, focus, and pop-out state across frames.
-- A window's title acts as its identifier within a tool instance. Two
-  `ui.window` calls with the same title in the same declarator is a bug.
-- The runtime can implicitly start a tool's main window by calling the
-  tool's `init` and letting the first declarator declare it. The launcher
-  uses this path; embed mode (`?tool=<id>`) does too.
+- A tool has an **implicit main window** that exists for the lifetime of the
+  tool instance. The declarator (`onRender`) runs inside this main window's
+  scope. The tool does not need to call `ui.window(...)` to create it.
+- Sub-windows exist iff the tool's current declarator includes a call to
+  `ui.window(id, cb)` (second form: `ui.window(id, title, cb)`). The tool
+  controls sub-window existence via its own state (e.g. a `let subOpen = false`
+  flag flipped by a button click).
+- The runtime remembers each window's position, size, focus, and pop-out state
+  across frames, keyed by id.
+- A window's **id** is its stable identifier within a tool instance. A
+  window's **title** is the display string shown in the title bar, which can
+  be overridden at runtime via `ui.window.setTitle(newTitle)` called inside
+  the window's callback scope.
+- Two `ui.window` calls with the same id in the same declarator is a bug.
 
 ### Redraws
 

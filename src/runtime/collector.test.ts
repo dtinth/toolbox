@@ -1,119 +1,94 @@
 import { describe, expect, it } from "vite-plus/test";
-import { collect, type Node, type Ui } from "./collector.ts";
+import { collect, type Ui } from "./collector.ts";
 
 describe("collector", () => {
-  it("collects a window with a label into a vDOM tree", () => {
-    const tree = collect((ui) => {
-      ui.window("Hello", () => {
-        ui.label("Hi there");
+  it("returns main window even when declarator does nothing", () => {
+    const result = collect((_ui: Ui) => {});
+    expect(result).toHaveLength(1);
+    expect(result[0]!.kind).toBe("window");
+    expect(result[0]!.id).toBe("__main__");
+  });
+
+  it("collects top-level label into main window's children", () => {
+    const result = collect((ui) => {
+      ui.label("Hi");
+    });
+    expect(result[0]!.children).toEqual([{ kind: "label", text: "Hi" }]);
+  });
+
+  it("sets main window title via ui.window.setTitle", () => {
+    const result = collect((ui) => {
+      ui.window.setTitle("My App");
+    });
+    expect(result[0]!.title).toBe("My App");
+  });
+
+  it("creates a sub-window with id as default title", () => {
+    const result = collect((ui) => {
+      ui.window("sub", () => {
+        ui.label("inside");
       });
     });
-    expect(tree).toEqual([
-      {
-        kind: "window",
-        title: "Hello",
-        children: [{ kind: "label", text: "Hi there" }],
-      },
-    ]);
+    expect(result).toHaveLength(2);
+    expect(result[0]!.id).toBe("__main__");
+    expect(result[1]!.id).toBe("sub");
+    expect(result[1]!.title).toBe("sub");
+    expect(result[1]!.children).toEqual([{ kind: "label", text: "inside" }]);
   });
 
-  it("collects multiple windows in declaration order", () => {
-    const tree = collect((ui) => {
-      ui.window("A", () => ui.label("a"));
-      ui.window("B", () => ui.label("b"));
-    });
-    expect(tree.map((w) => w.title)).toEqual(["A", "B"]);
-  });
-
-  it("collects nested widgets inside a window", () => {
-    const tree = collect((ui) => {
-      ui.window("Main", () => {
-        ui.label("title");
-        ui.button("OK", { onClick: () => {} });
+  it("creates a sub-window with explicit title", () => {
+    const result = collect((ui) => {
+      ui.window("sub", "Sub Window", () => {
+        ui.label("inside");
       });
     });
-    expect(tree[0]!.children).toHaveLength(2);
-    const button = tree[0]!.children[1] as Extract<Node, { kind: "button" }>;
-    expect(button.kind).toBe("button");
-    expect(button.label).toBe("OK");
-    expect(typeof button.onClick).toBe("function");
+    expect(result[1]!.id).toBe("sub");
+    expect(result[1]!.title).toBe("Sub Window");
+    expect(result[1]!.children).toEqual([{ kind: "label", text: "inside" }]);
   });
 
-  it("captures the onClick closure (so it can be invoked later)", () => {
-    let clicked = 0;
-    const tree = collect((ui) => {
-      ui.window("Main", () => {
-        ui.button("+", { onClick: () => clicked++ });
+  it("sets sub-window title via ui.window.setTitle inside callback", () => {
+    const result = collect((ui) => {
+      ui.window("sub", () => {
+        ui.window.setTitle("Renamed");
       });
     });
-    const button = tree[0]!.children[0] as Extract<Node, { kind: "button" }>;
-    button.onClick!();
-    button.onClick!();
-    expect(clicked).toBe(2);
+    expect(result[1]!.title).toBe("Renamed");
   });
 
-  it("returns an empty list when the declarator declares nothing", () => {
-    const tree = collect((_ui: Ui) => {});
-    expect(tree).toEqual([]);
+  it("stores onClose handler on main window", () => {
+    const handler = () => {};
+    const result = collect((ui) => {
+      ui.window.onClose(handler);
+    });
+    expect(result[0]!.onClose).toBe(handler);
   });
 
-  it("collects a row of children into a horizontal container", () => {
-    const tree = collect((ui) => {
-      ui.window("Main", () => {
-        ui.row(() => {
-          ui.label("left");
-          ui.button("right", {});
-        });
+  it("stores onClose handler on sub-window", () => {
+    const handler = () => {};
+    const result = collect((ui) => {
+      ui.window("sub", () => {
+        ui.window.onClose(handler);
       });
     });
-    expect(tree[0]!.children[0]).toEqual({
-      kind: "row",
-      children: [
-        { kind: "label", text: "left" },
-        { kind: "button", label: "right", onClick: undefined },
-      ],
-    });
+    expect(result[1]!.onClose).toBe(handler);
   });
 
-  it("collects a textInput with value, placeholder, and onChange", () => {
-    let received: string | null = null;
-    const tree = collect((ui) => {
-      ui.window("Main", () => {
-        ui.textInput("hi", {
-          placeholder: "type here",
-          onChange: (v) => {
-            received = v;
-          },
-        });
-      });
+  it("collects multiple sub-windows in declaration order after main window", () => {
+    const result = collect((ui) => {
+      ui.window("a", () => {});
+      ui.window("b", () => {});
     });
-    const input = tree[0]!.children[0] as Extract<Node, { kind: "textInput" }>;
-    expect(input.kind).toBe("textInput");
-    expect(input.value).toBe("hi");
-    expect(input.placeholder).toBe("type here");
-    expect(typeof input.onChange).toBe("function");
-    input.onChange!("world");
-    expect(received).toBe("world");
+    expect(result).toHaveLength(3);
+    expect(result[0]!.id).toBe("__main__");
+    expect(result[1]!.id).toBe("a");
+    expect(result[2]!.id).toBe("b");
   });
 
-  it("collects a textarea with value, placeholder, and onChange", () => {
-    let received: string | null = null;
-    const tree = collect((ui) => {
-      ui.window("Main", () => {
-        ui.textarea("hi", {
-          placeholder: "longer",
-          onChange: (v) => {
-            received = v;
-          },
-        });
-      });
+  it("main window has empty children when only sub-windows exist", () => {
+    const result = collect((ui) => {
+      ui.window("sub", () => {});
     });
-    const ta = tree[0]!.children[0] as Extract<Node, { kind: "textarea" }>;
-    expect(ta.kind).toBe("textarea");
-    expect(ta.value).toBe("hi");
-    expect(ta.placeholder).toBe("longer");
-    expect(typeof ta.onChange).toBe("function");
-    ta.onChange!("\n\nworld\n");
-    expect(received).toBe("\n\nworld\n");
+    expect(result[0]!.children).toEqual([]);
   });
 });

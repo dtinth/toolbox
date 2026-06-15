@@ -14,32 +14,31 @@ export default function init(api: Api) {
     }
     const secondsSinceLastTap = lastTap ? (now - lastTap) / 1000 : 0;
 
-    api.ui.window("Tap BPM", () => {
-      api.ui.row(() => {
-        api.ui.label(`${bpm || "—"} BPM`);
-        api.ui.button("tap", {
-          onClick: () => {
-            const t = Date.now();
-            if (lastTap && t - lastTap > 2000) taps = [];
-            taps.push(t);
-            lastTap = t;
-            api.requestUpdate();
-          },
-        });
-        api.ui.button("reset", {
-          onClick: () => {
-            taps = [];
-            lastTap = 0;
-            api.requestUpdate();
-          },
-        });
+    api.ui.window.setTitle("Tap BPM");
+    api.ui.row(() => {
+      api.ui.label(`${bpm || "—"} BPM`);
+      api.ui.button("tap", {
+        onClick: () => {
+          const t = Date.now();
+          if (lastTap && t - lastTap > 2000) taps = [];
+          taps.push(t);
+          lastTap = t;
+          api.requestUpdate();
+        },
       });
-      api.ui.label(
-        secondsSinceLastTap < 2 && lastTap
-          ? `last tap ${secondsSinceLastTap.toFixed(1)}s ago`
-          : "tap the button to a beat",
-      );
+      api.ui.button("reset", {
+        onClick: () => {
+          taps = [];
+          lastTap = 0;
+          api.requestUpdate();
+        },
+      });
     });
+    api.ui.label(
+      secondsSinceLastTap < 2 && lastTap
+        ? `last tap ${secondsSinceLastTap.toFixed(1)}s ago`
+        : "tap the button to a beat",
+    );
   };
 
   api.tick(() => {

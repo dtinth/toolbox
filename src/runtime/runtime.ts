@@ -2,6 +2,12 @@ import { collect, type ChildNode, type Node, type Ui, type WindowNode } from "./
 import { toPreact } from "./renderer.tsx";
 import type { VNode } from "preact";
 
+export interface WindowState {
+  x: number;
+  y: number;
+  zIndex: number;
+}
+
 export interface ToastHandle {
   update(opts: { message?: string; loading?: boolean }): void;
   dismiss(): void;
@@ -22,6 +28,7 @@ export interface Api {
   toast: {
     show(message: string, opts?: { loading?: boolean; duration?: number }): ToastHandle;
   };
+  dispose: () => void;
 }
 
 export interface Runtime {
@@ -34,6 +41,12 @@ export interface Runtime {
   toasts(): Toast[];
   dismissToast(id: number): void;
   updateCount: number;
+  windowStates: ReadonlyMap<string, WindowState>;
+  focusWindow(id: string): void;
+  moveWindow(id: string, x: number, y: number): void;
+  activeWindowId: string | null;
+  dispose(): void;
+  readonly disposed: boolean;
 }
 
 function findLastButton(windows: WindowNode[]): Extract<Node, { kind: "button" }> | null {
@@ -58,6 +71,9 @@ export function createRuntime(): Runtime {
   let nextToastId = 1;
   const toasts: Toast[] = [];
   const subscribers = new Set<() => void>();
+  let zCounter = 0;
+  const windowStates = new Map<string, WindowState>();
+  let disposed = false;
   const tickSubscribers = new Set<() => void>();
   const autoDismissTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
@@ -76,7 +92,21 @@ export function createRuntime(): Runtime {
       }
     });
     lastButtonRef = findLastButton(lastTree);
-    return toPreact(lastTree) as VNode;
+    for (let i = 0; i < lastTree.length; i++) {
+      const w = lastTree[i];
+      if (!windowStates.has(w.id)) {
+        const cx = (globalThis.window?.innerWidth ?? 800) / 2 - 150;
+        const cy = (globalThis.window?.innerHeight ?? 600) / 2 - 100;
+        const offset = i === 0 ? 0 : (i - 1) * 30;
+        windowStates.set(w.id, {
+          x: cx + offset,
+          y: cy + offset,
+          zIndex: i === 0 ? 0 : ++zCounter,
+        });
+      }
+    }
+    const active = getActiveWindowId();
+    return toPreact(lastTree, windowStates, active, focusWindow, moveWindow) as VNode;
   }
 
   function requestUpdate(): void {
@@ -156,8 +186,39 @@ export function createRuntime(): Runtime {
     };
   }
 
+  function focusWindow(id: string) {
+    const state = windowStates.get(id);
+    if (state) {
+      const maxZ = Math.max(...Array.from(windowStates.values(), (s: WindowState) => s.zIndex), 0);
+      if (state.zIndex < maxZ) {
+        state.zIndex = ++zCounter;
+        requestUpdate();
+      }
+    }
+  }
+
+  function getActiveWindowId(): string | null {
+    let maxZ = -1;
+    let active: string | null = null;
+    for (const [id, state] of windowStates) {
+      if (state.zIndex > maxZ) {
+        maxZ = state.zIndex;
+        active = id;
+      }
+    }
+    return active;
+  }
+
+  function moveWindow(id: string, x: number, y: number) {
+    const state = windowStates.get(id);
+    if (state) {
+      state.x = x;
+      state.y = y;
+    }
+  }
+
   const noopUi: Ui = {
-    window() {},
+    window: Object.assign(() => {}, { setTitle() {}, onClose() {} }),
     label() {},
     button() {},
     row() {},
@@ -168,16 +229,22 @@ export function createRuntime(): Runtime {
   return {
     loadTool(loader) {
       tickSubscribers.clear();
-      // Clear any leftover toasts from a prior tool
       for (const timer of autoDismissTimers.values()) clearTimeout(timer);
       autoDismissTimers.clear();
       toasts.length = 0;
+      windowStates.clear();
+      zCounter = 0;
+      disposed = false;
       api = {
         onRender: () => {},
         ui: noopUi,
         requestUpdate,
         tick: tickSubscribe,
         toast: { show: showToast },
+        dispose: () => {
+          disposed = true;
+          requestUpdate();
+        },
       };
       lastTree = [];
       loader(api);
@@ -200,6 +267,21 @@ export function createRuntime(): Runtime {
     dismissToast: dismissToastInternal,
     get updateCount() {
       return updates;
+    },
+    get windowStates() {
+      return windowStates as ReadonlyMap<string, WindowState>;
+    },
+    focusWindow,
+    moveWindow,
+    get activeWindowId() {
+      return getActiveWindowId();
+    },
+    dispose: () => {
+      disposed = true;
+      requestUpdate();
+    },
+    get disposed() {
+      return disposed;
     },
   };
 }

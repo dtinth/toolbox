@@ -4,14 +4,13 @@ export default function init(api: Api) {
   let open = true;
 
   api.onRender = () => {
-    api.ui.window("Controls", () => {
-      api.ui.label("This is the main window.");
-      api.ui.button(open ? "Close second window" : "Open second window", {
-        onClick: () => {
-          open = !open;
-          api.requestUpdate();
-        },
-      });
+    api.ui.window.setTitle("Controls");
+    api.ui.label("This is the main window.");
+    api.ui.button(open ? "Close second window" : "Open second window", {
+      onClick: () => {
+        open = !open;
+        api.requestUpdate();
+      },
     });
     if (open) {
       api.ui.window("Second", () => {
