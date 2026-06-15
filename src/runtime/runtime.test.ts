@@ -146,13 +146,16 @@ describe("runtime", () => {
       });
       runtime.render();
       const wm = runtime.windowStates;
-      const s1 = wm.get("sub1")!;
-      const s2 = wm.get("sub2")!;
+      const ids = Array.from(wm.keys()).filter((k) => k.endsWith("::sub1") || k.endsWith("::sub2"));
+      const id1 = ids.find((k) => k.endsWith("::sub1"))!;
+      const id2 = ids.find((k) => k.endsWith("::sub2"))!;
+      const s1 = wm.get(id1)!;
+      const s2 = wm.get(id2)!;
       const z1 = s1.zIndex;
       const z2 = s2.zIndex;
       expect(z1).toBeLessThan(z2);
-      runtime.focusWindow("sub1");
-      expect(wm.get("sub1")!.zIndex).toBeGreaterThan(wm.get("sub2")!.zIndex);
+      runtime.focusWindow(id1);
+      expect(wm.get(id1)!.zIndex).toBeGreaterThan(wm.get(id2)!.zIndex);
     });
 
     it("focusWindow(id) on an already-focused window doesn't change zIndex unnecessarily", () => {
@@ -165,9 +168,10 @@ describe("runtime", () => {
         };
       });
       runtime.render();
-      const state = runtime.windowStates.get("sub1")!;
+      const id = Array.from(runtime.windowStates.keys()).find((k) => k.endsWith("::sub1"))!;
+      const state = runtime.windowStates.get(id)!;
       const zBefore = state.zIndex;
-      runtime.focusWindow("sub1");
+      runtime.focusWindow(id);
       expect(state.zIndex).toBe(zBefore);
     });
 
@@ -183,10 +187,12 @@ describe("runtime", () => {
         };
       });
       runtime.render();
-      expect(runtime.windowStates.has("__main__")).toBe(true);
-      expect(runtime.windowStates.has("sub1")).toBe(true);
+      const ids = Array.from(runtime.windowStates.keys());
+      expect(ids.some((k) => k.endsWith("::__main__"))).toBe(true);
+      expect(ids.some((k) => k.endsWith("::sub1"))).toBe(true);
       expect(runtime.windowStates.size).toBe(2);
-      const main = runtime.windowStates.get("__main__")!;
+      const mainId = ids.find((k) => k.endsWith("::__main__"))!;
+      const main = runtime.windowStates.get(mainId)!;
       expect(main.x).toBeTypeOf("number");
       expect(main.y).toBeTypeOf("number");
       expect(main.zIndex).toBeTypeOf("number");
@@ -205,9 +211,13 @@ describe("runtime", () => {
         };
       });
       runtime.render();
-      const main = runtime.windowStates.get("__main__")!;
-      const sub1 = runtime.windowStates.get("sub1")!;
-      const sub2 = runtime.windowStates.get("sub2")!;
+      const ids = Array.from(runtime.windowStates.keys());
+      const mainId = ids.find((k) => k.endsWith("::__main__"))!;
+      const sub1Id = ids.find((k) => k.endsWith("::sub1"))!;
+      const sub2Id = ids.find((k) => k.endsWith("::sub2"))!;
+      const main = runtime.windowStates.get(mainId)!;
+      const sub1 = runtime.windowStates.get(sub1Id)!;
+      const sub2 = runtime.windowStates.get(sub2Id)!;
       const cx = 800 / 2 - 150;
       const cy = 600 / 2 - 100;
       expect(main.x).toBe(cx);
@@ -231,6 +241,37 @@ describe("runtime", () => {
         api.onRender = () => {};
       });
       expect(runtime.windowStates.size).toBe(0);
+    });
+  });
+
+  describe("multiple instances", () => {
+    it("launchTool returns a ToolInstanceInfo and adds to toolInstances()", () => {
+      const runtime = createRuntime();
+      const info = runtime.launchTool({
+        manifestId: "counter",
+        name: "Counter",
+        loader: (api) => {
+          api.onRender = () => {};
+        },
+      });
+      expect(info.manifestId).toBe("counter");
+      expect(info.name).toBe("Counter");
+      expect(info.instanceId).toBeTypeOf("string");
+      expect(runtime.toolInstances()).toHaveLength(1);
+      expect(runtime.toolInstances()[0]).toEqual(info);
+    });
+
+    it("isEmpty is true initially and false after launch", () => {
+      const runtime = createRuntime();
+      expect(runtime.isEmpty).toBe(true);
+      runtime.launchTool({
+        manifestId: "counter",
+        name: "Counter",
+        loader: (api) => {
+          api.onRender = () => {};
+        },
+      });
+      expect(runtime.isEmpty).toBe(false);
     });
   });
 

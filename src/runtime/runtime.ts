@@ -31,8 +31,22 @@ export interface Api {
   dispose: () => void;
 }
 
+export interface ToolInstanceInfo {
+  instanceId: string;
+  manifestId: string;
+  name: string;
+}
+
 export interface Runtime {
   loadTool(init: (api: Api) => void): void;
+  launchTool(opts: {
+    manifestId: string;
+    name: string;
+    loader: (api: Api) => void;
+  }): ToolInstanceInfo;
+  closeTool(instanceId: string): void;
+  toolInstances(): ReadonlyArray<ToolInstanceInfo>;
+  readonly isEmpty: boolean;
   render(): VNode;
   requestUpdate(): void;
   subscribe(onChange: () => void): () => void;
@@ -62,38 +76,152 @@ function findLastButton(windows: WindowNode[]): Extract<Node, { kind: "button" }
   return last;
 }
 
+// Scoped window id format: `${instanceId}::${originalId}`.
+function scopeId(instanceId: string, originalId: string): string {
+  return `${instanceId}::${originalId}`;
+}
+
+function instancePrefix(instanceId: string): string {
+  return `${instanceId}::`;
+}
+
+interface ToolInstance {
+  info: ToolInstanceInfo;
+  onRender: () => void;
+  api: Api;
+  tickSubscribers: Set<() => void>;
+  toastIds: Set<number>;
+}
+
 export function createRuntime(): Runtime {
-  let api: Api | null = null;
-  let lastTree: WindowNode[] = [];
+  const instances = new Map<string, ToolInstance>();
+  const instanceOrder: string[] = [];
   let lastButtonRef: Extract<Node, { kind: "button" }> | null = null;
   let updates = 0;
   let pendingRender = false;
   let nextToastId = 1;
+  let instanceCounter = 0;
   const toasts: Toast[] = [];
   const subscribers = new Set<() => void>();
   let zCounter = 0;
   const windowStates = new Map<string, WindowState>();
   let disposed = false;
-  const tickSubscribers = new Set<() => void>();
   const autoDismissTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+  const noopUi: Ui = {
+    window: Object.assign(() => {}, { setTitle() {}, onClose() {} }),
+    label() {},
+    button() {},
+    row() {},
+    textInput() {},
+    textarea() {},
+  };
 
   function notify() {
     for (const sub of subscribers) sub();
   }
 
-  function renderOnce(): VNode {
-    if (!api) throw new Error("no tool loaded");
-    lastTree = collect((collectorUi) => {
-      api!.ui = collectorUi;
-      try {
-        api!.onRender();
-      } finally {
-        api!.ui = noopUi;
-      }
+  function buildApi(instance: ToolInstance): Api {
+    const api: Api = {
+      onRender: () => {},
+      ui: noopUi,
+      requestUpdate: () => {
+        updates++;
+        scheduleRender();
+      },
+      tick(cb: () => void) {
+        instance.tickSubscribers.add(cb);
+        return () => instance.tickSubscribers.delete(cb);
+      },
+      toast: {
+        show: (message, opts) => showToast(message, opts, instance),
+      },
+      dispose: () => {
+        closeTool(instance.info.instanceId);
+      },
+    };
+    Object.defineProperty(api, "onRender", {
+      get: () => instance.onRender,
+      set: (fn: () => void) => {
+        instance.onRender = fn;
+      },
+      configurable: true,
+      enumerable: true,
     });
-    lastButtonRef = findLastButton(lastTree);
-    for (let i = 0; i < lastTree.length; i++) {
-      const w = lastTree[i];
+    return api;
+  }
+
+  function launchTool(opts: {
+    manifestId: string;
+    name: string;
+    loader: (api: Api) => void;
+  }): ToolInstanceInfo {
+    instanceCounter++;
+    const instanceId = `inst-${instanceCounter}`;
+    const info: ToolInstanceInfo = {
+      instanceId,
+      manifestId: opts.manifestId,
+      name: opts.name,
+    };
+    const instance: ToolInstance = {
+      info,
+      onRender: () => {},
+      api: undefined as unknown as Api,
+      tickSubscribers: new Set(),
+      toastIds: new Set(),
+    };
+    const api = buildApi(instance);
+    instance.api = api;
+    instances.set(instanceId, instance);
+    instanceOrder.push(instanceId);
+    disposed = false;
+    opts.loader(api);
+    scheduleRender();
+    return info;
+  }
+
+  function closeTool(instanceId: string): void {
+    const instance = instances.get(instanceId);
+    if (!instance) return;
+    for (const id of Array.from(instance.toastIds)) {
+      dismissToastInternal(id);
+    }
+    instance.tickSubscribers.clear();
+    const prefix = instancePrefix(instanceId);
+    for (const key of Array.from(windowStates.keys())) {
+      if (key.startsWith(prefix)) windowStates.delete(key);
+    }
+    instances.delete(instanceId);
+    const orderIdx = instanceOrder.indexOf(instanceId);
+    if (orderIdx >= 0) instanceOrder.splice(orderIdx, 1);
+    if (instanceOrder.length === 0) {
+      disposed = true;
+      zCounter = 0;
+    }
+    scheduleRender();
+  }
+
+  function renderOnce(): VNode {
+    const allWindows: WindowNode[] = [];
+    for (const instanceId of instanceOrder) {
+      const instance = instances.get(instanceId);
+      if (!instance) continue;
+      const instanceWindows = collect((collectorUi) => {
+        const previousUi = instance.api.ui;
+        instance.api.ui = collectorUi;
+        try {
+          instance.onRender();
+        } finally {
+          instance.api.ui = previousUi;
+        }
+      });
+      for (const w of instanceWindows) {
+        allWindows.push({ ...w, id: scopeId(instanceId, w.id) });
+      }
+    }
+    lastButtonRef = findLastButton(allWindows);
+    for (let i = 0; i < allWindows.length; i++) {
+      const w = allWindows[i];
       if (!windowStates.has(w.id)) {
         const cx = (globalThis.window?.innerWidth ?? 800) / 2 - 150;
         const cy = (globalThis.window?.innerHeight ?? 600) / 2 - 100;
@@ -106,29 +234,32 @@ export function createRuntime(): Runtime {
       }
     }
     const active = getActiveWindowId();
-    return toPreact(lastTree, windowStates, active, focusWindow, moveWindow) as VNode;
+    return toPreact(allWindows, windowStates, active, focusWindow, moveWindow) as VNode;
   }
 
   function requestUpdate(): void {
     updates++;
+    scheduleRender();
+  }
+
+  function scheduleRender(): void {
     if (pendingRender) return;
     pendingRender = true;
     queueMicrotask(() => {
       pendingRender = false;
-      if (api) {
+      if (instanceOrder.length > 0) {
         renderOnce();
-        notify();
       }
+      notify();
     });
   }
 
   function fireTicks() {
-    for (const cb of tickSubscribers) cb();
-  }
-
-  function tickSubscribe(cb: () => void): () => void {
-    tickSubscribers.add(cb);
-    return () => tickSubscribers.delete(cb);
+    for (const instanceId of instanceOrder) {
+      const instance = instances.get(instanceId);
+      if (!instance) continue;
+      for (const cb of instance.tickSubscribers) cb();
+    }
   }
 
   function scheduleAutoDismiss(id: number, duration: number) {
@@ -142,6 +273,9 @@ export function createRuntime(): Runtime {
     const i = toasts.findIndex((t) => t.id === id);
     if (i < 0) return;
     toasts.splice(i, 1);
+    for (const instance of instances.values()) {
+      instance.toastIds.delete(id);
+    }
     const timer = autoDismissTimers.get(id);
     if (timer) {
       clearTimeout(timer);
@@ -152,13 +286,15 @@ export function createRuntime(): Runtime {
 
   function showToast(
     message: string,
-    opts?: { loading?: boolean; duration?: number },
+    opts: { loading?: boolean; duration?: number } | undefined,
+    instance: ToolInstance,
   ): ToastHandle {
     const id = nextToastId++;
     const loading = opts?.loading ?? false;
     const duration = opts?.duration ?? 2000;
     const toast: Toast = { id, message, loading, createdAt: Date.now() };
     toasts.push(toast);
+    instance.toastIds.add(id);
     if (!loading) scheduleAutoDismiss(id, duration);
     requestUpdate();
     return {
@@ -217,37 +353,29 @@ export function createRuntime(): Runtime {
     }
   }
 
-  const noopUi: Ui = {
-    window: Object.assign(() => {}, { setTitle() {}, onClose() {} }),
-    label() {},
-    button() {},
-    row() {},
-    textInput() {},
-    textarea() {},
-  };
-
   return {
     loadTool(loader) {
-      tickSubscribers.clear();
+      for (const id of Array.from(instances.keys())) {
+        closeTool(id);
+      }
       for (const timer of autoDismissTimers.values()) clearTimeout(timer);
       autoDismissTimers.clear();
       toasts.length = 0;
       windowStates.clear();
       zCounter = 0;
-      disposed = false;
-      api = {
-        onRender: () => {},
-        ui: noopUi,
-        requestUpdate,
-        tick: tickSubscribe,
-        toast: { show: showToast },
-        dispose: () => {
-          disposed = true;
-          requestUpdate();
-        },
-      };
-      lastTree = [];
-      loader(api);
+      instanceCounter = 0;
+      nextToastId = 1;
+      launchTool({
+        manifestId: "__loaded__",
+        name: "Loaded",
+        loader,
+      });
+    },
+    launchTool,
+    closeTool,
+    toolInstances: () => instanceOrder.map((id) => instances.get(id)!.info),
+    get isEmpty() {
+      return instanceOrder.length === 0;
     },
     render: renderOnce,
     requestUpdate,
@@ -277,7 +405,9 @@ export function createRuntime(): Runtime {
       return getActiveWindowId();
     },
     dispose: () => {
-      disposed = true;
+      for (const id of Array.from(instances.keys())) {
+        closeTool(id);
+      }
       requestUpdate();
     },
     get disposed() {
