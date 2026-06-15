@@ -14,6 +14,16 @@ capabilities. A single `pnpm build` produces a deployable `dist/` artifact
 including the runtime, the manifest, and all built tools. The build fails
 on any lint warning.
 
+**Window chrome is now implemented:**
+
+- Implicit main window with id/title split and `ui.window.setTitle()` / `ui.window.onClose()`
+- Floating fixed-position windows with title bar drag via pointer events (mouse + touch)
+- Global z-order counter, click-to-focus with a lime green focus ring
+- All 7 tools migrated to the new implicit-main-window API
+- Dark theme design system via Tailwind v4 `@theme` tokens (`toolbox-*`) inspired by
+  thdocs/notes-frontend aesthetic (dark charcoal surfaces, Arimo/Comic Mono fonts,
+  `#d7fc70` accent, `#ffffbb` hover, `#bbeeff` secondary)
+
 The architectural shape is captured in `CONTEXT.md` and three ADRs under
 `docs/adr/`. The development process (tracer-bullet TDD, no dead code,
 tools drive the API) is in `docs/api-principles.md`. Past decisions and
@@ -31,63 +41,44 @@ has yet rendered:
   file-handling utilities.
 - A **menu-using tool** (e.g. a tool that has File / Edit / Help menus)
   would drive the `ui.menu` / `ui.menuItem` renderer.
-- A **sub-window tool** (a tool that opens a real second window via
-  `api.openWindow`) would drive multi-window lifecycle.
 - A **pop-out / projector implementation** would let the user tear off a
   window into a real browser popup (ADR 0002 is the plan; not yet
   implemented).
 
-Once those primitives are exercised, the next phase is **window
-chrome**: draggable title bars, resize handles, focus management,
-z-ordering. The current windows are just absolutely-positioned flex items.
-
-After chrome comes **embed mode polish** (currently `?tool=<id>` only),
-a **per-tool config** mechanism (a tool that has settings), and
-**persistence beyond localStorage** (e.g. tool state in IndexedDB).
+After those primitives come **embed mode polish** (currently `?tool=<id>` only),
+**per-tool config** (a tool that has settings), and **persistence beyond
+localStorage** (e.g. tool state in IndexedDB). **Resizable windows** and
+**PiP** are stretch goals.
 
 ## Open issues
 
 ### Build / tooling
 
-- [ ] **Pre-commit hook in `vite.config.ts` `staged: "*": "vp check --fix"`
-      can reformat files during the commit, including `public/tools.json`
-      if it's still tracked.** The original corruption that prompted the
-      move of the manifest to `tools/index.json` was traced to this. The
-      `tools/index.json` → `public/tools/index.json` copy now happens in
-      the build script (`scripts/build-tools.mjs`), so the source manifest
-      is no longer at risk. `public/tools/` is gitignored. Confirm the
-      hook doesn't surprise us again on a future refactor.
+- [x] **Tools built after Vite build, causing stale dist/tools/.** The
+      `pnpm build` script ran `vp build` (which copies `public/` to `dist/`)
+      before `scripts/build-tools.mjs`. Fixed: tools are now built before
+      Vite. (`tsc && node scripts/build-tools.mjs && vp build`)
+- [ ] **Pre-commit hook can reformat files during commit.** The
+      `vite.config.ts` `staged: "*": "vp check --fix"` hook can modify
+      staged files. `public/tools/` is gitignored so the manifest is safe.
+      No surprises since the build-order fix.
 
 ### Runtime capabilities (typed but unrendered)
 
-- [ ] **`ui.menu` / `ui.menuItem` / `ui.menuSeparator`** — types exist in
-      `src/runtime/collector.ts`, but the renderer in
-      `src/runtime/renderer.tsx` has no `case "menu"` for them. The next
-      tool that needs an in-window menu will pull this in.
-- [ ] **`ui.dropArea`** — same situation. Types in collector, no
-      renderer case. DnD plumbing not started.
-- [ ] **`ui.draggable`** — types in collector, no renderer. Should use
-      native HTML5 DnD per ADR scope decision.
+- [ ] **`ui.menu` / `ui.menuItem` / `ui.menuSeparator`** — types existed
+      in old `src/runtime/collector.ts` but were removed in the collector
+      refactor (menu types were never rendered by any tool). The next tool
+      that needs an in-window menu will re-introduce them.
+- [ ] **`ui.dropArea`** — never typed or rendered. DnD plumbing not started.
+- [ ] **`ui.draggable`** — never typed or rendered. Should use native HTML5 DnD.
 - [ ] **HTML5 DnD plumbing** — the runtime needs to forward `dragstart`,
       `dragover`, `drop` events to the matching `dropArea` / `draggable`
-      nodes. Decide whether to do this in the renderer (via Preact event
-      props) or at the collector level (the collector stores the
-      `onDrop` handler, the renderer wires it up).
+      nodes. Not started.
 
-### Window chrome
+### Window chrome (future)
 
-- [ ] **Draggable windows** — title bar drag to move. CSS positioning
-      updates on `pointerdown` / `pointermove` / `pointerup`. Persist
-      position in `localStorage` keyed by window title? Or scoped to
-      the tool? Design decision needed.
-- [ ] **Resizable windows** — at least a bottom-right handle. Same
-      persistence question.
-- [ ] **Focus / z-order** — clicking a window brings it to front. The
-      focus state is needed to scope `api.shortcuts` to the right
-      window. Needs an explicit "active window" concept.
-- [ ] **Window chrome styling** — title bar should be visually distinct
-      from the window content. Currently the title is just a label at
-      the top of the window body.
+- [ ] **Resizable windows** — at least a bottom-right handle. Postponed
+      from v1. Position persistence decision still needed.
 - [ ] **Pop-out button** — appears in the window chrome. Opens the
       window in a real browser popup via `window.open`, then the
       runtime drives the popup as a projector (ADR 0002).
@@ -98,25 +89,22 @@ a **per-tool config** mechanism (a tool that has settings), and
 
 - [ ] **`api.shortcuts.register(combo, handler)`** — types in
       `src/runtime/runtime.ts`, not yet implemented. Should be scoped
-      to the focused window. Decide the combo string format
-      (`"CmdOrCtrl+S"`, `"Cmd+K"`, etc.).
-- [ ] **`api.dialog.confirm` / `input` / `message`** — types in
-      collector and runtime, not yet implemented. The renderer needs
+      to the focused window (`runtime.activeWindowId` is now available).
+      Decide the combo string format (`"CmdOrCtrl+S"`, `"Cmd+K"`, etc.).
+- [ ] **`api.dialog.confirm` / `input` / `message`** — types once existed
+      in collector and runtime, not yet implemented. The renderer needs
       a modal overlay that blocks the calling window.
 
 ### Launcher / embed
 
 - [ ] **Embed mode improvements** — currently `?tool=<id>` only.
       Consider `?tools=qr,counter,echo` to open multiple tools at once.
-- [ ] **Launcher polish** — currently a list of cards. Could be a
-      grid, with icons, with search. Cmd-K palette already exists; the
-      launcher itself doesn't need a search box because Cmd-K works
-      everywhere.
+- [ ] **Launcher polish** — currently a list of cards (now dark-themed).
+      Could be a grid, with icons, with search. Cmd-K palette already exists.
 - [ ] **Launcher state** — when Cmd-K is open and a tool is running,
       the palette shows the manifest. Should the palette also list
       "open windows" so the user can switch between windows of the
-      same tool? (Currently multiple instances of the same tool just
-      sit there side by side.)
+      same tool?
 
 ### Persistence and state
 
@@ -125,9 +113,8 @@ a **per-tool config** mechanism (a tool that has settings), and
       files, undo history) need IndexedDB or a similar store. Decide
       whether the runtime provides a `api.storage` API or whether each
       tool rolls its own.
-- [ ] **Window state persistence** — the optional position/size
-      persistence mentioned under Window Chrome needs a single
-      decision (per-tool? per-window? per-instance?).
+- [ ] **Window state persistence** — position/size persistence not yet
+      implemented. Decision pending (per-tool? per-window? per-instance?).
 
 ### Tooling DX
 
@@ -151,10 +138,11 @@ a **per-tool config** mechanism (a tool that has settings), and
   `docs/api-principles.md`.
 - **Implementation history**: see git log. The recent commits map
   1-to-1 to tracer bullets (#1 hello-world through #8 launcher + Cmd-K),
-  with later commits fixing the build pipeline and strict-lint config.
-- **Test count and current state**: 20 tests in `src/runtime/*.test.ts`
+  with later commits for build pipeline, strict-lint config, and
+  window chrome + dark theme.
+- **Test count and current state**: 33 tests in `src/runtime/*.test.ts`
   (collector, renderer, runtime, manifest, tool-loader). All passing
-  as of `cfeafb5`. Build produces a complete `dist/` artifact and
+  as of `b8aba41`. Build produces a complete `dist/` artifact and
   fails on any lint warning.
 
 ## Suggested skills
