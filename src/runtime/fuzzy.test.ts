@@ -45,4 +45,8 @@ describe("searchTools", () => {
     ]);
     expect(result).toEqual([{ id: "counter", name: "Counter" }]);
   });
+
+  it("returns an empty array when no entry matches", () => {
+    expect(searchTools("xyz", entries)).toEqual([]);
+  });
 });
