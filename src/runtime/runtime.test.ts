@@ -626,4 +626,67 @@ describe("runtime", () => {
       expect(runtime.updateCount).toBeGreaterThan(before);
     });
   });
+
+  describe("loading state", () => {
+    it("launchTool without a loader creates a loading instance shown immediately", () => {
+      const runtime = createRuntime();
+      const info = runtime.launchTool({ manifestId: "counter", name: "Counter" });
+      expect(runtime.toolInstances()).toHaveLength(1);
+      expect(runtime.toolInstances()[0]).toEqual(info);
+      runtime.render();
+      const main = runtime.windowTree.find((w) => w.id.endsWith("::__main__"));
+      expect(main).toBeTruthy();
+      expect(main!.title).toBe("Counter");
+      expect(main!.children.some((c) => c.kind === "spinner")).toBe(true);
+    });
+
+    it("initializeTool transitions a loading instance to ready and calls the loader", () => {
+      const runtime = createRuntime();
+      const info = runtime.launchTool({ manifestId: "counter", name: "Counter" });
+      let called = false;
+      runtime.initializeTool(info.instanceId, (api) => {
+        called = true;
+        api.onRender = () => {
+          api.ui.window.setTitle("Counter");
+          api.ui.label("ready");
+        };
+      });
+      expect(called).toBe(true);
+      runtime.render();
+      const main = runtime.windowTree.find((w) => w.id.endsWith("::__main__"));
+      expect(main).toBeTruthy();
+      expect(main!.children.some((c) => c.kind === "spinner")).toBe(false);
+      expect(main!.children.some((c) => c.kind === "label" && c.text === "ready")).toBe(true);
+    });
+
+    it("a loading instance can be closed via the default main-window close button", () => {
+      const runtime = createRuntime();
+      const info = runtime.launchTool({ manifestId: "counter", name: "Counter" });
+      runtime.render();
+      const main = runtime.windowTree.find((w) => w.id.endsWith("::__main__"));
+      expect(main!.onClose).toBeTypeOf("function");
+      main!.onClose!();
+      expect(runtime.toolInstances()).toHaveLength(0);
+      expect(info.instanceId).toBeTruthy();
+    });
+
+    it("isLoading reports the instance's state", () => {
+      const runtime = createRuntime();
+      const info = runtime.launchTool({ manifestId: "counter", name: "Counter" });
+      expect(runtime.isLoading(info.instanceId)).toBe(true);
+      runtime.initializeTool(info.instanceId, (api) => {
+        api.onRender = () => {};
+      });
+      expect(runtime.isLoading(info.instanceId)).toBe(false);
+    });
+
+    it("initializeTool on a missing instance is a no-op", () => {
+      const runtime = createRuntime();
+      let called = false;
+      runtime.initializeTool("does-not-exist", () => {
+        called = true;
+      });
+      expect(called).toBe(false);
+    });
+  });
 });

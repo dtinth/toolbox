@@ -42,8 +42,10 @@ export interface Runtime {
   launchTool(opts: {
     manifestId: string;
     name: string;
-    loader: (api: Api) => void;
+    loader?: (api: Api) => void;
   }): ToolInstanceInfo;
+  initializeTool(instanceId: string, loader: (api: Api) => void): void;
+  isLoading(instanceId: string): boolean;
   closeTool(instanceId: string): void;
   toolInstances(): ReadonlyArray<ToolInstanceInfo>;
   readonly isEmpty: boolean;
@@ -92,6 +94,7 @@ interface ToolInstance {
   api: Api;
   tickSubscribers: Set<() => void>;
   toastIds: Set<number>;
+  state: "loading" | "ready";
 }
 
 export function createRuntime(): Runtime {
@@ -156,7 +159,7 @@ export function createRuntime(): Runtime {
   function launchTool(opts: {
     manifestId: string;
     name: string;
-    loader: (api: Api) => void;
+    loader?: (api: Api) => void;
   }): ToolInstanceInfo {
     instanceCounter++;
     const instanceId = `inst-${instanceCounter}`;
@@ -171,15 +174,25 @@ export function createRuntime(): Runtime {
       api: undefined as unknown as Api,
       tickSubscribers: new Set(),
       toastIds: new Set(),
+      state: opts.loader ? "ready" : "loading",
     };
     const api = buildApi(instance);
     instance.api = api;
     instances.set(instanceId, instance);
     instanceOrder.push(instanceId);
     disposed = false;
-    opts.loader(api);
+    if (opts.loader) opts.loader(api);
     scheduleRender();
     return info;
+  }
+
+  function initializeTool(instanceId: string, loader: (api: Api) => void): void {
+    const instance = instances.get(instanceId);
+    if (!instance) return;
+    if (instance.state === "ready") return;
+    instance.state = "ready";
+    loader(instance.api);
+    scheduleRender();
   }
 
   function closeTool(instanceId: string): void {
@@ -208,6 +221,17 @@ export function createRuntime(): Runtime {
     for (const instanceId of instanceOrder) {
       const instance = instances.get(instanceId);
       if (!instance) continue;
+      if (instance.state === "loading") {
+        const loadingWindow: WindowNode = {
+          kind: "window",
+          id: scopeId(instanceId, "__main__"),
+          title: instance.info.name,
+          children: [{ kind: "spinner" }],
+          onClose: () => instance.api.dispose(),
+        };
+        allWindows.push(loadingWindow);
+        continue;
+      }
       const instanceWindows = collect((collectorUi) => {
         const previousUi = instance.api.ui;
         instance.api.ui = collectorUi;
@@ -380,6 +404,8 @@ export function createRuntime(): Runtime {
       });
     },
     launchTool,
+    initializeTool,
+    isLoading: (instanceId: string) => instances.get(instanceId)?.state === "loading",
     closeTool,
     toolInstances: () => instanceOrder.map((id) => instances.get(id)!.info),
     get isEmpty() {

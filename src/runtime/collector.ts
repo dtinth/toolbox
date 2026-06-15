@@ -9,7 +9,8 @@ export type Node =
       placeholder?: string;
       onChange?: (v: string) => void;
       rows?: number;
-    };
+    }
+  | { kind: "spinner" };
 
 export type ChildNode = Node | WindowNode;
 

@@ -54,6 +54,15 @@ function nodeToPreact(
         class:
           "bg-toolbox-deepest border border-toolbox-border rounded px-2 py-1 text-sm text-toolbox-text placeholder-toolbox-muted font-mono w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
       }) as VNode;
+    case "spinner":
+      return h("div", {
+        class: "flex items-center justify-center py-6",
+        "data-toolbox-spinner": "",
+        children: h("span", {
+          class:
+            "inline-block w-5 h-5 border-2 border-toolbox-accent border-t-transparent rounded-full animate-spin",
+        }),
+      }) as VNode;
   }
 }
 

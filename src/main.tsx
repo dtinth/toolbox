@@ -48,16 +48,17 @@ async function bootstrap() {
       console.error(`Unknown tool: ${id}`);
       return;
     }
+    const instance = runtime.launchTool({
+      manifestId: entry.id,
+      name: entry.name,
+    });
     loadToolModule(id)
       .then((mod) => {
-        runtime.launchTool({
-          manifestId: entry.id,
-          name: entry.name,
-          loader: mod.default,
-        });
+        runtime.initializeTool(instance.instanceId, mod.default);
       })
       .catch((err) => {
         console.error(`Failed to load tool ${id}:`, err);
+        runtime.closeTool(instance.instanceId);
       });
   }
 

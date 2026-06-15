@@ -52,4 +52,22 @@ describe("toPreact", () => {
     const windowDiv = (el as any).props.children[0];
     expect(windowDiv.props.class).toContain("ring-focused");
   });
+
+  it("renders a spinner node with data-toolbox-spinner", () => {
+    const tree: WindowNode[] = [
+      {
+        kind: "window",
+        id: "w",
+        title: "Loading",
+        children: [{ kind: "spinner" }],
+      },
+    ];
+    const states = new Map<string, WindowState>([["w", { x: 0, y: 0, zIndex: 0 }]]);
+    const el = toPreact(tree, states, "w", noop, noop) as ReturnType<typeof h>;
+    const windowDiv = (el as any).props.children[0];
+    const body = windowDiv.props.children[1];
+    const children = body.props.children;
+    const spinnerContainer = Array.isArray(children) ? children[0] : children;
+    expect(spinnerContainer.props["data-toolbox-spinner"]).toBe("");
+  });
 });
