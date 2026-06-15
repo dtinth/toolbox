@@ -2,12 +2,8 @@ import { render } from "preact";
 import { useState } from "preact/hooks";
 import "./app.css";
 import { App, findManifestEntry } from "./app.tsx";
+import { installUrlSync, parseToolsFromSearch } from "./app/url-sync.ts";
 import { createRuntime, loadManifest, type Runtime, type ToolModule } from "./runtime/index.ts";
-
-function getToolFromUrl(): string | null {
-  const params = new URLSearchParams(window.location.search);
-  return params.get("tool");
-}
 
 async function loadToolModule(id: string): Promise<ToolModule> {
   return (await import(/* @vite-ignore */ `/tools/${id}/index.js`)) as ToolModule;
@@ -19,7 +15,7 @@ async function bootstrap() {
     return res.text();
   });
 
-  const toolFromUrl = getToolFromUrl();
+  const toolIdsFromUrl = parseToolsFromSearch(window.location.search);
   const runtime: Runtime = createRuntime();
 
   function launchById(id: string) {
@@ -41,9 +37,13 @@ async function bootstrap() {
       });
   }
 
-  if (toolFromUrl) {
-    launchById(toolFromUrl);
-  }
+  for (const id of toolIdsFromUrl) launchById(id);
+
+  installUrlSync({
+    runtime,
+    launchByManifestId: launchById,
+    getRunningInstances: () => runtime.toolInstances(),
+  });
 
   function AppRoot() {
     const [paletteOpen, setPaletteOpen] = useState(false);

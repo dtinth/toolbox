@@ -51,3 +51,36 @@ export interface UrlSyncOptions {
   launchByManifestId: (manifestId: string) => void;
   getRunningInstances: () => ReadonlyArray<Pick<ToolInstanceInfo, "instanceId" | "manifestId">>;
 }
+
+export function installUrlSync(opts: UrlSyncOptions): () => void {
+  const { runtime, launchByManifestId, getRunningInstances } = opts;
+  const w = globalThis.window;
+  if (!w) return () => {};
+
+  function currentUrlString(): string {
+    return `${w.location.pathname}${w.location.search}`;
+  }
+
+  function syncUrlFromState() {
+    const manifestIds = getRunningInstances().map((i) => i.manifestId);
+    const desired = buildUrlForTools(manifestIds);
+    if (currentUrlString() === desired) return;
+    w.history.pushState(null, "", desired);
+  }
+
+  const unsubscribe = runtime.subscribe(syncUrlFromState);
+
+  function onPopState() {
+    const desired = readToolsFromUrl();
+    const action = reconcileActions(getRunningInstances(), desired);
+    for (const instanceId of action.toClose) runtime.closeTool(instanceId);
+    for (const manifestId of action.toLaunch) launchByManifestId(manifestId);
+  }
+
+  w.addEventListener("popstate", onPopState);
+
+  return () => {
+    unsubscribe();
+    w.removeEventListener("popstate", onPopState);
+  };
+}
