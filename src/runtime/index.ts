@@ -5,3 +5,4 @@ export { collect } from "./collector.ts";
 export { toPreact } from "./renderer.tsx";
 export { loadManifest, type Manifest, type ManifestEntry } from "./manifest.ts";
 export { loadTool, type ToolModule } from "./tool-loader.ts";
+export { launchToolFromModule } from "./launch.ts";
