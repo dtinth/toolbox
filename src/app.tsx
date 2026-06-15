@@ -3,9 +3,11 @@ import type { ManifestEntry, Runtime, Toast, ToolInstanceInfo } from "./runtime/
 import { searchTools } from "./runtime/fuzzy.ts";
 import { shouldInterceptClick } from "./app/click.ts";
 import { findManifestEntry, runningManifestIds } from "./app/host.ts";
+import { computePaletteVisibility } from "./app/palette-visibility.ts";
 
 export interface PaletteProps {
   open: boolean;
+  canClose: boolean;
   manifest: ManifestEntry[];
   runningManifestIds: Set<string>;
   onLaunch: (id: string) => void;
@@ -14,6 +16,7 @@ export interface PaletteProps {
 
 export function Palette({
   open,
+  canClose,
   manifest,
   runningManifestIds: running,
   onLaunch,
@@ -43,10 +46,33 @@ export function Palette({
     if (item) onLaunch(item.id);
   };
 
+  const handleBackdropClick = () => {
+    if (canClose) onClose();
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      if (canClose) {
+        e.preventDefault();
+        onClose();
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlight((h) => (items.length === 0 ? 0 : Math.min(h + 1, items.length - 1)));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      invoke(highlight);
+    }
+  };
+
   return (
     <div
       class="fixed inset-0 z-40 flex items-start justify-center pt-32 bg-black/60"
-      onClick={onClose}
+      data-toolbox-chrome
+      onClick={handleBackdropClick}
     >
       <div
         class="bg-toolbox-surface border border-toolbox-border rounded-lg shadow-2xl w-full max-w-xl mx-4"
@@ -61,21 +87,7 @@ export function Palette({
             setQuery((e.currentTarget as HTMLInputElement).value);
             setHighlight(0);
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.preventDefault();
-              onClose();
-            } else if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setHighlight((h) => (items.length === 0 ? 0 : Math.min(h + 1, items.length - 1)));
-            } else if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setHighlight((h) => Math.max(h - 1, 0));
-            } else if (e.key === "Enter") {
-              e.preventDefault();
-              invoke(highlight);
-            }
-          }}
+          onKeyDown={handleKeyDown}
           class="w-full px-4 py-3 text-lg border-b border-toolbox-border bg-toolbox-deepest text-toolbox-text placeholder-toolbox-muted outline-none rounded-t-lg"
         />
         <ul class="max-h-80 overflow-y-auto">
@@ -112,7 +124,7 @@ export function Palette({
 function ToastLayer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
   if (toasts.length === 0) return null;
   return (
-    <div class="fixed bottom-4 right-4 flex flex-col gap-2 z-50">
+    <div class="fixed bottom-4 right-4 flex flex-col gap-2 z-50" data-toolbox-chrome>
       {toasts.map((t) => (
         <div
           key={t.id}
@@ -165,6 +177,7 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
+        if (runtime.isEmpty) return;
         onPaletteOpenChange(!paletteOpen);
       }
     };
@@ -174,16 +187,27 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
       if (rafId !== null) cancelAnimationFrame(rafId);
       window.removeEventListener("keydown", onKey);
     };
-  }, [paletteOpen, onPaletteOpenChange]);
+  }, [paletteOpen, onPaletteOpenChange, runtime]);
 
   const running = runningManifestIds(instances);
+  const visibility = computePaletteVisibility({
+    userToggledOpen: paletteOpen,
+    runningCount: instances.length,
+  });
+
+  const handleHostClick = (e: MouseEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest("[data-toolbox-window], [data-toolbox-chrome]")) return;
+    if (!visibility.isOpen) onPaletteOpenChange(true);
+  };
 
   return (
-    <div class="toolbox-host">
+    <div class="toolbox-host fixed inset-0" onClick={handleHostClick}>
       {vnode}
       <ToastLayer toasts={toasts} onDismiss={(id) => runtime.dismissToast(id)} />
       <Palette
-        open={paletteOpen}
+        open={visibility.isOpen}
+        canClose={visibility.canClose}
         manifest={manifest}
         runningManifestIds={running}
         onLaunch={onLaunch}
