@@ -503,8 +503,23 @@ describe("runtime", () => {
       expect(info.instanceId).toBeTypeOf("string");
       expect(runtime.toolInstances()).toHaveLength(1);
       expect(runtime.toolInstances()[0]).toEqual(info);
-      void mod;
-      void ({} as Api);
+    });
+
+    it("calls the module's default(api) with a real runtime Api", () => {
+      const runtime = createRuntime();
+      let receivedApi: Api | null = null;
+      const mod: ToolModule = {
+        default: (api) => {
+          receivedApi = api;
+        },
+      };
+      launchToolFromModule(runtime, { id: "x", name: "X" }, mod);
+      expect(receivedApi).not.toBeNull();
+      expect(receivedApi!.ui).toBeTypeOf("object");
+      expect(typeof receivedApi!.ui.button).toBe("function");
+      expect(typeof receivedApi!.ui.label).toBe("function");
+      expect(typeof receivedApi!.requestUpdate).toBe("function");
+      expect(typeof receivedApi!.dispose).toBe("function");
     });
   });
 
