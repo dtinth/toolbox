@@ -10,4 +10,13 @@ describe("computePaletteVisibility", () => {
     expect(result.isOpen).toBe(true);
     expect(result.canClose).toBe(false);
   });
+
+  it("opens the palette and allows closing when tools are running and the user has toggled it open", () => {
+    const result = computePaletteVisibility({
+      userToggledOpen: true,
+      runningCount: 2,
+    });
+    expect(result.isOpen).toBe(true);
+    expect(result.canClose).toBe(true);
+  });
 });
