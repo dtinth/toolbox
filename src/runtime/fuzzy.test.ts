@@ -29,4 +29,12 @@ describe("searchTools", () => {
     const result = searchTools("ctr", entries);
     expect(result).toEqual([{ id: "counter", name: "Counter" }]);
   });
+
+  it("matches against the id as well as the name", () => {
+    const result = searchTools("hello", [
+      { id: "hello-world", name: "Hello World" },
+      { id: "other", name: "Other" },
+    ]);
+    expect(result).toEqual([{ id: "hello-world", name: "Hello World" }]);
+  });
 });
