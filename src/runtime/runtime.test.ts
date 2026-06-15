@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 import { createRuntime } from "./runtime.ts";
 import type { Ui } from "./collector.ts";
+import { launchToolFromModule } from "./launch.ts";
+import type { ToolModule } from "./tool-loader.ts";
+import type { Api } from "./runtime.ts";
 
 describe("runtime", () => {
   it("passes an api object with onRender, ui, and requestUpdate", () => {
@@ -486,6 +489,22 @@ describe("runtime", () => {
       expect(runtime.toolInstances()).toHaveLength(0);
       expect(runtime.isEmpty).toBe(true);
       expect(runtime.disposed).toBe(true);
+    });
+  });
+
+  describe("launchToolFromModule", () => {
+    it("adds the tool to toolInstances() and preserves manifest id and name", () => {
+      const runtime = createRuntime();
+      const mod: ToolModule = { default: () => {} };
+      const entry = { id: "counter", name: "Counter" };
+      const info = launchToolFromModule(runtime, entry, mod);
+      expect(info.manifestId).toBe("counter");
+      expect(info.name).toBe("Counter");
+      expect(info.instanceId).toBeTypeOf("string");
+      expect(runtime.toolInstances()).toHaveLength(1);
+      expect(runtime.toolInstances()[0]).toEqual(info);
+      void mod;
+      void ({} as Api);
     });
   });
 
