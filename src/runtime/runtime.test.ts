@@ -337,6 +337,32 @@ describe("runtime", () => {
       expect(runtime.windowStates.size).toBe(0);
       expect(runtime.isEmpty).toBe(true);
     });
+
+    it("windowStates keys are scoped per instance (inst-N::originalId)", () => {
+      const runtime = createRuntime();
+      runtime.launchTool({
+        manifestId: "a",
+        name: "A",
+        loader: (api) => {
+          api.onRender = () => {
+            api.ui.label("A");
+          };
+        },
+      });
+      runtime.launchTool({
+        manifestId: "b",
+        name: "B",
+        loader: (api) => {
+          api.onRender = () => {
+            api.ui.label("B");
+          };
+        },
+      });
+      runtime.render();
+      const keys = Array.from(runtime.windowStates.keys());
+      expect(keys).toContain("inst-1::__main__");
+      expect(keys).toContain("inst-2::__main__");
+    });
   });
 
   describe("dispose", () => {
