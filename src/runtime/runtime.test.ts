@@ -521,6 +521,16 @@ describe("runtime", () => {
       expect(typeof receivedApi!.requestUpdate).toBe("function");
       expect(typeof receivedApi!.dispose).toBe("function");
     });
+
+    it("closing the returned instanceId disposes it from toolInstances()", () => {
+      const runtime = createRuntime();
+      const mod: ToolModule = { default: () => {} };
+      const info = launchToolFromModule(runtime, { id: "x", name: "X" }, mod);
+      expect(runtime.toolInstances()).toHaveLength(1);
+      runtime.closeTool(info.instanceId);
+      expect(runtime.toolInstances()).toHaveLength(0);
+      expect(runtime.isEmpty).toBe(true);
+    });
   });
 
   describe("dispose", () => {
