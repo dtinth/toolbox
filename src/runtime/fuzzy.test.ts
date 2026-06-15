@@ -37,4 +37,12 @@ describe("searchTools", () => {
     ]);
     expect(result).toEqual([{ id: "hello-world", name: "Hello World" }]);
   });
+
+  it("matches case-insensitively", () => {
+    const result = searchTools("COUNTER", [
+      { id: "counter", name: "Counter" },
+      { id: "other", name: "Other" },
+    ]);
+    expect(result).toEqual([{ id: "counter", name: "Counter" }]);
+  });
 });
