@@ -14,17 +14,20 @@ capabilities. A single `pnpm build` produces a deployable `dist/` artifact
 including the runtime, the manifest, and all built tools. The build fails
 on any lint warning.
 
-**The runtime now hosts multiple tool instances concurrently.** `launchTool`,
-`closeTool`, and `toolInstances()`/`isEmpty` replaced the single-tool
-`loadTool`-resets-everything model. The launcher is no longer a separate
-home page; a single unified **Cmd-K palette** is the launcher. It auto-
-opens when no tools are running (so visiting `/` shows the palette), and
-re-opens when the last tool closes. Cmd-K toggles it otherwise; the empty
-desktop area is a touch-friendly click target. Each tool item is an
-`<a href="?tool=<id>">` so right-click / cmd-click / middle-click open
-the tool in a new tab (embed mode); a plain left-click launches it in-
-place. The URL is kept in sync via `pushState`: `/?tool=id1,id2,…` and
-`popstate` reconciles back/forward navigation.
+**The runtime runs in one of two modes:**
+
+- **Desktop mode** (no `?tool=`): the multi-window runtime with the
+  Cmd-K palette launcher. Multiple tools can be running concurrently.
+  The palette auto-opens when no tools are running; Cmd-K toggles it
+  otherwise; clicking the empty desktop area is a touch-friendly open
+  target. A plain left-click on a palette item launches the tool in-
+  place; right-click / cmd-click / middle-click follow the item's
+  `<a href="?tool=<id>">` and open the tool in a new tab (embed mode).
+  No URL is written — the desktop URL stays as `/` regardless of which
+  tools are running.
+- **Embed mode** (`?tool=<id>`): a single tool runs in a clean desktop
+  with no launcher. Cmd-K is a no-op; the palette is never shown. The
+  URL is the source of truth for which tool is running.
 
 **Window chrome is now implemented:**
 
@@ -120,9 +123,9 @@ localStorage** (e.g. tool state in IndexedDB). **Resizable windows** and
 
 ### Launcher / embed
 
-- [x] **Embed mode improvements** — was `?tool=<id>` only; now
-      `?tool=id1,id2,…` opens multiple tools at once (see commit log
-      for the URL-sync tracer bullet).
+- [x] **Embed mode** — `?tool=<id>` runs that one tool in a clean
+      desktop, no palette, no Cmd-K. Used as the "open in new tab"
+      target from a palette item's `<a href="?tool=<id>">`.
 - [x] **Launcher polish** — the card-list home page is gone. The Cmd-K
       palette is the only launcher UI. Empty query shows the manifest
       in alphabetical order; non-empty runs a fuzzy match against
@@ -167,11 +170,11 @@ localStorage** (e.g. tool state in IndexedDB). **Resizable windows** and
   1-to-1 to tracer bullets (#1 hello-world through #8 launcher + Cmd-K),
   with later commits for build pipeline, strict-lint config, and
   window chrome + dark theme.
-- **Test count and current state**: 83 tests in 10 test files under
+- **Test count and current state**: 68 tests in 9 test files under
   `src/runtime/*.test.ts` and `src/app/*.test.ts` (collector, renderer,
   runtime, manifest, tool-loader, fuzzy, click, host, palette-
-  visibility, url-sync). All passing as of the latest commit. Build
-  produces a complete `dist/` artifact and fails on any lint warning.
+  visibility). All passing as of the latest commit. Build produces a
+  complete `dist/` artifact and fails on any lint warning.
 
 ## Suggested skills
 

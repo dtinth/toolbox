@@ -168,6 +168,39 @@ export interface HostProps {
   onLaunch: (id: string) => void;
 }
 
+export interface EmbedHostProps {
+  runtime: Runtime;
+}
+
+export function EmbedHost({ runtime }: EmbedHostProps) {
+  const [vnode, setVnode] = useState(() => runtime.render());
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  useEffect(() => {
+    const unsubscribe = runtime.subscribe(() => {
+      setVnode(runtime.render());
+      setToasts(runtime.toasts());
+    });
+    let rafId: number | null = null;
+    const loop = () => {
+      runtime.tick();
+      rafId = requestAnimationFrame(loop);
+    };
+    rafId = requestAnimationFrame(loop);
+    return () => {
+      unsubscribe();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [runtime]);
+
+  return (
+    <div class="toolbox-host fixed inset-0">
+      {vnode}
+      <ToastLayer toasts={toasts} onDismiss={(id) => runtime.dismissToast(id)} />
+    </div>
+  );
+}
+
 export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLaunch }: HostProps) {
   const [vnode, setVnode] = useState(() => runtime.render());
   const [toasts, setToasts] = useState<Toast[]>([]);

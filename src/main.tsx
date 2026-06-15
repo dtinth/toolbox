@@ -1,13 +1,16 @@
 import { render } from "preact";
 import { useState } from "preact/hooks";
 import "./app.css";
-import { Host } from "./app.tsx";
+import { EmbedHost, Host } from "./app.tsx";
 import { findManifestEntry } from "./app/host.ts";
-import { installUrlSync, parseToolsFromSearch } from "./app/url-sync.ts";
 import { createRuntime, loadManifest, type Runtime, type ToolModule } from "./runtime/index.ts";
 
 async function loadToolModule(id: string): Promise<ToolModule> {
   return (await import(/* @vite-ignore */ `/tools/${id}/index.js`)) as ToolModule;
+}
+
+function getEmbedToolFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get("tool");
 }
 
 async function bootstrap() {
@@ -16,8 +19,28 @@ async function bootstrap() {
     return res.text();
   });
 
-  const toolIdsFromUrl = parseToolsFromSearch(window.location.search);
   const runtime: Runtime = createRuntime();
+  const embedToolId = getEmbedToolFromUrl();
+
+  if (embedToolId) {
+    const entry = findManifestEntry(manifest.tools, embedToolId);
+    if (!entry) {
+      console.error(`Unknown tool: ${embedToolId}`);
+    } else {
+      try {
+        const mod = await loadToolModule(embedToolId);
+        runtime.launchTool({
+          manifestId: entry.id,
+          name: entry.name,
+          loader: mod.default,
+        });
+      } catch (err) {
+        console.error(`Failed to load tool ${embedToolId}:`, err);
+      }
+    }
+    render(<EmbedHost runtime={runtime} />, document.getElementById("app")!);
+    return;
+  }
 
   function launchById(id: string) {
     const entry = findManifestEntry(manifest.tools, id);
@@ -38,15 +61,7 @@ async function bootstrap() {
       });
   }
 
-  for (const id of toolIdsFromUrl) launchById(id);
-
-  installUrlSync({
-    runtime,
-    launchByManifestId: launchById,
-    getRunningInstances: () => runtime.toolInstances(),
-  });
-
-  function AppRoot() {
+  function DesktopRoot() {
     const [paletteOpen, setPaletteOpen] = useState(false);
     return (
       <Host
@@ -59,7 +74,7 @@ async function bootstrap() {
     );
   }
 
-  render(<AppRoot />, document.getElementById("app")!);
+  render(<DesktopRoot />, document.getElementById("app")!);
 }
 
 void bootstrap();
