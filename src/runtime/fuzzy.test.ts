@@ -24,4 +24,9 @@ describe("searchTools", () => {
       { id: "counter", name: "Counter" },
     ]);
   });
+
+  it("returns matching entries for a non-empty query", () => {
+    const result = searchTools("ctr", entries);
+    expect(result).toEqual([{ id: "counter", name: "Counter" }]);
+  });
 });
