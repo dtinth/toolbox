@@ -64,4 +64,15 @@ describe("reconcileActions", () => {
   it("launches desired tools when none are running", () => {
     expect(reconcileActions([], ["counter"])).toEqual({ toClose: [], toLaunch: ["counter"] });
   });
+
+  it("closes and launches the right tools when swapping a set", () => {
+    const running = [
+      { instanceId: "inst-1", manifestId: "counter" },
+      { instanceId: "inst-2", manifestId: "echo" },
+    ];
+    expect(reconcileActions(running, ["echo", "alpha"])).toEqual({
+      toClose: ["inst-1"],
+      toLaunch: ["alpha"],
+    });
+  });
 });
