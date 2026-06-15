@@ -423,6 +423,39 @@ describe("runtime", () => {
       void handleA;
       void handleB;
     });
+
+    it("loadTool still works and resets prior state", () => {
+      const runtime = createRuntime();
+      runtime.launchTool({
+        manifestId: "a",
+        name: "A",
+        loader: (api) => {
+          api.onRender = () => {
+            api.ui.label("A");
+          };
+        },
+      });
+      runtime.launchTool({
+        manifestId: "b",
+        name: "B",
+        loader: (api) => {
+          api.onRender = () => {
+            api.ui.label("B");
+          };
+        },
+      });
+      runtime.render();
+      expect(runtime.toolInstances()).toHaveLength(2);
+      expect(runtime.windowStates.size).toBe(2);
+      runtime.loadTool((api) => {
+        api.onRender = () => {
+          api.ui.label("loaded");
+        };
+      });
+      runtime.render();
+      expect(runtime.toolInstances()).toHaveLength(1);
+      expect(runtime.windowStates.size).toBe(1);
+    });
   });
 
   describe("dispose", () => {
