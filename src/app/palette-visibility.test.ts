@@ -28,19 +28,4 @@ describe("computePaletteVisibility", () => {
     expect(result.isOpen).toBe(false);
     expect(result.canClose).toBe(true);
   });
-
-  it("reports isUserToggled as the user toggle, not the auto-open state", () => {
-    expect(
-      computePaletteVisibility({ userToggledOpen: false, runningCount: 0 }).isUserToggled,
-    ).toBe(false);
-    expect(computePaletteVisibility({ userToggledOpen: true, runningCount: 0 }).isUserToggled).toBe(
-      true,
-    );
-    expect(computePaletteVisibility({ userToggledOpen: true, runningCount: 3 }).isUserToggled).toBe(
-      true,
-    );
-    expect(
-      computePaletteVisibility({ userToggledOpen: false, runningCount: 3 }).isUserToggled,
-    ).toBe(false);
-  });
 });

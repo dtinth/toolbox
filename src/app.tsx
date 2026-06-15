@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type { ManifestEntry, Runtime, Toast, ToolInstanceInfo } from "./runtime/index.ts";
 import { searchTools } from "./runtime/fuzzy.ts";
 import { shouldInterceptClick } from "./app/click.ts";
-import { findManifestEntry, runningManifestIds } from "./app/host.ts";
+import { runningManifestIds } from "./app/host.ts";
 import { computePaletteVisibility } from "./app/palette-visibility.ts";
 
 export interface PaletteProps {
@@ -161,6 +161,8 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
   const [instances, setInstances] = useState<ReadonlyArray<ToolInstanceInfo>>(() =>
     runtime.toolInstances(),
   );
+  const paletteOpenRef = useRef(paletteOpen);
+  paletteOpenRef.current = paletteOpen;
 
   useEffect(() => {
     const unsubscribe = runtime.subscribe(() => {
@@ -178,7 +180,7 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         if (runtime.isEmpty) return;
-        onPaletteOpenChange(!paletteOpen);
+        onPaletteOpenChange(!paletteOpenRef.current);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -187,7 +189,7 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
       if (rafId !== null) cancelAnimationFrame(rafId);
       window.removeEventListener("keydown", onKey);
     };
-  }, [paletteOpen, onPaletteOpenChange, runtime]);
+  }, [onPaletteOpenChange, runtime]);
 
   const running = runningManifestIds(instances);
   const visibility = computePaletteVisibility({
@@ -216,17 +218,3 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
     </div>
   );
 }
-
-export interface AppProps {
-  runtime: Runtime;
-  manifest: ManifestEntry[];
-  paletteOpen: boolean;
-  onPaletteOpenChange: (open: boolean) => void;
-  onLaunch: (id: string) => void;
-}
-
-export function App(props: AppProps) {
-  return <Host {...props} />;
-}
-
-export { findManifestEntry };

@@ -1,7 +1,8 @@
 import { render } from "preact";
 import { useState } from "preact/hooks";
 import "./app.css";
-import { App, findManifestEntry } from "./app.tsx";
+import { Host } from "./app.tsx";
+import { findManifestEntry } from "./app/host.ts";
 import { installUrlSync, parseToolsFromSearch } from "./app/url-sync.ts";
 import { createRuntime, loadManifest, type Runtime, type ToolModule } from "./runtime/index.ts";
 
@@ -48,7 +49,7 @@ async function bootstrap() {
   function AppRoot() {
     const [paletteOpen, setPaletteOpen] = useState(false);
     return (
-      <App
+      <Host
         runtime={runtime}
         manifest={manifest.tools}
         paletteOpen={paletteOpen}
