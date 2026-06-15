@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { parseToolsFromSearch } from "./url-sync.ts";
+import { buildUrlForTools, parseToolsFromSearch } from "./url-sync.ts";
 
 describe("parseToolsFromSearch", () => {
   it("returns an empty array for empty search", () => {
@@ -28,5 +28,11 @@ describe("parseToolsFromSearch", () => {
 
   it("decodes percent-encoded ids", () => {
     expect(parseToolsFromSearch("?tool=a%20b")).toEqual(["a b"]);
+  });
+});
+
+describe("buildUrlForTools", () => {
+  it("returns '/' (no query) when the list is empty", () => {
+    expect(buildUrlForTools([])).toBe("/");
   });
 });
