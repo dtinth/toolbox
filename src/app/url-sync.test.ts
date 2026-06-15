@@ -53,4 +53,11 @@ describe("reconcileActions", () => {
   it("is a no-op when both running and desired are empty", () => {
     expect(reconcileActions([], [])).toEqual({ toClose: [], toLaunch: [] });
   });
+
+  it("closes running tools when desired is empty", () => {
+    expect(reconcileActions([{ instanceId: "inst-1", manifestId: "counter" }], [])).toEqual({
+      toClose: ["inst-1"],
+      toLaunch: [],
+    });
+  });
 });
