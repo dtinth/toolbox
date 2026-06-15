@@ -75,4 +75,15 @@ describe("reconcileActions", () => {
       toLaunch: ["alpha"],
     });
   });
+
+  it("is a no-op when running and desired have the same set in different order", () => {
+    const running = [
+      { instanceId: "inst-1", manifestId: "counter" },
+      { instanceId: "inst-2", manifestId: "echo" },
+    ];
+    expect(reconcileActions(running, ["echo", "counter"])).toEqual({
+      toClose: [],
+      toLaunch: [],
+    });
+  });
 });
