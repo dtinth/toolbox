@@ -39,4 +39,8 @@ describe("buildUrlForTools", () => {
   it("returns '/?tool=counter' for a single id", () => {
     expect(buildUrlForTools(["counter"])).toBe("/?tool=counter");
   });
+
+  it("returns '/?tool=counter,echo' for two ids", () => {
+    expect(buildUrlForTools(["counter", "echo"])).toBe("/?tool=counter,echo");
+  });
 });

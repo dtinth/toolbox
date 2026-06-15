@@ -20,9 +20,8 @@ export function readToolsFromUrl(): string[] {
 // URL format: `/?tool=<id1>,<id2>,…` — empty list means no query, just "/".
 export function buildUrlForTools(manifestIds: string[]): string {
   if (manifestIds.length === 0) return "/";
-  const params = new URLSearchParams();
-  params.set("tool", manifestIds.join(","));
-  return `/?${params.toString()}`;
+  const value = manifestIds.map(encodeURIComponent).join(",");
+  return `/?tool=${value}`;
 }
 
 export interface ReconcileAction {
