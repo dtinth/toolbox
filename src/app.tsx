@@ -73,6 +73,12 @@ export function Palette({
       class="fixed inset-0 z-40 flex items-start justify-center pt-32 bg-black/60"
       data-toolbox-chrome
       onClick={handleBackdropClick}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && canClose) {
+          e.preventDefault();
+          onClose();
+        }
+      }}
     >
       <div
         class="bg-toolbox-surface border border-toolbox-border rounded-lg shadow-2xl w-full max-w-xl mx-4"
