@@ -273,6 +273,36 @@ describe("runtime", () => {
       });
       expect(runtime.isEmpty).toBe(false);
     });
+
+    it("two concurrent instances coexist in render() and windowStates", () => {
+      const runtime = createRuntime();
+      runtime.launchTool({
+        manifestId: "a",
+        name: "A",
+        loader: (api) => {
+          api.onRender = () => {
+            api.ui.label("A");
+          };
+        },
+      });
+      runtime.launchTool({
+        manifestId: "b",
+        name: "B",
+        loader: (api) => {
+          api.onRender = () => {
+            api.ui.label("B");
+          };
+        },
+      });
+      runtime.render();
+      expect(runtime.toolInstances()).toHaveLength(2);
+      expect(runtime.windowStates.size).toBe(2);
+      const ids = Array.from(runtime.windowStates.keys());
+      const hasA = ids.some((k) => k.startsWith("inst-1::"));
+      const hasB = ids.some((k) => k.startsWith("inst-2::"));
+      expect(hasA).toBe(true);
+      expect(hasB).toBe(true);
+    });
   });
 
   describe("dispose", () => {
