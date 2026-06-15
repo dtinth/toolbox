@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { buildUrlForTools, parseToolsFromSearch, reconcileActions } from "./url-sync.ts";
+import {
+  buildUrlForTools,
+  parseToolsFromSearch,
+  readToolsFromUrl,
+  reconcileActions,
+} from "./url-sync.ts";
 
 describe("parseToolsFromSearch", () => {
   it("returns an empty array for empty search", () => {
@@ -28,6 +33,20 @@ describe("parseToolsFromSearch", () => {
 
   it("decodes percent-encoded ids", () => {
     expect(parseToolsFromSearch("?tool=a%20b")).toEqual(["a b"]);
+  });
+});
+
+describe("readToolsFromUrl", () => {
+  it("delegates to parseToolsFromSearch with window.location.search", () => {
+    const original = globalThis.window;
+    (globalThis as { window?: { location: { search: string } } }).window = {
+      location: { search: "?tool=counter,echo" },
+    };
+    try {
+      expect(readToolsFromUrl()).toEqual(["counter", "echo"]);
+    } finally {
+      (globalThis as { window?: unknown }).window = original;
+    }
   });
 });
 
