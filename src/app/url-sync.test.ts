@@ -43,4 +43,8 @@ describe("buildUrlForTools", () => {
   it("returns '/?tool=counter,echo' for two ids", () => {
     expect(buildUrlForTools(["counter", "echo"])).toBe("/?tool=counter,echo");
   });
+
+  it("URL-encodes ids that contain special characters", () => {
+    expect(buildUrlForTools(["a b"])).toBe("/?tool=a%20b");
+  });
 });
