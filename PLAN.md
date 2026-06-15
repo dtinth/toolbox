@@ -14,6 +14,18 @@ capabilities. A single `pnpm build` produces a deployable `dist/` artifact
 including the runtime, the manifest, and all built tools. The build fails
 on any lint warning.
 
+**The runtime now hosts multiple tool instances concurrently.** `launchTool`,
+`closeTool`, and `toolInstances()`/`isEmpty` replaced the single-tool
+`loadTool`-resets-everything model. The launcher is no longer a separate
+home page; a single unified **Cmd-K palette** is the launcher. It auto-
+opens when no tools are running (so visiting `/` shows the palette), and
+re-opens when the last tool closes. Cmd-K toggles it otherwise; the empty
+desktop area is a touch-friendly click target. Each tool item is an
+`<a href="?tool=<id>">` so right-click / cmd-click / middle-click open
+the tool in a new tab (embed mode); a plain left-click launches it in-
+place. The URL is kept in sync via `pushState`: `/?tool=id1,id2,…` and
+`popstate` reconciles back/forward navigation.
+
 **Window chrome is now implemented:**
 
 - Implicit main window with id/title split and `ui.window.setTitle()` / `ui.window.onClose()`
@@ -49,6 +61,17 @@ After those primitives come **embed mode polish** (currently `?tool=<id>` only),
 **per-tool config** (a tool that has settings), and **persistence beyond
 localStorage** (e.g. tool state in IndexedDB). **Resizable windows** and
 **PiP** are stretch goals.
+
+### Runtime
+
+- [x] **Multi-tool support** — the runtime now hosts multiple tool
+      instances concurrently. `launchTool({ manifestId, name, loader })`,
+      `closeTool(instanceId)`, `toolInstances()`, and `isEmpty` are the
+      primary surface. `loadTool(loader)` is kept as a back-compat
+      single-instance path. Window ids are scoped (`${instanceId}::${id}`)
+      so per-tool windows coexist in `windowStates` / `activeWindowId`
+      without collisions. Toasts are aggregated across instances.
+      See commits `d5fc030` … `849d5b2` and `9ecbb1c` … `849d5b2`.
 
 ## Open issues
 
@@ -97,10 +120,14 @@ localStorage** (e.g. tool state in IndexedDB). **Resizable windows** and
 
 ### Launcher / embed
 
-- [ ] **Embed mode improvements** — currently `?tool=<id>` only.
-      Consider `?tools=qr,counter,echo` to open multiple tools at once.
-- [ ] **Launcher polish** — currently a list of cards (now dark-themed).
-      Could be a grid, with icons, with search. Cmd-K palette already exists.
+- [x] **Embed mode improvements** — was `?tool=<id>` only; now
+      `?tool=id1,id2,…` opens multiple tools at once (see commit log
+      for the URL-sync tracer bullet).
+- [x] **Launcher polish** — the card-list home page is gone. The Cmd-K
+      palette is the only launcher UI. Empty query shows the manifest
+      in alphabetical order; non-empty runs a fuzzy match against
+      `name` and `id`. Each item is an `<a href="?tool=<id>">` so
+      right-click / cmd-click / middle-click open in a new tab.
 - [ ] **Launcher state** — when Cmd-K is open and a tool is running,
       the palette shows the manifest. Should the palette also list
       "open windows" so the user can switch between windows of the
@@ -140,10 +167,11 @@ localStorage** (e.g. tool state in IndexedDB). **Resizable windows** and
   1-to-1 to tracer bullets (#1 hello-world through #8 launcher + Cmd-K),
   with later commits for build pipeline, strict-lint config, and
   window chrome + dark theme.
-- **Test count and current state**: 33 tests in `src/runtime/*.test.ts`
-  (collector, renderer, runtime, manifest, tool-loader). All passing
-  as of `b8aba41`. Build produces a complete `dist/` artifact and
-  fails on any lint warning.
+- **Test count and current state**: 83 tests in 10 test files under
+  `src/runtime/*.test.ts` and `src/app/*.test.ts` (collector, renderer,
+  runtime, manifest, tool-loader, fuzzy, click, host, palette-
+  visibility, url-sync). All passing as of the latest commit. Build
+  produces a complete `dist/` artifact and fails on any lint warning.
 
 ## Suggested skills
 

@@ -36,8 +36,10 @@ unlisted tools can still be developed and tested in isolation.
 _Avoid_: registry, catalog, index
 
 **Runtime**:
-The toolbox application itself: the launcher, the desktop chrome, the
-collector, the api surface that tools call into. Built by Vite from `src/`.
+The toolbox application itself: the desktop chrome, the cmd-k palette
+launcher, the collector, the api surface that tools call into. Built by
+Vite from `src/`. The runtime hosts zero or more **Tools** at once; the
+launcher is part of the runtime itself, not a separate app.
 _Avoid_: shell, host, framework, kernel
 
 **API**:
@@ -76,13 +78,20 @@ _Avoid_: mirror, replica, child window
 
 ## Relationships
 
-- A **Runtime** hosts zero or more **Tools**
+- A **Runtime** hosts zero or more **Tools** simultaneously
 - A **Tool** instance has at least one **Window** (the implicit main window).
   A window exists iff the tool's current **Declarator** includes a matching
   `ui.window(id, cb)` call, or it is the implicit main window.
 - A **Tool source** under `tools/<id>/` compiles to `public/tools/<id>/` for the
   runtime to import at runtime
 - A **Manifest** entry references a **Tool** by `id` (the import specifier)
+- The **Cmd-K palette** is the runtime's unified launcher: it lists the
+  manifest (alphabetical when empty, fuzzy-filtered as the user types) and
+  launches the selected tool in-place. A plain left-click on a palette
+  item calls `runtime.launchTool`; right-click / cmd-click / middle-click
+  follow the natural `<a href="?tool=<id>">` link and open the tool in a
+  new tab. The palette auto-opens when no tools are running; Cmd-K toggles
+  it otherwise.
 
 ## Example dialogue
 
@@ -101,9 +110,13 @@ _Avoid_: mirror, replica, child window
 > `ui.window` for it."
 >
 > **Dev:** "What happens if I open `/?tool=qr-code-reader`?"
-> **Domain expert:** "The runtime loads, sees the query param, skips the
-> launcher, and runs the QR reader's `init(api)`. The tool's first declarator
-> runs, populating the implicit main window."
+> **Domain expert:** "The runtime loads, sees the query param, and
+> launches the QR reader via `runtime.launchTool` — the QR reader
+> becomes a running tool instance. The URL is also kept in sync as tools
+> are launched and closed, so `/?tool=qr-code-reader,counter` is a
+> normal form (comma-separated manifest ids). The cmd-k palette
+> auto-opens on the home page (no `?tool=`); the embed-mode URL also
+> works in a new tab, since each palette item is an `<a href="?tool=…">`."
 >
 > **Dev:** "If a tool is in the source tree but not in `tools.json`, does it
 > still build?"
