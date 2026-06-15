@@ -363,6 +363,32 @@ describe("runtime", () => {
       expect(keys).toContain("inst-1::__main__");
       expect(keys).toContain("inst-2::__main__");
     });
+
+    it("activeWindowId returns the scoped id of the topmost window", () => {
+      const runtime = createRuntime();
+      runtime.launchTool({
+        manifestId: "a",
+        name: "A",
+        loader: (api) => {
+          api.onRender = () => {
+            api.ui.label("A");
+          };
+        },
+      });
+      runtime.launchTool({
+        manifestId: "b",
+        name: "B",
+        loader: (api) => {
+          api.onRender = () => {
+            api.ui.label("B");
+          };
+        },
+      });
+      runtime.render();
+      const active = runtime.activeWindowId;
+      expect(active).toBeTruthy();
+      expect(active).toMatch(/^inst-\d+::__main__$/);
+    });
   });
 
   describe("dispose", () => {
