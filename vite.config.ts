@@ -3,7 +3,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [tailwindcss()],
-  preview: { host: true, allowedHosts: true },
+  preview: { allowedHosts: true },
   staged: {
     "*": "vp check --fix",
   },
