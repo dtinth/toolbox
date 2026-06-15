@@ -60,4 +60,8 @@ describe("reconcileActions", () => {
       toLaunch: [],
     });
   });
+
+  it("launches desired tools when none are running", () => {
+    expect(reconcileActions([], ["counter"])).toEqual({ toClose: [], toLaunch: ["counter"] });
+  });
 });
