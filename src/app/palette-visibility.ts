@@ -1,6 +1,7 @@
 export interface PaletteVisibilityInput {
   userToggledOpen: boolean;
   runningCount: number;
+  userDismissed: boolean;
 }
 
 export interface PaletteVisibilityResult {
@@ -9,8 +10,11 @@ export interface PaletteVisibilityResult {
 }
 
 export function computePaletteVisibility(input: PaletteVisibilityInput): PaletteVisibilityResult {
-  return {
-    isOpen: input.runningCount === 0 || input.userToggledOpen,
-    canClose: input.runningCount > 0,
-  };
+  let isOpen: boolean;
+  if (input.runningCount === 0) {
+    isOpen = !input.userDismissed || input.userToggledOpen;
+  } else {
+    isOpen = input.userToggledOpen;
+  }
+  return { isOpen, canClose: input.runningCount > 0 };
 }

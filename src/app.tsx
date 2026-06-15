@@ -22,6 +22,9 @@ export function Palette({
   onLaunch,
   onClose,
 }: PaletteProps) {
+  const closeIfAllowed = () => {
+    if (canClose) onClose();
+  };
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,7 +46,10 @@ export function Palette({
 
   const invoke = (index: number) => {
     const item = items[index];
-    if (item) onLaunch(item.id);
+    if (item) {
+      onLaunch(item.id);
+      closeIfAllowed();
+    }
   };
 
   const handleBackdropClick = () => {
@@ -110,6 +116,7 @@ export function Palette({
                       e.preventDefault();
                       setHighlight(i);
                       onLaunch(t.id);
+                      closeIfAllowed();
                     }
                   }}
                   onMouseEnter={() => setHighlight(i)}
@@ -167,8 +174,10 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
   const [instances, setInstances] = useState<ReadonlyArray<ToolInstanceInfo>>(() =>
     runtime.toolInstances(),
   );
+  const userDismissedRef = useRef(false);
   const paletteOpenRef = useRef(paletteOpen);
   paletteOpenRef.current = paletteOpen;
+  const lastInstancesLengthRef = useRef(instances.length);
 
   useEffect(() => {
     const unsubscribe = runtime.subscribe(() => {
@@ -186,6 +195,7 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         if (runtime.isEmpty) return;
+        userDismissedRef.current = true;
         onPaletteOpenChange(!paletteOpenRef.current);
       }
     };
@@ -197,16 +207,29 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
     };
   }, [onPaletteOpenChange, runtime]);
 
+  useEffect(() => {
+    const prev = lastInstancesLengthRef.current;
+    const next = instances.length;
+    if (prev > 0 && next === 0) {
+      userDismissedRef.current = false;
+    }
+    lastInstancesLengthRef.current = next;
+  }, [instances.length]);
+
   const running = runningManifestIds(instances);
   const visibility = computePaletteVisibility({
     userToggledOpen: paletteOpen,
     runningCount: instances.length,
+    userDismissed: userDismissedRef.current,
   });
 
   const handleHostClick = (e: MouseEvent) => {
     const target = e.target as HTMLElement | null;
     if (target?.closest("[data-toolbox-window], [data-toolbox-chrome]")) return;
-    if (!visibility.isOpen) onPaletteOpenChange(true);
+    if (!visibility.isOpen) {
+      userDismissedRef.current = true;
+      onPaletteOpenChange(true);
+    }
   };
 
   return (
@@ -218,8 +241,14 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
         canClose={visibility.canClose}
         manifest={manifest}
         runningManifestIds={running}
-        onLaunch={onLaunch}
-        onClose={() => onPaletteOpenChange(false)}
+        onLaunch={(id) => {
+          userDismissedRef.current = true;
+          onLaunch(id);
+        }}
+        onClose={() => {
+          userDismissedRef.current = true;
+          onPaletteOpenChange(false);
+        }}
       />
     </div>
   );
