@@ -689,4 +689,51 @@ describe("runtime", () => {
       expect(called).toBe(false);
     });
   });
+
+  describe("dialog.pick", () => {
+    it("surfaces a pending pick and resolves it on selection", async () => {
+      const runtime = createTestRuntime();
+      let pick!: Promise<{ label: string } | undefined>;
+      runtime.loadTool((api) => {
+        api.onRender = () => {};
+        pick = api.dialog.pick([{ label: "X" }, { label: "Y" }], { title: "Pick one" });
+      });
+
+      const pending = runtime.pendingPicks();
+      expect(pending).toHaveLength(1);
+      expect(pending[0]!.options.title).toBe("Pick one");
+
+      runtime.resolvePick(pending[0]!.id, 1);
+      await expect(pick).resolves.toEqual({ label: "Y" });
+      expect(runtime.pendingPicks()).toHaveLength(0);
+    });
+
+    it("resolves undefined when the pick is dismissed", async () => {
+      const runtime = createTestRuntime();
+      let pick!: Promise<{ label: string } | undefined>;
+      runtime.loadTool((api) => {
+        api.onRender = () => {};
+        pick = api.dialog.pick([{ label: "X" }]);
+      });
+      runtime.resolvePick(runtime.pendingPicks()[0]!.id, null);
+      await expect(pick).resolves.toBeUndefined();
+    });
+
+    it("cancels a tool's pending picks (undefined) when it closes", async () => {
+      const runtime = createTestRuntime();
+      let pick!: Promise<{ label: string } | undefined>;
+      const info = runtime.launchTool({
+        manifestId: "m",
+        name: "N",
+        loader: (api) => {
+          api.onRender = () => {};
+          pick = api.dialog.pick([{ label: "X" }]);
+        },
+      });
+      expect(runtime.pendingPicks()).toHaveLength(1);
+      runtime.closeTool(info.instanceId);
+      await expect(pick).resolves.toBeUndefined();
+      expect(runtime.pendingPicks()).toHaveLength(0);
+    });
+  });
 });

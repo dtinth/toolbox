@@ -1,6 +1,10 @@
 export { createRuntime, createTestRuntime } from "./runtime.ts";
 export type {
   Api,
+  Dialog,
+  PickRequest,
+  QuickPickItem,
+  QuickPickOptions,
   Runtime,
   TestRuntime,
   Toast,

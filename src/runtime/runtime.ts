@@ -9,9 +9,11 @@ import {
   type WindowState,
 } from "./window-manager.ts";
 import { createToastCenter, type Toast, type ToastHandle } from "./toast-center.ts";
+import { createDialogCenter, type Dialog, type PickRequest } from "./dialog-center.ts";
 
 export type { WindowState } from "./window-manager.ts";
 export type { Toast, ToastHandle } from "./toast-center.ts";
+export type { Dialog, PickRequest, QuickPickItem, QuickPickOptions } from "./dialog-center.ts";
 
 export interface Api {
   onRender: () => void;
@@ -21,6 +23,7 @@ export interface Api {
   toast: {
     show(message: string, opts?: { loading?: boolean; duration?: number }): ToastHandle;
   };
+  dialog: Dialog;
   dispose: () => void;
 }
 
@@ -47,6 +50,8 @@ export interface Runtime {
   tick(): void;
   toasts(): Toast[];
   dismissToast(id: number): void;
+  pendingPicks(): PickRequest[];
+  resolvePick(id: number, index: number | null): void;
   windowStates: ReadonlyMap<string, WindowState>;
   focusWindow(id: string): void;
   moveWindow(id: string, x: number, y: number): void;
@@ -99,6 +104,10 @@ function build(): TestRuntime {
     onChange: () => requestUpdate(),
   });
 
+  const dialogCenter = createDialogCenter({
+    onChange: () => requestUpdate(),
+  });
+
   const noopUi: Ui = {
     window: Object.assign(() => {}, { setTitle() {}, onClose() {} }),
     label() {},
@@ -127,6 +136,7 @@ function build(): TestRuntime {
       toast: {
         show: (message, opts) => toastCenter.show(instance.info.instanceId, message, opts),
       },
+      dialog: dialogCenter.forInstance(instance.info.instanceId),
       dispose: () => {
         closeTool(instance.info.instanceId);
       },
@@ -184,6 +194,7 @@ function build(): TestRuntime {
     const instance = instances.get(instanceId);
     if (!instance) return;
     toastCenter.dismissForInstance(instanceId);
+    dialogCenter.cancelForInstance(instanceId);
     instance.tickSubscribers.clear();
     wm.forget(instancePrefix(instanceId));
     instances.delete(instanceId);
@@ -275,6 +286,7 @@ function build(): TestRuntime {
         closeTool(id);
       }
       toastCenter.reset();
+      dialogCenter.reset();
       wm.reset();
       instanceCounter = 0;
       lastTree = [];
@@ -308,6 +320,8 @@ function build(): TestRuntime {
     },
     toasts: () => toastCenter.list(),
     dismissToast: (id) => toastCenter.dismiss(id),
+    pendingPicks: () => dialogCenter.list(),
+    resolvePick: (id, index) => dialogCenter.resolve(id, index),
     get updateCount() {
       return updates;
     },

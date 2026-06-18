@@ -23,6 +23,23 @@ function scoreEntry(query: string, entry: ManifestEntry): number | null {
   return Math.min(nameScore ?? Infinity, idScore ?? Infinity);
 }
 
+/**
+ * Generic fuzzy filter: keeps items whose `getText` subsequence-matches the
+ * query, best matches first. An empty query preserves the given order (callers
+ * supply items in a meaningful order, e.g. priority or drop order).
+ */
+export function fuzzyFilter<T>(query: string, items: T[], getText: (item: T) => string): T[] {
+  if (query.trim() === "") return [...items];
+  const q = query.toLowerCase();
+  const scored: Array<{ item: T; score: number; i: number }> = [];
+  items.forEach((item, i) => {
+    const score = matchScore(q, getText(item).toLowerCase());
+    if (score !== null) scored.push({ item, score, i });
+  });
+  scored.sort((a, b) => a.score - b.score || a.i - b.i);
+  return scored.map((s) => s.item);
+}
+
 function matchScore(query: string, text: string): number | null {
   let qi = 0;
   let lastMatchPos = -1;

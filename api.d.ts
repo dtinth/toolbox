@@ -12,6 +12,33 @@ export interface ToastHandle {
   dismiss(): void;
 }
 
+/** An entry shown in a quick pick (see `api.dialog.pick`). */
+export interface QuickPickItem {
+  label: string;
+  description?: string;
+  detail?: string;
+}
+
+/** Options for a quick pick. */
+export interface QuickPickOptions {
+  title?: string;
+  placeholder?: string;
+}
+
+/**
+ * Modal, Promise-returning dialogs rendered by the host (not `ui.*` collector
+ * nodes). Scoped to the calling tool. Currently only `pick` is implemented;
+ * `confirm` / `input` / `message` are planned (see PLAN.md).
+ */
+export interface Dialog {
+  /**
+   * Show a VS Code-style quick pick. Resolves with the chosen item, or
+   * `undefined` if dismissed (Escape / backdrop). Items keep their order;
+   * the user can type to fuzzy-filter.
+   */
+  pick<T extends QuickPickItem>(items: T[], opts?: QuickPickOptions): Promise<T | undefined>;
+}
+
 /**
  * The IMGUI primitive surface. Calls are collected by the runtime during the
  * tool's declarator and turned into a vDOM tree. The current window is the one
@@ -51,6 +78,7 @@ export interface Api {
   toast: {
     show(message: string, opts?: { loading?: boolean; duration?: number }): ToastHandle;
   };
+  dialog: Dialog;
   /** Close this tool instance. */
   dispose: () => void;
 }

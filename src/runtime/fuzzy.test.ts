@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vite-plus/test";
-import { searchTools } from "./fuzzy.ts";
+import { fuzzyFilter, searchTools } from "./fuzzy.ts";
 import type { ManifestEntry } from "./manifest.ts";
+
+describe("fuzzyFilter", () => {
+  it("returns all items in the given order for an empty query", () => {
+    const items = [{ t: "banana" }, { t: "apple" }];
+    expect(fuzzyFilter("", items, (x) => x.t)).toEqual(items);
+  });
+
+  it("keeps only subsequence matches", () => {
+    const items = [{ t: "apple" }, { t: "banana" }, { t: "grape" }];
+    const res = fuzzyFilter("ae", items, (x) => x.t).map((x) => x.t);
+    expect(res).toContain("apple");
+    expect(res).toContain("grape");
+    expect(res).not.toContain("banana");
+  });
+
+  it("is case-insensitive", () => {
+    const items = [{ t: "Apple" }];
+    expect(fuzzyFilter("apple", items, (x) => x.t)).toHaveLength(1);
+  });
+});
 
 const entries: ManifestEntry[] = [
   { id: "counter", name: "Counter" },
