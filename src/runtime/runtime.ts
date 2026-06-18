@@ -8,20 +8,10 @@ import {
   type WindowManager,
   type WindowState,
 } from "./window-manager.ts";
+import { createToastCenter, type Toast, type ToastHandle } from "./toast-center.ts";
 
 export type { WindowState } from "./window-manager.ts";
-
-export interface ToastHandle {
-  update(opts: { message?: string; loading?: boolean }): void;
-  dismiss(): void;
-}
-
-export interface Toast {
-  id: number;
-  message: string;
-  loading: boolean;
-  createdAt: number;
-}
+export type { Toast, ToastHandle } from "./toast-center.ts";
 
 export interface Api {
   onRender: () => void;
@@ -87,7 +77,6 @@ interface ToolInstance {
   onRender: () => void;
   api: Api;
   tickSubscribers: Set<() => void>;
-  toastIds: Set<number>;
   state: "loading" | "ready";
 }
 
@@ -98,13 +87,14 @@ export function createRuntime(): Runtime {
   let lastTree: WindowNode[] = [];
   let updates = 0;
   let pendingRender = false;
-  let nextToastId = 1;
   let instanceCounter = 0;
-  const toasts: Toast[] = [];
   const subscribers = new Set<() => void>();
   const wm: WindowManager = createWindowManager();
   let disposed = false;
-  const autoDismissTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+  const toastCenter = createToastCenter({
+    onChange: () => requestUpdate(),
+  });
 
   const noopUi: Ui = {
     window: Object.assign(() => {}, { setTitle() {}, onClose() {} }),
@@ -132,7 +122,7 @@ export function createRuntime(): Runtime {
         return () => instance.tickSubscribers.delete(cb);
       },
       toast: {
-        show: (message, opts) => showToast(message, opts, instance),
+        show: (message, opts) => toastCenter.show(instance.info.instanceId, message, opts),
       },
       dispose: () => {
         closeTool(instance.info.instanceId);
@@ -166,7 +156,6 @@ export function createRuntime(): Runtime {
       onRender: () => {},
       api: undefined as unknown as Api,
       tickSubscribers: new Set(),
-      toastIds: new Set(),
       state: opts.loader ? "ready" : "loading",
     };
     const api = buildApi(instance);
@@ -191,9 +180,7 @@ export function createRuntime(): Runtime {
   function closeTool(instanceId: string): void {
     const instance = instances.get(instanceId);
     if (!instance) return;
-    for (const id of Array.from(instance.toastIds)) {
-      dismissToastInternal(id);
-    }
+    toastCenter.dismissForInstance(instanceId);
     instance.tickSubscribers.clear();
     wm.forget(instancePrefix(instanceId));
     instances.delete(instanceId);
@@ -271,66 +258,6 @@ export function createRuntime(): Runtime {
     }
   }
 
-  function scheduleAutoDismiss(id: number, duration: number) {
-    const timer = setTimeout(() => {
-      dismissToastInternal(id);
-    }, duration);
-    autoDismissTimers.set(id, timer);
-  }
-
-  function dismissToastInternal(id: number): void {
-    const i = toasts.findIndex((t) => t.id === id);
-    if (i < 0) return;
-    toasts.splice(i, 1);
-    for (const instance of instances.values()) {
-      instance.toastIds.delete(id);
-    }
-    const timer = autoDismissTimers.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      autoDismissTimers.delete(id);
-    }
-    requestUpdate();
-  }
-
-  function showToast(
-    message: string,
-    opts: { loading?: boolean; duration?: number } | undefined,
-    instance: ToolInstance,
-  ): ToastHandle {
-    const id = nextToastId++;
-    const loading = opts?.loading ?? false;
-    const duration = opts?.duration ?? 2000;
-    const toast: Toast = { id, message, loading, createdAt: Date.now() };
-    toasts.push(toast);
-    instance.toastIds.add(id);
-    if (!loading) scheduleAutoDismiss(id, duration);
-    requestUpdate();
-    return {
-      update(updateOpts) {
-        const t = toasts.find((x) => x.id === id);
-        if (!t) return;
-        if (updateOpts.message !== undefined) t.message = updateOpts.message;
-        if (updateOpts.loading !== undefined) {
-          t.loading = updateOpts.loading;
-          if (updateOpts.loading) {
-            const timer = autoDismissTimers.get(id);
-            if (timer) {
-              clearTimeout(timer);
-              autoDismissTimers.delete(id);
-            }
-          } else {
-            scheduleAutoDismiss(id, duration);
-          }
-        }
-        requestUpdate();
-      },
-      dismiss() {
-        dismissToastInternal(id);
-      },
-    };
-  }
-
   function focusWindow(id: string) {
     const hadState = wm.states.has(id);
     if (hadState) {
@@ -351,12 +278,9 @@ export function createRuntime(): Runtime {
       for (const id of Array.from(instances.keys())) {
         closeTool(id);
       }
-      for (const timer of autoDismissTimers.values()) clearTimeout(timer);
-      autoDismissTimers.clear();
-      toasts.length = 0;
+      toastCenter.reset();
       wm.reset();
       instanceCounter = 0;
-      nextToastId = 1;
       lastTree = [];
       launchTool({
         manifestId: "__loaded__",
@@ -386,8 +310,8 @@ export function createRuntime(): Runtime {
       fireTicks();
       requestUpdate();
     },
-    toasts: () => toasts.slice(),
-    dismissToast: dismissToastInternal,
+    toasts: () => toastCenter.list(),
+    dismissToast: (id) => toastCenter.dismiss(id),
     get updateCount() {
       return updates;
     },
