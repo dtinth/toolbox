@@ -1,12 +1,15 @@
 import { collect, type ChildNode, type Node, type Ui, type WindowNode } from "./collector.ts";
 import { toPreact } from "./renderer.tsx";
 import type { VNode } from "preact";
+import {
+  createWindowManager,
+  instancePrefix,
+  scopeId,
+  type WindowManager,
+  type WindowState,
+} from "./window-manager.ts";
 
-export interface WindowState {
-  x: number;
-  y: number;
-  zIndex: number;
-}
+export type { WindowState } from "./window-manager.ts";
 
 export interface ToastHandle {
   update(opts: { message?: string; loading?: boolean }): void;
@@ -79,15 +82,6 @@ function findLastButton(windows: WindowNode[]): Extract<Node, { kind: "button" }
   return last;
 }
 
-// Scoped window id format: `${instanceId}::${originalId}`.
-function scopeId(instanceId: string, originalId: string): string {
-  return `${instanceId}::${originalId}`;
-}
-
-function instancePrefix(instanceId: string): string {
-  return `${instanceId}::`;
-}
-
 interface ToolInstance {
   info: ToolInstanceInfo;
   onRender: () => void;
@@ -108,8 +102,7 @@ export function createRuntime(): Runtime {
   let instanceCounter = 0;
   const toasts: Toast[] = [];
   const subscribers = new Set<() => void>();
-  let zCounter = 0;
-  const windowStates = new Map<string, WindowState>();
+  const wm: WindowManager = createWindowManager();
   let disposed = false;
   const autoDismissTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
@@ -202,16 +195,13 @@ export function createRuntime(): Runtime {
       dismissToastInternal(id);
     }
     instance.tickSubscribers.clear();
-    const prefix = instancePrefix(instanceId);
-    for (const key of Array.from(windowStates.keys())) {
-      if (key.startsWith(prefix)) windowStates.delete(key);
-    }
+    wm.forget(instancePrefix(instanceId));
     instances.delete(instanceId);
     const orderIdx = instanceOrder.indexOf(instanceId);
     if (orderIdx >= 0) instanceOrder.splice(orderIdx, 1);
     if (instanceOrder.length === 0) {
       disposed = true;
-      zCounter = 0;
+      wm.reset();
     }
     scheduleRender();
   }
@@ -251,21 +241,9 @@ export function createRuntime(): Runtime {
     }
     lastTree = allWindows;
     lastButtonRef = findLastButton(allWindows);
-    for (let i = 0; i < allWindows.length; i++) {
-      const w = allWindows[i];
-      if (!windowStates.has(w.id)) {
-        const cx = (globalThis.window?.innerWidth ?? 800) / 2 - 150;
-        const cy = (globalThis.window?.innerHeight ?? 600) / 2 - 100;
-        const offset = i === 0 ? 0 : (i - 1) * 30;
-        windowStates.set(w.id, {
-          x: cx + offset,
-          y: cy + offset,
-          zIndex: i === 0 ? 0 : ++zCounter,
-        });
-      }
-    }
-    const active = getActiveWindowId();
-    return toPreact(allWindows, windowStates, active, focusWindow, moveWindow) as VNode;
+    wm.place(allWindows.map((w) => w.id));
+    const active = wm.activeId();
+    return toPreact(allWindows, wm.states, active, focusWindow, moveWindow) as VNode;
   }
 
   function requestUpdate(): void {
@@ -354,34 +332,18 @@ export function createRuntime(): Runtime {
   }
 
   function focusWindow(id: string) {
-    const state = windowStates.get(id);
-    if (state) {
-      const maxZ = Math.max(...Array.from(windowStates.values(), (s: WindowState) => s.zIndex), 0);
-      if (state.zIndex < maxZ) {
-        state.zIndex = ++zCounter;
+    const hadState = wm.states.has(id);
+    if (hadState) {
+      const zBefore = wm.states.get(id)!.zIndex;
+      wm.focus(id);
+      if (wm.states.get(id)!.zIndex !== zBefore) {
         requestUpdate();
       }
     }
   }
 
-  function getActiveWindowId(): string | null {
-    let maxZ = -1;
-    let active: string | null = null;
-    for (const [id, state] of windowStates) {
-      if (state.zIndex > maxZ) {
-        maxZ = state.zIndex;
-        active = id;
-      }
-    }
-    return active;
-  }
-
   function moveWindow(id: string, x: number, y: number) {
-    const state = windowStates.get(id);
-    if (state) {
-      state.x = x;
-      state.y = y;
-    }
+    wm.move(id, x, y);
   }
 
   return {
@@ -392,8 +354,7 @@ export function createRuntime(): Runtime {
       for (const timer of autoDismissTimers.values()) clearTimeout(timer);
       autoDismissTimers.clear();
       toasts.length = 0;
-      windowStates.clear();
-      zCounter = 0;
+      wm.reset();
       instanceCounter = 0;
       nextToastId = 1;
       lastTree = [];
@@ -431,12 +392,12 @@ export function createRuntime(): Runtime {
       return updates;
     },
     get windowStates() {
-      return windowStates as ReadonlyMap<string, WindowState>;
+      return wm.states;
     },
     focusWindow,
     moveWindow,
     get activeWindowId() {
-      return getActiveWindowId();
+      return wm.activeId();
     },
     get windowTree() {
       return lastTree as ReadonlyArray<WindowNode>;
