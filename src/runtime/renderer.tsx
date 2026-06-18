@@ -72,7 +72,62 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
             "inline-block w-5 h-5 border-2 border-toolbox-accent border-t-transparent rounded-full animate-spin",
         }),
       }) as VNode;
+    case "file":
+      return fileToPreact(node);
   }
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
+  const f = node.file;
+  const openDialog = (e: Event) => {
+    const box = (e.currentTarget as HTMLElement).closest("[data-toolbox-file]");
+    const input = box?.querySelector<HTMLInputElement>('input[type="file"]');
+    input?.click();
+  };
+
+  const body: VNode = f
+    ? (h("div", { class: "flex flex-col gap-1" }, [
+        h("div", { class: "flex items-center gap-2" }, [
+          h("span", { class: "text-toolbox-accent" }, "📄"),
+          h("span", { class: "flex-1 truncate text-toolbox-text" }, f.name),
+        ]),
+        h(
+          "div",
+          { class: "text-xs text-toolbox-muted" },
+          `${f.type || "application/octet-stream"} · ${formatBytes(f.size)}`,
+        ),
+      ]) as VNode)
+    : (h(
+        "span",
+        { class: "text-toolbox-muted text-sm" },
+        node.label ?? "Choose a file, drop, or paste",
+      ) as VNode);
+
+  const hiddenInput = h("input", {
+    type: "file",
+    accept: node.accept,
+    class: "hidden",
+    onChange: (e: Event) => {
+      const input = e.currentTarget as HTMLInputElement;
+      node.resolve(Array.from(input.files ?? []));
+      input.value = "";
+    },
+  });
+
+  return h("div", {
+    tabindex: 0,
+    "data-toolbox-file": "",
+    class:
+      "border border-dashed border-toolbox-border rounded px-3 py-4 bg-toolbox-deepest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
+    onClick: openDialog,
+    children: [body, hiddenInput],
+  }) as VNode;
 }
 
 function childToPreact(child: ChildNode, ctx: RenderContext): VNode {

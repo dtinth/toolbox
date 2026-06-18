@@ -156,4 +156,42 @@ describe("renderNode (pure node renderer)", () => {
     // Both children were delegated to the stub
     expect(rendered).toEqual([labelA, labelB]);
   });
+
+  it("renders an empty file box (focusable) with the placeholder label", () => {
+    const el = renderNode(
+      { kind: "file", file: null, label: "Drop a blob", resolve: () => {} },
+      noChild,
+    ) as any;
+    expect(el.type).toBe("div");
+    expect(el.props.tabindex).toBe(0);
+    expect(el.props["data-toolbox-file"]).toBe("");
+    // body is the placeholder span; hidden input is the second child
+    const [body, input] = el.props.children;
+    expect(body.props.children).toBe("Drop a blob");
+    expect(input.type).toBe("input");
+    expect(input.props.type).toBe("file");
+    expect(input.props.class).toContain("hidden");
+  });
+
+  it("renders file metadata (name, type, size) when a file is present", () => {
+    const file = new File(["abcde"], "note.txt", { type: "text/plain" });
+    const el = renderNode({ kind: "file", file, resolve: () => {} }, noChild) as any;
+    const [body] = el.props.children;
+    const [nameRow, meta] = body.props.children;
+    expect(nameRow.props.children[1].props.children).toBe("note.txt");
+    expect(meta.props.children).toBe("text/plain · 5 B");
+  });
+
+  it("delivers selected files through resolve via the hidden input onChange", () => {
+    const delivered: File[][] = [];
+    const el = renderNode(
+      { kind: "file", file: null, resolve: (files) => delivered.push(files) },
+      noChild,
+    ) as any;
+    const input = el.props.children[1];
+    const file = new File(["x"], "x.bin", { type: "application/octet-stream" });
+    input.props.onChange({ currentTarget: { files: [file], value: "" } });
+    expect(delivered).toHaveLength(1);
+    expect(delivered[0]).toEqual([file]);
+  });
 });

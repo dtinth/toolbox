@@ -10,6 +10,13 @@ export type Node =
       onChange?: (v: string) => void;
       rows?: number;
     }
+  | {
+      kind: "file";
+      file: File | null;
+      accept?: string;
+      label?: string;
+      resolve: (files: File[]) => void;
+    }
   | { kind: "spinner" };
 
 export type ChildNode = Node | WindowNode;
@@ -36,6 +43,10 @@ export interface Ui {
   textarea(
     value: string,
     opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
+  ): void;
+  file(
+    file: File | null,
+    opts: { onFile: (file: File) => void; accept?: string; label?: string },
   ): void;
 }
 
@@ -111,6 +122,19 @@ export function collect(declarator: (ui: Ui) => void): WindowNode[] {
         placeholder: opts?.placeholder,
         onChange: opts?.onChange,
         rows: opts?.rows,
+      });
+    },
+    file(file, opts) {
+      stack[stack.length - 1]!.children.push({
+        kind: "file",
+        file,
+        accept: opts.accept,
+        label: opts.label,
+        // Deliver one File to the tool. Ambiguity (more than one candidate) is
+        // wired to api.dialog.pick in a later step; for now the first wins.
+        resolve: (files: File[]) => {
+          if (files.length > 0) opts.onFile(files[0]!);
+        },
       });
     },
   };

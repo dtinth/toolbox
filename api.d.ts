@@ -64,6 +64,16 @@ export interface Ui {
     value: string,
     opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
   ): void;
+  /**
+   * A focusable intake box that yields a File from choose-a-file, drop, or
+   * paste. Pass the tool's current file (or null) for the metadata display;
+   * `onFile` delivers a newly supplied one. Ambiguity (several files, or a
+   * multi-type clipboard) is resolved via `api.dialog.pick`.
+   */
+  file(
+    file: File | null,
+    opts: { onFile: (file: File) => void; accept?: string; label?: string },
+  ): void;
 }
 
 /** The per-instance object the runtime passes to a tool's `init(api)`. */

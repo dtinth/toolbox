@@ -91,4 +91,22 @@ describe("collector", () => {
     });
     expect(result[0]!.children).toEqual([]);
   });
+
+  it("collects a file node carrying file, accept, label and a resolve that delivers one file", () => {
+    const delivered: File[] = [];
+    const current = new File(["hi"], "current.txt", { type: "text/plain" });
+    const result = collect((ui) => {
+      ui.file(current, { onFile: (f) => delivered.push(f), accept: "image/*", label: "Pick" });
+    });
+    const node = result[0]!.children[0]!;
+    expect(node.kind).toBe("file");
+    if (node.kind !== "file") throw new Error("expected file node");
+    expect(node.file).toBe(current);
+    expect(node.accept).toBe("image/*");
+    expect(node.label).toBe("Pick");
+
+    const a = new File(["a"], "a.bin");
+    node.resolve([a]);
+    expect(delivered).toEqual([a]);
+  });
 });

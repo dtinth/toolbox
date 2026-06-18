@@ -115,6 +115,7 @@ function build(): TestRuntime {
     row() {},
     textInput() {},
     textarea() {},
+    file() {},
   };
 
   function notify() {
