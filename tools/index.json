@@ -22,6 +22,11 @@
       "id": "save-demo",
       "name": "Save demo",
       "description": "Demonstrates toasts with loading state."
+    },
+    {
+      "id": "blob-inspector",
+      "name": "Blob Inspector",
+      "description": "Inspect a blob received via file picker, drop, or paste."
     }
   ]
 }
