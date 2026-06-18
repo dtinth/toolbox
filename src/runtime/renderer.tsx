@@ -2,13 +2,24 @@ import { h, type VNode } from "preact";
 import type { ChildNode, Node, WindowNode } from "./collector.ts";
 import type { WindowState } from "./runtime.ts";
 
-function nodeToPreact(
-  node: Node,
-  windowStates: ReadonlyMap<string, WindowState>,
-  activeWindowId: string | null,
-  onFocusWindow: (id: string) => void,
-  onMoveWindow: (id: string, x: number, y: number) => void,
-): VNode {
+/**
+ * Bundles the four window-chrome concerns that window rendering needs.
+ * Pure node rendering (labels, buttons, inputs, etc.) does not receive this context.
+ */
+export interface RenderContext {
+  windowStates: ReadonlyMap<string, WindowState>;
+  activeWindowId: string | null;
+  onFocusWindow: (id: string) => void;
+  onMoveWindow: (id: string, x: number, y: number) => void;
+}
+
+/**
+ * Pure node renderer: converts a single leaf/row Node to a VNode.
+ * Has no dependency on window-chrome concerns.
+ * The `renderChild` callback handles nested children (e.g. inside `row`),
+ * so the caller controls how child ChildNodes are resolved.
+ */
+export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode): VNode {
   switch (node.kind) {
     case "label":
       return h("div", null, node.text) as VNode;
@@ -26,9 +37,7 @@ function nodeToPreact(
       return h(
         "div",
         { class: "flex flex-row items-center gap-2" },
-        ...node.children.map((child) =>
-          childToPreact(child, windowStates, activeWindowId, onFocusWindow, onMoveWindow),
-        ),
+        ...node.children.map((child) => renderChild(child)),
       ) as VNode;
     case "textInput":
       return h("input", {
@@ -66,26 +75,15 @@ function nodeToPreact(
   }
 }
 
-function childToPreact(
-  child: ChildNode,
-  windowStates: ReadonlyMap<string, WindowState>,
-  activeWindowId: string | null,
-  onFocusWindow: (id: string) => void,
-  onMoveWindow: (id: string, x: number, y: number) => void,
-): VNode {
+function childToPreact(child: ChildNode, ctx: RenderContext): VNode {
   if (child.kind === "window") {
-    return windowToPreact(child, windowStates, activeWindowId, onFocusWindow, onMoveWindow);
+    return windowToPreact(child, ctx);
   }
-  return nodeToPreact(child, windowStates, activeWindowId, onFocusWindow, onMoveWindow);
+  return renderNode(child, (c) => childToPreact(c, ctx));
 }
 
-function windowToPreact(
-  w: WindowNode,
-  windowStates: ReadonlyMap<string, WindowState>,
-  activeWindowId: string | null,
-  onFocusWindow: (id: string) => void,
-  onMoveWindow: (id: string, x: number, y: number) => void,
-): VNode {
+function windowToPreact(w: WindowNode, ctx: RenderContext): VNode {
+  const { windowStates, activeWindowId, onFocusWindow, onMoveWindow } = ctx;
   const state = windowStates.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
   const isActive = w.id === activeWindowId;
 
@@ -128,7 +126,7 @@ function windowToPreact(
           class: "text-toolbox-muted hover:text-toolbox-accent-yellow text-sm leading-none px-1",
           onClick: w.onClose,
         },
-        "\u00D7",
+        "×",
       ) as VNode,
     );
   }
@@ -144,9 +142,7 @@ function windowToPreact(
 
   const body = h("div", {
     class: "flex-1 bg-toolbox-surface p-3 flex flex-col gap-1 min-h-0",
-    children: w.children.map((child) =>
-      childToPreact(child, windowStates, activeWindowId, onFocusWindow, onMoveWindow),
-    ),
+    children: w.children.map((child) => childToPreact(child, ctx)),
   });
 
   return h("div", {
@@ -165,10 +161,9 @@ export function toPreact(
   onFocusWindow: (id: string) => void,
   onMoveWindow: (id: string, x: number, y: number) => void,
 ): VNode {
+  const ctx: RenderContext = { windowStates, activeWindowId, onFocusWindow, onMoveWindow };
   return h("div", {
     class: "fixed inset-0",
-    children: windows.map((w) =>
-      windowToPreact(w, windowStates, activeWindowId, onFocusWindow, onMoveWindow),
-    ),
+    children: windows.map((w) => windowToPreact(w, ctx)),
   }) as VNode;
 }
