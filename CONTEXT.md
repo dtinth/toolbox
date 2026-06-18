@@ -91,6 +91,49 @@ state. The tool's JS does not re-execute in the popup; the runtime ships
 vDOM updates and routes input events back.
 _Avoid_: mirror, replica, child window
 
+**Blob**:
+An immutable chunk of bytes with a MIME `type` — the web platform's `Blob`.
+The unit of binary data a **Tool** inspects or processes. A **File** is a
+named Blob.
+_Avoid_: binary, buffer, payload, attachment
+
+**File**:
+A named **Blob** (`name`, `type`, `size`, `lastModified`) — the web platform's
+`File`. The canonical thing a tool receives from the user, regardless of
+source: a chosen OS file, a dropped file, a pasted screenshot, or pasted text
+are all normalised to a File. Nameless/typed-only sources (paste of an image,
+drop of text) get a synthesised name (`pasted-<timestamp>.<ext>`) and
+`lastModified = now`; text is wrapped as a `text/plain` File. _Everything the
+user hands a tool is bytes, and bytes-with-a-name is a File._
+_Avoid_: upload, document, blob (a File is a _named_ Blob — keep them distinct)
+
+**Quick pick**:
+A transient, filterable chooser the runtime renders as host chrome, modelled
+on VS Code's quick pick. Exposed imperatively as `api.dialog.pick(items, opts)
+-> Promise<Item | undefined>` (single-select; resolves `undefined` when
+dismissed with Escape). Like **Toast** and the rest of `api.dialog`, it is
+_not_ a `ui.*` collector node — it returns a Promise and is drawn by the host,
+so it works regardless of pop-out (**Projector**) state. It reuses the same
+search-input + fuzzy-filter + arrow-nav UX as the Cmd-K palette.
+_Avoid_: dropdown, combobox, menu, modal list
+
+**File input**:
+The `ui.file(opts)` primitive — a focusable box (its own `tabindex`) that
+yields a **File** from three sources: choose-a-file, drop, and paste. Paste is
+scoped to the focused _box_ (click it, then Cmd/Ctrl+V), not merely the focused
+**Window**, so two file inputs never fight over a paste. On hover (and always
+on touch) the box shows a `…` menu with explicit _Choose file…_ and _Paste from
+clipboard_ actions, so it works without a keyboard (mobile-friendly); the menu's
+paste uses the async Clipboard API (`navigator.clipboard.read()`). Empty, the
+box is blank; once a file is set it shows an icon + metadata. The `…` menu is
+chrome the runtime draws, _not_ the (removed) `ui.menu` primitive. It always
+yields _exactly one_ File via `onFile`; any ambiguity — several dropped files,
+or a clipboard payload with multiple representations — is resolved through a
+**Quick pick**, never a silent guess. Distinct from the deferred, generic
+`ui.dropArea` / `ui.draggable` (inter-tool drag-and-drop): `ui.file` brings
+_external_ data _into_ a tool.
+_Avoid_: file picker, upload, dropzone, dropArea
+
 ## Relationships
 
 - A **Runtime** hosts zero or more **Tools** simultaneously
@@ -225,48 +268,18 @@ Dear ImGui uses with `ImGui::Begin/End`.
 
 ## API surface (v1)
 
-The runtime passes a per-instance `api` object to a tool's `init(api)`. The
-shape:
+The exact, machine-checked shape of the `api` object a tool's `init(api)`
+receives is **not** kept here as prose — it lives in the hand-authored
+contract **`api.d.ts`**, which the runtime's real types are asserted to conform
+to. See [ADR-0004](docs/adr/0004-api-contract-as-dts.md). The sections below
+describe the _behaviour_ behind that surface; the contract file is the source
+of truth for its _shape_.
 
-```
-api = {
-  // declarator (set during init)
-  onRender: () => {},
-
-  // IMGUI primitives; calls are collected by the runtime
-  ui: {
-    // windows
-    window(id, cb),                          // declare a sub-window this frame
-    window(id, title, cb),                   // declare a sub-window with explicit title
-    window.setTitle(newTitle),               // override current window's display title
-    // layout
-    row, column, spacer,
-    // text
-    label, heading, text, code,
-    // input
-    button, textInput, checkbox, select, slider,
-    // display
-    image,
-    // chrome inside the window
-    menu(label, cb),
-    menuItem(label, opts),
-    menu(label, cb),                         // nested submenu (recursive)
-    menuSeparator(),
-    // drag and drop
-    draggable, dropArea,
-  },
-
-  // per-window (scoped to the focused window)
-  shortcuts: { register(combo, handler) -> unregister },
-  dialog:    { confirm, input, message } -> Promise,
-  tick:      (cb) | (rateHz, cb) -> unsubscribe,
-
-  // desktop-scoped (visible above any window; not blocked by focus)
-  toast:     { show(msg, opts) -> ToastHandle },
-}
-```
-
-`ToastHandle = { update({ message, loading, ... }), dismiss() }`.
+> Note: earlier revisions of this section listed many primitives
+> (`column`, `spacer`, `heading`, `code`, `checkbox`, `select`, `slider`,
+> `image`, `menu*`, `draggable`, `dropArea`, `shortcuts`, `dialog`) that were
+> never implemented. Treat `api.d.ts` as authoritative; PLAN.md tracks what is
+> intended but unbuilt.
 
 ### Window lifecycle
 

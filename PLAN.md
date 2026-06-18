@@ -52,8 +52,10 @@ COMMIT), wire the tool into the manifest, verify, push. The next tools
 should exercise primitives that the runtime types declare but that no tool
 has yet rendered:
 
-- A **file-picker / drop-area tool** would drive `ui.dropArea` (DnD) and
-  file-handling utilities.
+- ~~A **file-picker / drop-area tool** would drive `ui.dropArea` (DnD) and
+  file-handling utilities.~~ **Superseded:** file _intake_ is now the `ui.file`
+  primitive — see [ADR-0005](docs/adr/0005-file-intake-via-ui-file.md). Generic
+  `ui.dropArea` (inter-tool DnD) remains a separate, deferred concern.
 - A **menu-using tool** (e.g. a tool that has File / Edit / Help menus)
   would drive the `ui.menu` / `ui.menuItem` renderer.
 - A **pop-out / projector implementation** would let the user tear off a
@@ -64,6 +66,30 @@ After those primitives come **embed mode polish** (currently `?tool=<id>` only),
 **per-tool config** (a tool that has settings), and **persistence beyond
 localStorage** (e.g. tool state in IndexedDB). **Resizable windows** and
 **PiP** are stretch goals.
+
+### Blob inspector (planned tracer bullets)
+
+Concrete plan from a `grill-with-docs` session — see
+[ADR-0004](docs/adr/0004-api-contract-as-dts.md),
+[ADR-0005](docs/adr/0005-file-intake-via-ui-file.md) and the
+**Blob / File / Quick pick / File input** glossary entries in `CONTEXT.md`.
+Build contract-first (add to `api.d.ts` first, then implement to conform):
+
+1. **API contract (`api.d.ts`)** — introduce the hand-authored contract for the
+   _current_ surface, add a tsc-checked conformance assertion, and repoint tool
+   imports from `src/runtime/index.ts` to it. (ADR-0004)
+2. **`api.dialog.pick`** — VS Code-style quick pick: a Promise-returning,
+   host-rendered overlay reusing the Cmd-K palette's search / fuzzy / arrow-nav
+   UX. Single-select; `canPickMany` deferred.
+3. **`ui.file`** — focusable intake box (choose / drop / focus-scoped paste, plus
+   a hover/touch `…` menu with _Choose file…_ / _Paste from clipboard_). Yields
+   exactly one `File`; ambiguity (multiple files, or multi-type paste) resolves
+   via `api.dialog.pick`. Every source normalised to a `File`. (ADR-0005)
+4. **`blob-inspector` tool** — metadata only (name / type / size /
+   lastModified), consumes `ui.file`. Add to the manifest. Proves `ui.file`
+   end-to-end.
+5. **(future)** `ui.image` + type-aware previews (text / image / hex) in the
+   inspector.
 
 ### Runtime
 
@@ -95,7 +121,9 @@ localStorage** (e.g. tool state in IndexedDB). **Resizable windows** and
       in old `src/runtime/collector.ts` but were removed in the collector
       refactor (menu types were never rendered by any tool). The next tool
       that needs an in-window menu will re-introduce them.
-- [ ] **`ui.dropArea`** — never typed or rendered. DnD plumbing not started.
+- [ ] **`ui.dropArea`** _(generic inter-tool DnD — distinct from `ui.file`
+      intake; see [ADR-0005](docs/adr/0005-file-intake-via-ui-file.md))_ — never
+      typed or rendered. DnD plumbing not started.
 - [ ] **`ui.draggable`** — never typed or rendered. Should use native HTML5 DnD.
 - [ ] **HTML5 DnD plumbing** — the runtime needs to forward `dragstart`,
       `dragover`, `drop` events to the matching `dropArea` / `draggable`
