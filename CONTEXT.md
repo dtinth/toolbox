@@ -49,6 +49,21 @@ per tool instance. There is no separate "sub-api" for sub-windows — the same
 `api.ui.window(title, cb)` call is currently executing its callback.
 _Avoid_: sdk, runtime API
 
+**Window manager**:
+An internal module of the **Runtime** (`createWindowManager`) that owns each
+**Window**'s position, z-order, focus, and initial placement (centering +
+cascade offset) across frames, plus the scoped-id encoding
+(`${instanceId}::${originalId}`). The Runtime delegates all window geometry to
+it; tools never see it.
+_Avoid_: WM, layout engine, compositor, window service
+
+**Toast center**:
+An internal module of the **Runtime** (`createToastCenter`) that owns the toast
+queue, per-instance association, and auto-dismiss timers — including the rule
+that a `loading` toast suppresses auto-dismiss until loading clears. The
+Runtime's `toast` API and tool-close cleanup delegate to it.
+_Avoid_: notification service, snackbar manager
+
 **Declarator**:
 A function the runtime calls to render a tool instance's UI for one frame.
 The tool assigns it via `api.onRender = () => { ... }`. The runtime invokes
