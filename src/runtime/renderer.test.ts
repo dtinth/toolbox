@@ -76,6 +76,28 @@ describe("toPreact", () => {
 // A trivial renderChild stub for leaf node tests that need no child resolution.
 const noChild = (): VNode => h("span", null) as VNode;
 
+// Recursively collect all text from a vnode tree.
+const collectText = (n: any): string => {
+  if (n == null || typeof n === "boolean") return "";
+  if (typeof n === "string" || typeof n === "number") return String(n);
+  if (Array.isArray(n)) return n.map(collectText).join("");
+  return collectText(n.props?.children);
+};
+
+// Find the first vnode matching pred (depth-first).
+const findVNode = (n: any, pred: (x: any) => boolean): any => {
+  if (n == null || typeof n !== "object") return null;
+  if (Array.isArray(n)) {
+    for (const c of n) {
+      const r = findVNode(c, pred);
+      if (r) return r;
+    }
+    return null;
+  }
+  if (pred(n)) return n;
+  return findVNode(n.props?.children, pred);
+};
+
 describe("renderNode (pure node renderer)", () => {
   it("renders a label as a div with the text content", () => {
     const el = renderNode({ kind: "label", text: "Hello world" }, noChild) as any;
@@ -157,7 +179,10 @@ describe("renderNode (pure node renderer)", () => {
     expect(rendered).toEqual([labelA, labelB]);
   });
 
-  it("renders an empty file box (focusable) with the placeholder label", () => {
+  const fileInputOf = (el: any) =>
+    findVNode(el, (n) => n.type === "input" && n.props?.type === "file");
+
+  it("renders a focusable empty file box with the placeholder label and a hidden input", () => {
     const el = renderNode(
       { kind: "file", file: null, label: "Drop a blob", resolve: () => {} },
       noChild,
@@ -165,21 +190,17 @@ describe("renderNode (pure node renderer)", () => {
     expect(el.type).toBe("div");
     expect(el.props.tabindex).toBe(0);
     expect(el.props["data-toolbox-file"]).toBe("");
-    // body is the placeholder span; hidden input is the second child
-    const [body, input] = el.props.children;
-    expect(body.props.children).toBe("Drop a blob");
-    expect(input.type).toBe("input");
-    expect(input.props.type).toBe("file");
+    expect(collectText(el)).toContain("Drop a blob");
+    const input = fileInputOf(el);
     expect(input.props.class).toContain("hidden");
   });
 
   it("renders file metadata (name, type, size) when a file is present", () => {
     const file = new File(["abcde"], "note.txt", { type: "text/plain" });
     const el = renderNode({ kind: "file", file, resolve: () => {} }, noChild) as any;
-    const [body] = el.props.children;
-    const [nameRow, meta] = body.props.children;
-    expect(nameRow.props.children[1].props.children).toBe("note.txt");
-    expect(meta.props.children).toBe("text/plain · 5 B");
+    const text = collectText(el);
+    expect(text).toContain("note.txt");
+    expect(text).toContain("text/plain · 5 B");
   });
 
   it("delivers selected files through resolve via the hidden input onChange", () => {
@@ -188,11 +209,9 @@ describe("renderNode (pure node renderer)", () => {
       { kind: "file", file: null, resolve: (files) => delivered.push(files) },
       noChild,
     ) as any;
-    const input = el.props.children[1];
     const file = new File(["x"], "x.bin", { type: "application/octet-stream" });
-    input.props.onChange({ currentTarget: { files: [file], value: "" } });
-    expect(delivered).toHaveLength(1);
-    expect(delivered[0]).toEqual([file]);
+    fileInputOf(el).props.onChange({ currentTarget: { files: [file], value: "" } });
+    expect(delivered).toEqual([[file]]);
   });
 
   it("delivers dropped files through resolve and prevents default", () => {
@@ -203,12 +222,11 @@ describe("renderNode (pure node renderer)", () => {
     ) as any;
     const file = new File(["y"], "y.png", { type: "image/png" });
     let prevented = false;
-    const classList = { toggle: () => {} };
     el.props.onDrop({
       preventDefault: () => {
         prevented = true;
       },
-      currentTarget: { classList },
+      currentTarget: { classList: { toggle: () => {} } },
       dataTransfer: { files: [file], getData: () => "" },
     });
     expect(prevented).toBe(true);
@@ -225,5 +243,32 @@ describe("renderNode (pure node renderer)", () => {
       currentTarget: { classList: { toggle: () => {} } },
     });
     expect(prevented).toBe(true);
+  });
+
+  it("delivers pasted clipboard data through resolve (focus-scoped paste)", () => {
+    const delivered: File[][] = [];
+    const el = renderNode(
+      { kind: "file", file: null, resolve: (files) => delivered.push(files) },
+      noChild,
+    ) as any;
+    const file = new File(["z"], "z.png", { type: "image/png" });
+    let prevented = false;
+    el.props.onPaste({
+      preventDefault: () => {
+        prevented = true;
+      },
+      clipboardData: { files: [file], getData: () => "" },
+    });
+    expect(prevented).toBe(true);
+    expect(delivered[0]).toEqual([file]);
+  });
+
+  it("offers a … menu with Choose file… and Paste from clipboard actions", () => {
+    const el = renderNode({ kind: "file", file: null, resolve: () => {} }, noChild) as any;
+    const text = collectText(el);
+    expect(text).toContain("Choose file…");
+    expect(text).toContain("Paste from clipboard");
+    // The menu uses a native <details> so it toggles without component state.
+    expect(findVNode(el, (n) => n.type === "details")).toBeTruthy();
   });
 });

@@ -1,7 +1,7 @@
 import { h, type VNode } from "preact";
 import type { ChildNode, Node, WindowNode } from "./collector.ts";
 import type { WindowState } from "./runtime.ts";
-import { filesFromDataTransfer } from "./file-intake.ts";
+import { filesFromClipboardItems, filesFromDataTransfer } from "./file-intake.ts";
 
 /**
  * Bundles the four window-chrome concerns that window rendering needs.
@@ -84,13 +84,34 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Read the clipboard via the async Clipboard API (the `…` menu path, for touch
+// and no-keyboard use). Silently ignores denial / lack of support.
+async function pasteFromClipboard(node: Extract<Node, { kind: "file" }>): Promise<void> {
+  try {
+    const clip = navigator.clipboard;
+    if (!clip?.read) return;
+    const files = await filesFromClipboardItems(await clip.read());
+    if (files.length > 0) node.resolve(files);
+  } catch {
+    // permission denied or unsupported — no-op
+  }
+}
+
+function fileBox(el: HTMLElement): Element | null {
+  return el.closest("[data-toolbox-file]");
+}
+
+function clickHiddenInput(el: HTMLElement): void {
+  fileBox(el)?.querySelector<HTMLInputElement>('input[type="file"]')?.click();
+}
+
+function closeMenu(el: HTMLElement): void {
+  const details = el.closest("details");
+  if (details) (details as HTMLDetailsElement).open = false;
+}
+
 function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
   const f = node.file;
-  const openDialog = (e: Event) => {
-    const box = (e.currentTarget as HTMLElement).closest("[data-toolbox-file]");
-    const input = box?.querySelector<HTMLInputElement>('input[type="file"]');
-    input?.click();
-  };
 
   const body: VNode = f
     ? (h("div", { class: "flex flex-col gap-1" }, [
@@ -107,7 +128,7 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
     : (h(
         "span",
         { class: "text-toolbox-muted text-sm" },
-        node.label ?? "Choose a file, drop, or paste",
+        node.label ?? "Click and paste, drop a file, or use the ⋯ menu",
       ) as VNode);
 
   const hiddenInput = h("input", {
@@ -121,6 +142,60 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
     },
   });
 
+  const menuItemClass =
+    "text-left px-3 py-1.5 text-sm text-toolbox-text hover:bg-toolbox-content whitespace-nowrap";
+  const menu = h(
+    "details",
+    {
+      class: "relative shrink-0 opacity-60 hover:opacity-100",
+      onClick: (e: Event) => e.stopPropagation(),
+    },
+    [
+      h(
+        "summary",
+        {
+          class:
+            "list-none cursor-pointer px-1 text-toolbox-muted hover:text-toolbox-text select-none",
+          "aria-label": "File options",
+        },
+        "⋯",
+      ),
+      h(
+        "div",
+        {
+          class:
+            "absolute right-0 mt-1 z-10 min-w-44 bg-toolbox-surface border border-toolbox-border rounded shadow-xl flex flex-col py-1",
+        },
+        [
+          h(
+            "button",
+            {
+              type: "button",
+              class: menuItemClass,
+              onClick: (e: Event) => {
+                closeMenu(e.currentTarget as HTMLElement);
+                clickHiddenInput(e.currentTarget as HTMLElement);
+              },
+            },
+            "Choose file…",
+          ),
+          h(
+            "button",
+            {
+              type: "button",
+              class: menuItemClass,
+              onClick: (e: Event) => {
+                closeMenu(e.currentTarget as HTMLElement);
+                void pasteFromClipboard(node);
+              },
+            },
+            "Paste from clipboard",
+          ),
+        ],
+      ),
+    ],
+  );
+
   const setDragActive = (e: Event, active: boolean) => {
     const box = e.currentTarget as HTMLElement;
     box.classList.toggle("ring-2", active);
@@ -131,8 +206,15 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
     tabindex: 0,
     "data-toolbox-file": "",
     class:
-      "border border-dashed border-toolbox-border rounded px-3 py-4 bg-toolbox-deepest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
-    onClick: openDialog,
+      "border border-dashed border-toolbox-border rounded px-3 py-4 bg-toolbox-deepest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
+    onPaste: (e: ClipboardEvent) => {
+      if (!e.clipboardData) return;
+      const files = filesFromDataTransfer(e.clipboardData);
+      if (files.length > 0) {
+        e.preventDefault();
+        node.resolve(files);
+      }
+    },
     onDragOver: (e: DragEvent) => {
       e.preventDefault();
       setDragActive(e, true);
@@ -143,7 +225,13 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
       setDragActive(e, false);
       if (e.dataTransfer) node.resolve(filesFromDataTransfer(e.dataTransfer));
     },
-    children: [body, hiddenInput],
+    children: [
+      h("div", { class: "flex items-start gap-2" }, [
+        h("div", { class: "flex-1 min-w-0" }, body),
+        menu,
+      ]),
+      hiddenInput,
+    ],
   }) as VNode;
 }
 
