@@ -1,4 +1,4 @@
-import type { Api } from "../../src/runtime/index.ts";
+import type { Api } from "../../api.d.ts";
 
 export default function init(api: Api) {
   let open = true;
