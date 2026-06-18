@@ -1,3 +1,6 @@
+import { chooseFile } from "./file-intake.ts";
+import type { Dialog } from "./dialog-center.ts";
+
 export type Node =
   | { kind: "label"; text: string }
   | { kind: "button"; label: string; onClick?: () => void }
@@ -50,7 +53,12 @@ export interface Ui {
   ): void;
 }
 
-export function collect(declarator: (ui: Ui) => void): WindowNode[] {
+export interface CollectDeps {
+  /** Bound `api.dialog.pick` for the instance, used to disambiguate candidates. */
+  pick?: Dialog["pick"];
+}
+
+export function collect(declarator: (ui: Ui) => void, deps: CollectDeps = {}): WindowNode[] {
   const mainWindow: WindowNode = { kind: "window", id: "__main__", title: "", children: [] };
   const stack: { children: ChildNode[] }[] = [mainWindow];
   const subWindows: WindowNode[] = [];
@@ -130,10 +138,17 @@ export function collect(declarator: (ui: Ui) => void): WindowNode[] {
         file,
         accept: opts.accept,
         label: opts.label,
-        // Deliver one File to the tool. Ambiguity (more than one candidate) is
-        // wired to api.dialog.pick in a later step; for now the first wins.
+        // Deliver one File to the tool. A single candidate is delivered
+        // synchronously; more than one is disambiguated via the quick pick.
         resolve: (files: File[]) => {
-          if (files.length > 0) opts.onFile(files[0]!);
+          if (files.length === 0) return;
+          if (files.length === 1) {
+            opts.onFile(files[0]!);
+            return;
+          }
+          void chooseFile(files, deps.pick).then((file) => {
+            if (file) opts.onFile(file);
+          });
         },
       });
     },

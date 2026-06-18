@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   blobToFile,
+  chooseFile,
   extensionForMime,
   filesFromClipboardItems,
   filesFromDataTransfer,
   synthName,
   textToFile,
 } from "./file-intake.ts";
+import type { Dialog } from "./dialog-center.ts";
 
 describe("extensionForMime", () => {
   it("maps known types", () => {
@@ -87,6 +89,43 @@ describe("filesFromDataTransfer", () => {
 
   it("returns nothing for an empty transfer", () => {
     expect(filesFromDataTransfer({ files: [], getData: () => "" })).toEqual([]);
+  });
+});
+
+describe("chooseFile", () => {
+  it("returns the only candidate without invoking pick", async () => {
+    const f = new File(["a"], "a.txt");
+    let called = false;
+    const pick = (<T>(items: T[]) => {
+      called = true;
+      return Promise.resolve(items[0]);
+    }) as Dialog["pick"];
+    expect(await chooseFile([f], pick)).toBe(f);
+    expect(called).toBe(false);
+  });
+
+  it("returns undefined when there are no candidates", async () => {
+    expect(await chooseFile([])).toBeUndefined();
+  });
+
+  it("routes multiple candidates through pick and returns the chosen file", async () => {
+    const a = new File(["a"], "a.txt");
+    const b = new File(["b"], "b.txt");
+    let seen: Array<{ label: string }> = [];
+    const pick = (<T>(items: T[]) => {
+      seen = items as Array<{ label: string }>;
+      return Promise.resolve(items[1]);
+    }) as Dialog["pick"];
+    const chosen = await chooseFile([a, b], pick);
+    expect(seen).toHaveLength(2);
+    expect(seen[0]!.label).toBe("a.txt");
+    expect(chosen).toBe(b);
+  });
+
+  it("falls back to the first candidate when multiple but no pick is available", async () => {
+    const a = new File(["a"], "a.txt");
+    const b = new File(["b"], "b.txt");
+    expect(await chooseFile([a, b])).toBe(a);
   });
 });
 

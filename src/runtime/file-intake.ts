@@ -1,3 +1,5 @@
+import type { Dialog } from "./dialog-center.ts";
+
 // Normalise everything a user can hand a tool — chosen files, dropped files,
 // dropped/pasted text, pasted blobs — into File objects. "Everything the user
 // hands a tool is bytes, and bytes-with-a-name is a File." See ADR-0005.
@@ -89,4 +91,21 @@ export async function filesFromClipboardItems(
     }
   }
   return out;
+}
+
+/**
+ * Reduce candidate Files to the one the tool should receive. Zero or one
+ * candidate resolves immediately; more than one is disambiguated through the
+ * quick pick (label = file name). With no pick available, the first wins.
+ */
+export async function chooseFile(files: File[], pick?: Dialog["pick"]): Promise<File | undefined> {
+  if (files.length <= 1) return files[0];
+  if (!pick) return files[0];
+  const items = files.map((file) => ({
+    label: file.name,
+    description: `${file.type || "application/octet-stream"} · ${file.size} B`,
+    file,
+  }));
+  const chosen = await pick(items, { title: "Choose what to use" });
+  return chosen?.file;
 }

@@ -15,7 +15,7 @@ export interface QuickPickOptions {
 }
 
 export interface Dialog {
-  pick<T extends QuickPickItem>(items: T[], opts?: QuickPickOptions): Promise<T | undefined>;
+  pick: <T extends QuickPickItem>(items: T[], opts?: QuickPickOptions) => Promise<T | undefined>;
 }
 
 /** A pending pick, as exposed to the host for rendering (no resolver). */

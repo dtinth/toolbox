@@ -224,15 +224,18 @@ function build(): TestRuntime {
         allWindows.push(loadingWindow);
         continue;
       }
-      const instanceWindows = collect((collectorUi) => {
-        const previousUi = instance.api.ui;
-        instance.api.ui = collectorUi;
-        try {
-          instance.onRender();
-        } finally {
-          instance.api.ui = previousUi;
-        }
-      });
+      const instanceWindows = collect(
+        (collectorUi) => {
+          const previousUi = instance.api.ui;
+          instance.api.ui = collectorUi;
+          try {
+            instance.onRender();
+          } finally {
+            instance.api.ui = previousUi;
+          }
+        },
+        { pick: instance.api.dialog.pick },
+      );
       for (const w of instanceWindows) {
         const scoped: WindowNode = { ...w, id: scopeId(instanceId, w.id) };
         if (w.id === "__main__" && !scoped.onClose) {

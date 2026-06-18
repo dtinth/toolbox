@@ -36,7 +36,7 @@ export interface Dialog {
    * `undefined` if dismissed (Escape / backdrop). Items keep their order;
    * the user can type to fuzzy-filter.
    */
-  pick<T extends QuickPickItem>(items: T[], opts?: QuickPickOptions): Promise<T | undefined>;
+  pick: <T extends QuickPickItem>(items: T[], opts?: QuickPickOptions) => Promise<T | undefined>;
 }
 
 /**

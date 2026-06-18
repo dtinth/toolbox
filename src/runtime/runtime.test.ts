@@ -719,6 +719,49 @@ describe("runtime", () => {
       await expect(pick).resolves.toBeUndefined();
     });
 
+    it("routes multiple candidates from ui.file through api.dialog.pick", async () => {
+      const runtime = createTestRuntime();
+      const delivered: File[] = [];
+      runtime.loadTool((api) => {
+        api.onRender = () => {
+          api.ui.file(null, { onFile: (f) => delivered.push(f) });
+        };
+      });
+      runtime.render();
+
+      const fileNode = runtime.windowTree[0]!.children.find((c) => c.kind === "file");
+      if (!fileNode || fileNode.kind !== "file") throw new Error("expected a file node");
+
+      const a = new File(["a"], "a.txt");
+      const b = new File(["b"], "b.txt");
+      fileNode.resolve([a, b]);
+
+      const picks = runtime.pendingPicks();
+      expect(picks).toHaveLength(1);
+      expect(picks[0]!.items).toHaveLength(2);
+
+      runtime.resolvePick(picks[0]!.id, 1);
+      await new Promise((r) => setTimeout(r, 0));
+      expect(delivered).toEqual([b]);
+    });
+
+    it("delivers a single candidate from ui.file directly, without a pick", () => {
+      const runtime = createTestRuntime();
+      const delivered: File[] = [];
+      runtime.loadTool((api) => {
+        api.onRender = () => {
+          api.ui.file(null, { onFile: (f) => delivered.push(f) });
+        };
+      });
+      runtime.render();
+      const fileNode = runtime.windowTree[0]!.children.find((c) => c.kind === "file");
+      if (!fileNode || fileNode.kind !== "file") throw new Error("expected a file node");
+      const only = new File(["x"], "x.txt");
+      fileNode.resolve([only]);
+      expect(runtime.pendingPicks()).toHaveLength(0);
+      expect(delivered).toEqual([only]);
+    });
+
     it("cancels a tool's pending picks (undefined) when it closes", async () => {
       const runtime = createTestRuntime();
       let pick!: Promise<{ label: string } | undefined>;
