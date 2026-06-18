@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { createRuntime } from "./runtime.ts";
+import { createTestRuntime } from "./runtime.ts";
 import type { Ui } from "./collector.ts";
 import { launchToolFromModule } from "./launch.ts";
 import type { ToolModule } from "./tool-loader.ts";
@@ -7,7 +7,7 @@ import type { Api } from "./runtime.ts";
 
 describe("runtime", () => {
   it("passes an api object with onRender, ui, and requestUpdate", () => {
-    const runtime = createRuntime();
+    const runtime = createTestRuntime();
     let capturedApi: unknown = null;
     runtime.loadTool((api) => {
       capturedApi = api;
@@ -26,7 +26,7 @@ describe("runtime", () => {
   });
 
   it("captures a button click handler and runs requestUpdate on click", () => {
-    const runtime = createRuntime();
+    const runtime = createTestRuntime();
     runtime.loadTool((api) => {
       let count = 0;
       api.onRender = () => {
@@ -48,7 +48,7 @@ describe("runtime", () => {
   });
 
   it("renders a declarator that declares a window with a label", () => {
-    const runtime = createRuntime();
+    const runtime = createTestRuntime();
     runtime.loadTool((api) => {
       api.onRender = () => {
         api.ui.window.setTitle("Hello");
@@ -60,12 +60,12 @@ describe("runtime", () => {
   });
 
   it("does not throw when requestUpdate is called before any tool is loaded", () => {
-    const runtime = createRuntime();
+    const runtime = createTestRuntime();
     expect(() => runtime.requestUpdate()).not.toThrow();
   });
 
   it("api.tick(cb) registers a callback that fires when manually ticked", () => {
-    const runtime = createRuntime();
+    const runtime = createTestRuntime();
     let ticks = 0;
     runtime.loadTool((api) => {
       api.onRender = () => {};
@@ -79,7 +79,7 @@ describe("runtime", () => {
   });
 
   it("api.tick returns an unsubscribe function", () => {
-    const runtime = createRuntime();
+    const runtime = createTestRuntime();
     let ticks = 0;
     runtime.loadTool((api) => {
       api.onRender = () => {};
@@ -93,7 +93,7 @@ describe("runtime", () => {
   });
 
   it("api.tick triggers a redraw after the callback runs", async () => {
-    const runtime = createRuntime();
+    const runtime = createTestRuntime();
     let redraws = 0;
     runtime.loadTool((api) => {
       api.onRender = () => {
@@ -109,7 +109,7 @@ describe("runtime", () => {
   });
 
   it("api.toast.show returns a handle with update and dismiss", () => {
-    const runtime = createRuntime();
+    const runtime = createTestRuntime();
     let handle: unknown = null;
     runtime.loadTool((api) => {
       handle = api.toast.show("Hello", { loading: true });
@@ -121,7 +121,7 @@ describe("runtime", () => {
   });
 
   it("toasts are tracked in the runtime and can be enumerated", () => {
-    const runtime = createRuntime();
+    const runtime = createTestRuntime();
     runtime.loadTool((api) => {
       api.toast.show("one", { loading: true });
       api.toast.show("two");
@@ -136,7 +136,7 @@ describe("runtime", () => {
 
   describe("window states", () => {
     it("focusWindow(id) increases the window's zIndex above all others", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.loadTool((api) => {
         api.onRender = () => {
           api.ui.window("sub1", "Sub 1", () => {
@@ -162,7 +162,7 @@ describe("runtime", () => {
     });
 
     it("focusWindow(id) on an already-focused window doesn't change zIndex unnecessarily", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.loadTool((api) => {
         api.onRender = () => {
           api.ui.window("sub1", "Sub 1", () => {
@@ -179,7 +179,7 @@ describe("runtime", () => {
     });
 
     it("windowStates returns positions for all known windows after render", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.loadTool((api) => {
         api.onRender = () => {
           api.ui.window.setTitle("Main");
@@ -202,7 +202,7 @@ describe("runtime", () => {
     });
 
     it("Window positions center initially and cascade for sub-windows", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.loadTool((api) => {
         api.onRender = () => {
           api.ui.window("sub1", "Sub 1", () => {
@@ -232,7 +232,7 @@ describe("runtime", () => {
     });
 
     it("Loading a new tool resets window states", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.loadTool((api) => {
         api.onRender = () => {
           api.ui.label("first");
@@ -249,7 +249,7 @@ describe("runtime", () => {
 
   describe("multiple instances", () => {
     it("launchTool returns a ToolInstanceInfo and adds to toolInstances()", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       const info = runtime.launchTool({
         manifestId: "counter",
         name: "Counter",
@@ -265,7 +265,7 @@ describe("runtime", () => {
     });
 
     it("isEmpty is true initially and false after launch", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       expect(runtime.isEmpty).toBe(true);
       runtime.launchTool({
         manifestId: "counter",
@@ -278,7 +278,7 @@ describe("runtime", () => {
     });
 
     it("two concurrent instances coexist in render() and windowStates", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.launchTool({
         manifestId: "a",
         name: "A",
@@ -308,7 +308,7 @@ describe("runtime", () => {
     });
 
     it("closeTool removes the instance and its windows; isEmpty flips back to true", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       const a = runtime.launchTool({
         manifestId: "a",
         name: "A",
@@ -342,7 +342,7 @@ describe("runtime", () => {
     });
 
     it("windowStates keys are scoped per instance (inst-N::originalId)", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.launchTool({
         manifestId: "a",
         name: "A",
@@ -368,7 +368,7 @@ describe("runtime", () => {
     });
 
     it("activeWindowId returns the scoped id of the topmost window", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.launchTool({
         manifestId: "a",
         name: "A",
@@ -394,7 +394,7 @@ describe("runtime", () => {
     });
 
     it("toasts from two instances aggregate and can be dismissed", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       let handleA: { dismiss: () => void } | null = null;
       let handleB: { dismiss: () => void } | null = null;
       runtime.launchTool({
@@ -428,7 +428,7 @@ describe("runtime", () => {
     });
 
     it("loadTool still works and resets prior state", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.launchTool({
         manifestId: "a",
         name: "A",
@@ -461,7 +461,7 @@ describe("runtime", () => {
     });
 
     it("per-instance api.dispose() removes that instance; last disposal flips disposed true", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       let firstApi: { dispose: () => void } | null = null;
       let secondApi: { dispose: () => void } | null = null;
       runtime.launchTool({
@@ -494,7 +494,7 @@ describe("runtime", () => {
 
   describe("launchToolFromModule", () => {
     it("adds the tool to toolInstances() and preserves manifest id and name", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       const mod: ToolModule = { default: () => {} };
       const entry = { id: "counter", name: "Counter" };
       const info = launchToolFromModule(runtime, entry, mod);
@@ -506,7 +506,7 @@ describe("runtime", () => {
     });
 
     it("calls the module's default(api) with a real runtime Api", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       let receivedApi: Api | null = null;
       const mod: ToolModule = {
         default: (api) => {
@@ -523,7 +523,7 @@ describe("runtime", () => {
     });
 
     it("closing the returned instanceId disposes it from toolInstances()", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       const mod: ToolModule = { default: () => {} };
       const info = launchToolFromModule(runtime, { id: "x", name: "X" }, mod);
       expect(runtime.toolInstances()).toHaveLength(1);
@@ -533,7 +533,7 @@ describe("runtime", () => {
     });
 
     it("launching the same manifestId twice creates two separate instances", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       const mod: ToolModule = { default: () => {} };
       const entry = { id: "counter", name: "Counter" };
       const a = launchToolFromModule(runtime, entry, mod);
@@ -547,7 +547,7 @@ describe("runtime", () => {
 
   describe("main window close", () => {
     it("attaches a default onClose to the main window that disposes the instance", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.loadTool((api) => {
         api.onRender = () => {
           api.ui.window.setTitle("Counter");
@@ -566,7 +566,7 @@ describe("runtime", () => {
     });
 
     it("does not override an explicit onClose set via ui.window.onClose", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       let calls = 0;
       runtime.loadTool((api) => {
         api.onRender = () => {
@@ -586,7 +586,7 @@ describe("runtime", () => {
     });
 
     it("only attaches the default to the main window, not sub-windows", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.loadTool((api) => {
         api.onRender = () => {
           api.ui.window.setTitle("Counter");
@@ -607,7 +607,7 @@ describe("runtime", () => {
 
   describe("dispose", () => {
     it("api.dispose() marks the runtime as disposed", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       expect(runtime.disposed).toBe(false);
       runtime.loadTool((api) => {
         api.onRender = () => {};
@@ -617,7 +617,7 @@ describe("runtime", () => {
     });
 
     it("dispose() triggers a redraw (updateCount increments)", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       runtime.loadTool((api) => {
         api.onRender = () => {};
       });
@@ -629,7 +629,7 @@ describe("runtime", () => {
 
   describe("loading state", () => {
     it("launchTool without a loader creates a loading instance shown immediately", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       const info = runtime.launchTool({ manifestId: "counter", name: "Counter" });
       expect(runtime.toolInstances()).toHaveLength(1);
       expect(runtime.toolInstances()[0]).toEqual(info);
@@ -641,7 +641,7 @@ describe("runtime", () => {
     });
 
     it("initializeTool transitions a loading instance to ready and calls the loader", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       const info = runtime.launchTool({ manifestId: "counter", name: "Counter" });
       let called = false;
       runtime.initializeTool(info.instanceId, (api) => {
@@ -660,7 +660,7 @@ describe("runtime", () => {
     });
 
     it("a loading instance can be closed via the default main-window close button", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       const info = runtime.launchTool({ manifestId: "counter", name: "Counter" });
       runtime.render();
       const main = runtime.windowTree.find((w) => w.id.endsWith("::__main__"));
@@ -671,7 +671,7 @@ describe("runtime", () => {
     });
 
     it("isLoading reports the instance's state", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       const info = runtime.launchTool({ manifestId: "counter", name: "Counter" });
       expect(runtime.isLoading(info.instanceId)).toBe(true);
       runtime.initializeTool(info.instanceId, (api) => {
@@ -681,7 +681,7 @@ describe("runtime", () => {
     });
 
     it("initializeTool on a missing instance is a no-op", () => {
-      const runtime = createRuntime();
+      const runtime = createTestRuntime();
       let called = false;
       runtime.initializeTool("does-not-exist", () => {
         called = true;

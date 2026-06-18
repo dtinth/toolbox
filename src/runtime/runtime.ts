@@ -31,7 +31,6 @@ export interface ToolInstanceInfo {
 }
 
 export interface Runtime {
-  loadTool(init: (api: Api) => void): void;
   launchTool(opts: {
     manifestId: string;
     name: string;
@@ -45,18 +44,22 @@ export interface Runtime {
   render(): VNode;
   requestUpdate(): void;
   subscribe(onChange: () => void): () => void;
-  lastButton(): Extract<Node, { kind: "button" }>;
   tick(): void;
   toasts(): Toast[];
   dismissToast(id: number): void;
-  updateCount: number;
   windowStates: ReadonlyMap<string, WindowState>;
   focusWindow(id: string): void;
   moveWindow(id: string, x: number, y: number): void;
   activeWindowId: string | null;
-  windowTree: ReadonlyArray<WindowNode>;
   dispose(): void;
   readonly disposed: boolean;
+}
+
+export interface TestRuntime extends Runtime {
+  loadTool(init: (api: Api) => void): void;
+  lastButton(): Extract<Node, { kind: "button" }>;
+  updateCount: number;
+  windowTree: ReadonlyArray<WindowNode>;
 }
 
 function findLastButton(windows: WindowNode[]): Extract<Node, { kind: "button" }> | null {
@@ -80,7 +83,7 @@ interface ToolInstance {
   state: "loading" | "ready";
 }
 
-export function createRuntime(): Runtime {
+function build(): TestRuntime {
   const instances = new Map<string, ToolInstance>();
   const instanceOrder: string[] = [];
   let lastButtonRef: Extract<Node, { kind: "button" }> | null = null;
@@ -336,4 +339,12 @@ export function createRuntime(): Runtime {
       return disposed;
     },
   };
+}
+
+export function createRuntime(): Runtime {
+  return build();
+}
+
+export function createTestRuntime(): TestRuntime {
+  return build();
 }
