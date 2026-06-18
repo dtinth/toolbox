@@ -90,22 +90,28 @@ describe("window-manager", () => {
       wm.place(["win-a", "win-b"]);
       const zb = wm.states.get("win-b")!.zIndex;
       // win-a starts lower; focus it
-      wm.focus("win-a");
+      const changed = wm.focus("win-a");
+      expect(changed).toBe(true);
       expect(wm.states.get("win-a")!.zIndex).toBeGreaterThan(zb);
     });
 
-    it("focus on the already-top window leaves zIndex unchanged", () => {
+    it("focus on the already-top window leaves zIndex unchanged and returns false", () => {
       const wm = createWindowManager();
       wm.place(["win-a", "win-b"]);
       const zb = wm.states.get("win-b")!.zIndex;
-      wm.focus("win-b");
+      const changed = wm.focus("win-b");
+      expect(changed).toBe(false);
       expect(wm.states.get("win-b")!.zIndex).toBe(zb);
     });
 
-    it("focus on an unknown id is a no-op", () => {
+    it("focus on an unknown id is a no-op and returns false", () => {
       const wm = createWindowManager();
       wm.place(["win-a"]);
-      expect(() => wm.focus("unknown")).not.toThrow();
+      let changed: boolean | undefined;
+      expect(() => {
+        changed = wm.focus("unknown");
+      }).not.toThrow();
+      expect(changed).toBe(false);
       expect(wm.states.size).toBe(1);
     });
   });

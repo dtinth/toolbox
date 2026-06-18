@@ -262,14 +262,7 @@ function build(): TestRuntime {
   }
 
   function focusWindow(id: string) {
-    const hadState = wm.states.has(id);
-    if (hadState) {
-      const zBefore = wm.states.get(id)!.zIndex;
-      wm.focus(id);
-      if (wm.states.get(id)!.zIndex !== zBefore) {
-        requestUpdate();
-      }
-    }
+    if (wm.focus(id)) requestUpdate();
   }
 
   function moveWindow(id: string, x: number, y: number) {

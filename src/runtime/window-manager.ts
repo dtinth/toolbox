@@ -28,8 +28,11 @@ export interface WindowManager {
    */
   place(orderedIds: string[]): void;
 
-  /** Raise window to top z-order (no-op if already highest). */
-  focus(id: string): void;
+  /**
+   * Raise window to top z-order. Returns true if the z-order changed, false if
+   * the window was already highest or the id is unknown.
+   */
+  focus(id: string): boolean;
 
   /** Update the position of a window. */
   move(id: string, x: number, y: number): void;
@@ -67,14 +70,15 @@ export function createWindowManager(): WindowManager {
     }
   }
 
-  function focus(id: string): void {
+  function focus(id: string): boolean {
     const state = states.get(id);
-    if (state) {
-      const maxZ = Math.max(...Array.from(states.values(), (s: WindowState) => s.zIndex), 0);
-      if (state.zIndex < maxZ) {
-        state.zIndex = ++zCounter;
-      }
+    if (!state) return false;
+    const maxZ = Math.max(...Array.from(states.values(), (s: WindowState) => s.zIndex), 0);
+    if (state.zIndex < maxZ) {
+      state.zIndex = ++zCounter;
+      return true;
     }
+    return false;
   }
 
   function move(id: string, x: number, y: number): void {
