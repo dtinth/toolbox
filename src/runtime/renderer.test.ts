@@ -194,4 +194,36 @@ describe("renderNode (pure node renderer)", () => {
     expect(delivered).toHaveLength(1);
     expect(delivered[0]).toEqual([file]);
   });
+
+  it("delivers dropped files through resolve and prevents default", () => {
+    const delivered: File[][] = [];
+    const el = renderNode(
+      { kind: "file", file: null, resolve: (files) => delivered.push(files) },
+      noChild,
+    ) as any;
+    const file = new File(["y"], "y.png", { type: "image/png" });
+    let prevented = false;
+    const classList = { toggle: () => {} };
+    el.props.onDrop({
+      preventDefault: () => {
+        prevented = true;
+      },
+      currentTarget: { classList },
+      dataTransfer: { files: [file], getData: () => "" },
+    });
+    expect(prevented).toBe(true);
+    expect(delivered[0]).toEqual([file]);
+  });
+
+  it("allows drop by preventing default on dragover", () => {
+    const el = renderNode({ kind: "file", file: null, resolve: () => {} }, noChild) as any;
+    let prevented = false;
+    el.props.onDragOver({
+      preventDefault: () => {
+        prevented = true;
+      },
+      currentTarget: { classList: { toggle: () => {} } },
+    });
+    expect(prevented).toBe(true);
+  });
 });

@@ -1,6 +1,7 @@
 import { h, type VNode } from "preact";
 import type { ChildNode, Node, WindowNode } from "./collector.ts";
 import type { WindowState } from "./runtime.ts";
+import { filesFromDataTransfer } from "./file-intake.ts";
 
 /**
  * Bundles the four window-chrome concerns that window rendering needs.
@@ -120,12 +121,28 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
     },
   });
 
+  const setDragActive = (e: Event, active: boolean) => {
+    const box = e.currentTarget as HTMLElement;
+    box.classList.toggle("ring-2", active);
+    box.classList.toggle("ring-focused", active);
+  };
+
   return h("div", {
     tabindex: 0,
     "data-toolbox-file": "",
     class:
       "border border-dashed border-toolbox-border rounded px-3 py-4 bg-toolbox-deepest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
     onClick: openDialog,
+    onDragOver: (e: DragEvent) => {
+      e.preventDefault();
+      setDragActive(e, true);
+    },
+    onDragLeave: (e: DragEvent) => setDragActive(e, false),
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      setDragActive(e, false);
+      if (e.dataTransfer) node.resolve(filesFromDataTransfer(e.dataTransfer));
+    },
     children: [body, hiddenInput],
   }) as VNode;
 }
