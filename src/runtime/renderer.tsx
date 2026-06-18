@@ -133,7 +133,7 @@ function windowToPreact(
     );
   }
 
-  const containerClass = `fixed min-w-72 flex flex-col rounded-lg overflow-hidden${isActive ? " ring-1 ring-focused" : ""}`;
+  const containerClass = `fixed min-w-72 flex flex-col rounded-lg overflow-hidden ${isActive ? "ring-1 ring-focused" : ""}`;
 
   const titleBar = h("div", {
     class:
