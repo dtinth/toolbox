@@ -96,6 +96,9 @@ export default function init(api: Api) {
 
   api.onRender = () => {
     api.ui.window.setTitle("Uploader");
+    // Fixed width so a long result URL truncates instead of stretching the
+    // window past the viewport.
+    api.ui.window.setWidth(420);
     api.ui.menu("Settings", () => {
       api.ui.menuItem("Set upload URL…", { onClick: () => void promptForUrl() });
     });

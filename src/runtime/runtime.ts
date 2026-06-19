@@ -136,7 +136,7 @@ function build(): TestRuntime {
   });
 
   const noopUi: Ui = {
-    window: Object.assign(() => {}, { setTitle() {}, onClose() {} }),
+    window: Object.assign(() => {}, { setTitle() {}, setWidth() {}, onClose() {} }),
     label() {},
     button() {},
     row() {},

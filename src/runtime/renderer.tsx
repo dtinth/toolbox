@@ -128,7 +128,7 @@ function CopyableText({ node }: { node: Extract<Node, { kind: "copyableText" }> 
         }
       },
     },
-    h("span", { class: "flex-1 truncate font-mono text-sm text-toolbox-text" }, node.text),
+    h("span", { class: "flex-1 min-w-0 truncate font-mono text-sm text-toolbox-text" }, node.text),
     h("span", { class: "text-xs text-toolbox-muted shrink-0" }, copied ? "Copied" : "⧉"),
   ) as VNode;
 }
@@ -672,7 +672,9 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDr
     );
   }
 
-  const containerClass = `fixed min-w-72 flex flex-col rounded-lg overflow-hidden ${isActive ? "ring-1 ring-focused" : ""}`;
+  // A declared width is authoritative (drop the min-width floor so it's exact);
+  // otherwise the window sizes to its content above a sensible minimum.
+  const containerClass = `fixed ${w.width === undefined ? "min-w-72" : ""} flex flex-col rounded-lg overflow-hidden ${isActive ? "ring-1 ring-focused" : ""}`;
 
   const titleBar = h("div", {
     class:
@@ -691,7 +693,7 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDr
   return h("div", {
     ref: drag.containerRef,
     class: containerClass,
-    style: { left: state.x, top: state.y, zIndex: state.zIndex } as any,
+    style: { left: state.x, top: state.y, zIndex: state.zIndex, width: w.width } as any,
     "data-toolbox-window": w.id,
     onPointerDown: () => onFocusWindow(w.id),
     children: menuBar ? [titleBar, menuBar, body] : [titleBar, body],
