@@ -13,24 +13,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Enable corepack
-        run: corepack enable
-
-      - uses: actions/setup-node@v6
+      # Installs the vp (Vite+) CLI + Node and runs `vp install` (run-install
+      # defaults to true), so no separate pnpm/corepack/setup-node steps.
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 24
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          node-version: "24"
+          cache: true
 
       # Format + lint (zero warnings) + typecheck.
       - name: Check
-        run: pnpm exec vp check
+        run: vp check
 
-      # Full build: lint gate + tsc + tool bundles + Vite client into ./dist.
-      # This is the project's CI gate (see PLAN.md). The unit-test runner
-      # (`vp test`) is run locally; it doesn't resolve under pnpm's strict
-      # node_modules in CI (vite-plus-core / vite-plus-test version skew).
+      - name: Test
+        run: vp test --run
+
+      # Full build: prebuild lint gate + tsc + tool bundles + Vite client.
       - name: Build
-        run: pnpm build
+        run: vp run build
