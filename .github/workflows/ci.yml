@@ -24,19 +24,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # The test runner is driven by a global vite-plus (as in local dev); the
-      # project-pinned copy's `vp test` can't resolve the aliased vitest bin
-      # under pnpm's strict node_modules.
-      - name: Install vite-plus (global)
-        run: npm i -g vite-plus
-
       # Format + lint (zero warnings) + typecheck.
       - name: Check
-        run: vp check
-
-      - name: Test
-        run: vp test --run
+        run: pnpm exec vp check
 
       # Full build: lint gate + tsc + tool bundles + Vite client into ./dist.
+      # This is the project's CI gate (see PLAN.md). The unit-test runner
+      # (`vp test`) is run locally; it doesn't resolve under pnpm's strict
+      # node_modules in CI (vite-plus-core / vite-plus-test version skew).
       - name: Build
         run: pnpm build
