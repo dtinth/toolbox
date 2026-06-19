@@ -19,8 +19,8 @@ on any lint warning.
 - **Desktop mode** (no `?tool=`): the multi-window runtime with the
   Cmd-K palette launcher. Multiple tools can be running concurrently.
   The palette auto-opens when no tools are running; Cmd-K toggles it
-  otherwise; clicking the empty desktop area is a touch-friendly open
-  target. A plain left-click on a palette item launches the tool in-
+  otherwise; a "+" launcher button at the bottom-right of the screen is the
+  touch-friendly open target. A plain left-click on a palette item launches the tool in-
   place; right-click / cmd-click / middle-click follow the item's
   `<a href="?tool=<id>">` and open the tool in a new tab (embed mode).
   No URL is written — the desktop URL stays as `/` regardless of which

@@ -149,7 +149,9 @@ _Avoid_: file picker, upload, dropzone, dropArea
   item calls `runtime.launchTool`; right-click / cmd-click / middle-click
   follow the natural `<a href="?tool=<id>">` link and open the tool in a
   new tab. The palette auto-opens when no tools are running; Cmd-K toggles
-  it otherwise.
+  it otherwise; a "+" launcher button at the bottom-right of the screen
+  opens it (the touch-friendly affordance). Clicking the empty desktop does
+  nothing.
 
 ## Example dialogue
 

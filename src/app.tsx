@@ -375,20 +375,28 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
     userDismissed: userDismissedRef.current,
   });
 
-  const handleHostClick = (e: MouseEvent) => {
-    const target = e.target as HTMLElement | null;
-    if (target?.closest("[data-toolbox-window], [data-toolbox-chrome]")) return;
-    if (!visibility.isOpen) {
-      userDismissedRef.current = true;
-      onPaletteOpenChange(true);
-    }
+  const openPalette = () => {
+    userDismissedRef.current = true;
+    onPaletteOpenChange(true);
   };
 
   return (
-    <div class="toolbox-host fixed inset-0" onClick={handleHostClick}>
+    <div class="toolbox-host fixed inset-0">
       {vnode}
       <ToastLayer toasts={toasts} onDismiss={(id) => runtime.dismissToast(id)} />
       <PickLayer picks={picks} onResolve={(id, index) => runtime.resolvePick(id, index)} />
+      {!visibility.isOpen ? (
+        <button
+          type="button"
+          data-toolbox-chrome
+          aria-label="Open launcher"
+          title="Launch a tool (⌘K)"
+          class="fixed bottom-4 right-4 z-40 w-12 h-12 rounded-full bg-toolbox-accent text-toolbox-deepest text-2xl leading-none shadow-xl flex items-center justify-center hover:bg-toolbox-accent-yellow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused"
+          onClick={openPalette}
+        >
+          +
+        </button>
+      ) : null}
       <Palette
         open={visibility.isOpen}
         canClose={visibility.canClose}
