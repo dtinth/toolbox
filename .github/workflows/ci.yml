@@ -17,6 +17,9 @@ jobs:
       # defaults to true), so no separate pnpm/corepack/setup-node steps.
       - uses: voidzero-dev/setup-vp@v1
         with:
+          # Match the local dev vp CLI; newer vp can't resolve the test runner
+          # against the pinned vite-plus-test@0.1.24.
+          version: "0.1.20"
           node-version: "24"
           cache: true
 
