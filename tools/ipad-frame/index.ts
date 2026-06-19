@@ -124,9 +124,8 @@ export default function init(api: Api) {
     });
     api.ui.label("Framed result (copy / drag out / open / download):");
     api.ui.file(output, {
-      accept: "image/*",
+      readOnly: true,
       label: "The framed PNG will appear here",
-      onFile: (f) => void frame(f),
     });
   };
 }

@@ -84,10 +84,19 @@ export interface Ui {
    * paste. Pass the tool's current file (or null) for the metadata display;
    * `onFile` delivers a newly supplied one. Ambiguity (several files, or a
    * multi-type clipboard) is resolved via `api.dialog.pick`.
+   *
+   * With `readOnly: true` the box is output-only: no drop / paste / choose
+   * intake (and `onFile` is unused), just the file's metadata, the drag-out
+   * handle, and the export menu (open / copy / download).
    */
   file(
     file: File | null,
-    opts: { onFile: (file: File) => void; accept?: string; label?: string },
+    opts: {
+      onFile?: (file: File) => void;
+      accept?: string;
+      label?: string;
+      readOnly?: boolean;
+    },
   ): void;
 }
 

@@ -109,4 +109,17 @@ describe("collector", () => {
     node.resolve([a]);
     expect(delivered).toEqual([a]);
   });
+
+  it("collects a read-only file node whose resolve is a no-op (no onFile)", () => {
+    const out = new File(["x"], "out.png", { type: "image/png" });
+    const result = collect((ui) => {
+      ui.file(out, { readOnly: true, label: "Result" });
+    });
+    const node = result[0]!.children[0]!;
+    if (node.kind !== "file") throw new Error("expected file node");
+    expect(node.readOnly).toBe(true);
+    expect(node.file).toBe(out);
+    // No onFile provided — resolve must not throw.
+    expect(() => node.resolve([new File(["y"], "y.bin")])).not.toThrow();
+  });
 });

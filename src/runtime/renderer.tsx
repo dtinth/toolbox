@@ -198,16 +198,21 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
       "text-left px-3 py-1.5 text-sm text-toolbox-text hover:bg-toolbox-content whitespace-nowrap";
     const item = (label: string, onClick: () => void): VNode =>
       h("button", { type: "button", class: itemClass, onClick }, label) as VNode;
-    const menuItems: VNode[] = [
-      item(
-        "Choose file…",
-        run(() => openFileDialog(nodeRef.current)),
-      ),
-      item(
-        "Paste from clipboard",
-        run(() => void pasteFromClipboard(nodeRef.current)),
-      ),
-    ];
+    const menuItems: VNode[] = [];
+    if (!nodeRef.current.readOnly) {
+      menuItems.push(
+        item(
+          "Choose file…",
+          run(() => openFileDialog(nodeRef.current)),
+        ),
+      );
+      menuItems.push(
+        item(
+          "Paste from clipboard",
+          run(() => void pasteFromClipboard(nodeRef.current)),
+        ),
+      );
+    }
     if (nodeRef.current.file) {
       menuItems.push(item("Open in new tab", run(withFile(openInNewTab))));
       if (canCopyToClipboard(nodeRef.current.file)) {
@@ -265,6 +270,9 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
     };
   }, [open]);
 
+  // A read-only box with no file has no actions — render no menu.
+  if (node.readOnly && !node.file) return null as unknown as VNode;
+
   return h(
     "button",
     {
@@ -284,6 +292,7 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
 
 function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
   const f = node.file;
+  const readOnly = node.readOnly === true;
 
   const body: VNode = f
     ? (h("div", { class: "flex flex-col gap-1" }, [
@@ -311,7 +320,8 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
     : (h(
         "span",
         { class: "text-toolbox-muted text-sm" },
-        node.label ?? "Click and paste, drop a file, or use the ⋯ menu",
+        node.label ??
+          (readOnly ? "No file yet" : "Click and paste, drop a file, or use the ⋯ menu"),
       ) as VNode);
 
   const setDragActive = (e: Event, active: boolean) => {
@@ -320,29 +330,35 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
     box.classList.toggle("ring-focused", active);
   };
 
+  // Read-only / output box: display + export only, no drop / paste / focus intake.
+  const intake = readOnly
+    ? {}
+    : {
+        tabindex: 0,
+        onPaste: (e: ClipboardEvent) => {
+          if (!e.clipboardData) return;
+          const files = filesFromDataTransfer(e.clipboardData);
+          if (files.length > 0) {
+            e.preventDefault();
+            node.resolve(files);
+          }
+        },
+        onDragOver: (e: DragEvent) => {
+          e.preventDefault();
+          setDragActive(e, true);
+        },
+        onDragLeave: (e: DragEvent) => setDragActive(e, false),
+        onDrop: (e: DragEvent) => {
+          e.preventDefault();
+          setDragActive(e, false);
+          if (e.dataTransfer) node.resolve(filesFromDataTransfer(e.dataTransfer));
+        },
+      };
+
   return h("div", {
-    tabindex: 0,
     "data-toolbox-file": "",
-    class:
-      "border border-dashed border-toolbox-border rounded px-3 py-4 bg-toolbox-deepest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
-    onPaste: (e: ClipboardEvent) => {
-      if (!e.clipboardData) return;
-      const files = filesFromDataTransfer(e.clipboardData);
-      if (files.length > 0) {
-        e.preventDefault();
-        node.resolve(files);
-      }
-    },
-    onDragOver: (e: DragEvent) => {
-      e.preventDefault();
-      setDragActive(e, true);
-    },
-    onDragLeave: (e: DragEvent) => setDragActive(e, false),
-    onDrop: (e: DragEvent) => {
-      e.preventDefault();
-      setDragActive(e, false);
-      if (e.dataTransfer) node.resolve(filesFromDataTransfer(e.dataTransfer));
-    },
+    class: `border ${readOnly ? "border-solid" : "border-dashed"} border-toolbox-border rounded px-3 py-4 bg-toolbox-deepest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused`,
+    ...intake,
     children: [
       h("div", { class: "flex items-start gap-2" }, [
         h("div", { class: "flex-1 min-w-0" }, body),

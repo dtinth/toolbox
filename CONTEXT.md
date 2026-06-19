@@ -142,8 +142,11 @@ or a clipboard payload with multiple representations — is resolved through a
 **Quick pick**, never a silent guess. Distinct from the deferred, generic
 `ui.dropArea` / `ui.draggable` (inter-tool drag-and-drop): `ui.file` brings
 _external_ data _into_ a tool. Once a file is present it can also leave: the
-`…` menu offers _Download_, and the file icon is draggable straight out to the
-OS desktop (Chromium `DownloadURL` trick).
+`…` menu offers _Download_, _Open in new tab_ (preview) and _Copy to clipboard_
+(text/PNG), and the file icon is draggable straight out to the OS desktop
+(Chromium `DownloadURL` trick). An output-only variant (`readOnly: true`) drops
+the intake entirely — no drop / paste / choose — keeping just the metadata, the
+drag-out handle, and the export menu; tools use it for results.
 _Avoid_: file picker, upload, dropzone, dropArea
 
 ## Relationships

@@ -18,6 +18,7 @@ export type Node =
       file: File | null;
       accept?: string;
       label?: string;
+      readOnly?: boolean;
       resolve: (files: File[]) => void;
     }
   | { kind: "spinner" };
@@ -49,7 +50,12 @@ export interface Ui {
   ): void;
   file(
     file: File | null,
-    opts: { onFile: (file: File) => void; accept?: string; label?: string },
+    opts: {
+      onFile?: (file: File) => void;
+      accept?: string;
+      label?: string;
+      readOnly?: boolean;
+    },
   ): void;
 }
 
@@ -133,21 +139,24 @@ export function collect(declarator: (ui: Ui) => void, deps: CollectDeps = {}): W
       });
     },
     file(file, opts) {
+      const onFile = opts.onFile;
       stack[stack.length - 1]!.children.push({
         kind: "file",
         file,
         accept: opts.accept,
         label: opts.label,
+        readOnly: opts.readOnly,
         // Deliver one File to the tool. A single candidate is delivered
         // synchronously; more than one is disambiguated via the quick pick.
+        // (No-op when readOnly / no onFile — the renderer also disables intake.)
         resolve: (files: File[]) => {
-          if (files.length === 0) return;
+          if (!onFile || files.length === 0) return;
           if (files.length === 1) {
-            opts.onFile(files[0]!);
+            onFile(files[0]!);
             return;
           }
           void chooseFile(files, deps.pick).then((file) => {
-            if (file) opts.onFile(file);
+            if (file) onFile(file);
           });
         },
       });
