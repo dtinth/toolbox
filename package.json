@@ -14,7 +14,8 @@
     "prepare": "vp config"
   },
   "dependencies": {
-    "@floating-ui/dom": "^1.7.6"
+    "@floating-ui/dom": "^1.7.6",
+    "preact": "10.29.2"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",
