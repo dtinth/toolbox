@@ -148,19 +148,38 @@ async function copyFileToClipboard(file: File): Promise<void> {
 // "DownloadURL" DataTransfer trick (https://dt.in.th/DownloadURL). Module-
 // scoped because the runtime re-renders often: dragstart and dragend must
 // share the same object-URL across re-renders during a single drag.
+//
+// `DownloadURL` is an OS-only channel — the browser never turns it back into a
+// File for an in-app drop. So the same drag also publishes the original File on
+// a module-level channel, tagged with a marker MIME type, so dropping the icon
+// into another ui.file widget delivers the identical bytes (no round-trip
+// through the blob URL). The File outlives a single re-render here and is
+// cleared on dragend; the receiving drop handler reads it before dragend fires
+// (drop precedes dragend).
+const APP_FILE_DRAG = "application/x-toolbox-file";
 let dragOutUrl: string | null = null;
+let activeDragFile: File | null = null;
 function startFileDragOut(e: DragEvent, file: File): void {
   if (!e.dataTransfer) return;
   dragOutUrl = URL.createObjectURL(file);
+  activeDragFile = file;
   const mime = file.type || "application/octet-stream";
   e.dataTransfer.setData("DownloadURL", `${mime}:${file.name}:${dragOutUrl}`);
+  e.dataTransfer.setData(APP_FILE_DRAG, file.name);
   e.dataTransfer.effectAllowed = "copy";
 }
 function endFileDragOut(): void {
   const url = dragOutUrl;
   dragOutUrl = null;
+  activeDragFile = null;
   // Revoke late: the OS may still be reading the URL to write the file.
   if (url) setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+// The File carried by an in-app icon drag, if this DataTransfer is one of ours.
+function appDragFile(dt: DataTransfer): File | null {
+  if (!activeDragFile) return null;
+  return Array.from(dt.types).includes(APP_FILE_DRAG) ? activeDragFile : null;
 }
 
 // The `…` menu. Anchored to the ⋯ button but rendered into a detached host on
@@ -351,7 +370,12 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
         onDrop: (e: DragEvent) => {
           e.preventDefault();
           setDragActive(e, false);
-          if (e.dataTransfer) node.resolve(filesFromDataTransfer(e.dataTransfer));
+          const dt = e.dataTransfer;
+          if (!dt) return;
+          // Prefer an in-app icon drag (identical bytes); else fall back to OS
+          // files / dropped text.
+          const inApp = appDragFile(dt);
+          node.resolve(inApp ? [inApp] : filesFromDataTransfer(dt));
         },
       };
 
