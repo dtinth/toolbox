@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import type {
   ManifestEntry,
   PickRequest,
+  QuickPickItem,
   Runtime,
   Toast,
   ToolInstanceInfo,
@@ -10,6 +11,7 @@ import { fuzzyFilter, searchTools } from "./runtime/fuzzy.ts";
 import { shouldInterceptClick } from "./app/click.ts";
 import { runningManifestIds } from "./app/host.ts";
 import { computePaletteVisibility } from "./app/palette-visibility.ts";
+import { FilterableList } from "./app/filterable-list.tsx";
 
 export interface PaletteProps {
   open: boolean;
@@ -28,115 +30,40 @@ export function Palette({
   onLaunch,
   onClose,
 }: PaletteProps) {
-  const closeIfAllowed = () => {
-    if (canClose) onClose();
-  };
-  const [query, setQuery] = useState("");
-  const [highlight, setHighlight] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setHighlight(0);
-    } else {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
-  }, [open]);
-
   if (!open) return null;
 
-  const results = searchTools(query, manifest);
-  const items = results;
-
-  const invoke = (index: number) => {
-    const item = items[index];
-    if (item) {
-      onLaunch(item.id);
-      closeIfAllowed();
-    }
-  };
-
-  const handleBackdropClick = () => {
+  const launch = (id: string) => {
+    onLaunch(id);
     if (canClose) onClose();
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      if (canClose) {
-        e.preventDefault();
-        onClose();
-      }
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setHighlight((h) => (items.length === 0 ? 0 : Math.min(h + 1, items.length - 1)));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHighlight((h) => Math.max(h - 1, 0));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      invoke(highlight);
-    }
   };
 
   return (
-    <div
-      class="fixed inset-0 z-40 flex items-start justify-center pt-32 bg-black/60"
-      data-toolbox-chrome
-      onClick={handleBackdropClick}
-      onKeyDown={(e) => {
-        if (e.key === "Escape" && canClose) {
-          e.preventDefault();
-          onClose();
-        }
-      }}
-    >
-      <div
-        class="bg-toolbox-surface border border-toolbox-border rounded-lg shadow-2xl w-full max-w-xl mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Type to search tools…"
-          value={query}
-          onInput={(e) => {
-            setQuery((e.currentTarget as HTMLInputElement).value);
-            setHighlight(0);
+    <FilterableList<ManifestEntry>
+      filter={(query) => searchTools(query, manifest)}
+      itemKey={(t) => t.id}
+      canDismiss={canClose}
+      selectOnFocus
+      placeholder="Type to search tools…"
+      onChoose={(t) => launch(t.id)}
+      onDismiss={onClose}
+      renderItem={(t, { active, choose }) => (
+        // An <a> so cmd/ctrl/middle-click open the tool in a new tab natively;
+        // a plain left-click is intercepted and launches in place.
+        <a
+          href={`?tool=${encodeURIComponent(t.id)}`}
+          onClick={(e) => {
+            if (shouldInterceptClick(e)) {
+              e.preventDefault();
+              choose();
+            }
           }}
-          onKeyDown={handleKeyDown}
-          class="w-full px-4 py-3 text-lg border-b border-toolbox-border bg-toolbox-deepest text-toolbox-text placeholder-toolbox-muted outline-none rounded-t-lg"
-        />
-        <ul class="max-h-80 overflow-y-auto">
-          {items.length === 0 ? <li class="p-4 text-toolbox-muted">No matches.</li> : null}
-          {items.map((t, i) => {
-            const isRunning = running.has(t.id);
-            const isActive = i === highlight;
-            return (
-              <li key={t.id}>
-                <a
-                  href={`?tool=${encodeURIComponent(t.id)}`}
-                  onClick={(e) => {
-                    if (shouldInterceptClick(e)) {
-                      e.preventDefault();
-                      setHighlight(i);
-                      onLaunch(t.id);
-                      closeIfAllowed();
-                    }
-                  }}
-                  onMouseEnter={() => setHighlight(i)}
-                  class={`w-full text-left px-4 py-2 hover:bg-toolbox-content flex items-center gap-2 text-toolbox-text block ${isActive ? "bg-toolbox-content" : ""}`}
-                >
-                  <span class="flex-1">{t.name}</span>
-                  {isRunning ? <span class="text-xs text-toolbox-muted">current</span> : null}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </div>
+          class={`w-full text-left px-4 py-2 hover:bg-toolbox-content flex items-center gap-2 text-toolbox-text block ${active ? "bg-toolbox-content" : ""}`}
+        >
+          <span class="flex-1">{t.name}</span>
+          {running.has(t.id) ? <span class="text-xs text-toolbox-muted">current</span> : null}
+        </a>
+      )}
+    />
   );
 }
 
@@ -166,6 +93,11 @@ function ToastLayer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: nu
   );
 }
 
+interface IndexedItem {
+  item: QuickPickItem;
+  i: number;
+}
+
 function PickModal({
   request,
   onResolve,
@@ -173,92 +105,35 @@ function PickModal({
   request: PickRequest;
   onResolve: (id: number, index: number | null) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [highlight, setHighlight] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  const indexed = request.items.map((item, i) => ({ item, i }));
-  const results = fuzzyFilter(query, indexed, (x) => `${x.item.label} ${x.item.description ?? ""}`);
-
-  const dismiss = () => onResolve(request.id, null);
-  const choose = (pos: number) => {
-    const hit = results[pos];
-    if (hit) onResolve(request.id, hit.i);
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      dismiss();
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setHighlight((h) => (results.length === 0 ? 0 : Math.min(h + 1, results.length - 1)));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHighlight((h) => Math.max(h - 1, 0));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      choose(highlight);
-    }
-  };
+  const indexed: IndexedItem[] = request.items.map((item, i) => ({ item, i }));
 
   return (
-    <div
-      class="fixed inset-0 z-50 flex items-start justify-center pt-32 bg-black/60"
-      data-toolbox-chrome
-      onClick={dismiss}
-    >
-      <div
-        class="bg-toolbox-surface border border-toolbox-border rounded-lg shadow-2xl w-full max-w-xl mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {request.options.title ? (
-          <div class="px-4 pt-3 text-xs text-toolbox-muted">{request.options.title}</div>
-        ) : null}
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder={request.options.placeholder ?? "Type to filter…"}
-          value={query}
-          onInput={(e) => {
-            setQuery((e.currentTarget as HTMLInputElement).value);
-            setHighlight(0);
-          }}
-          onKeyDown={handleKeyDown}
-          class="w-full px-4 py-3 text-lg border-b border-toolbox-border bg-toolbox-deepest text-toolbox-text placeholder-toolbox-muted outline-none rounded-t-lg"
-        />
-        <ul class="max-h-80 overflow-y-auto">
-          {results.length === 0 ? <li class="p-4 text-toolbox-muted">No matches.</li> : null}
-          {results.map((hit, i) => {
-            const isActive = i === highlight;
-            return (
-              <li key={hit.i}>
-                <button
-                  type="button"
-                  onMouseEnter={() => setHighlight(i)}
-                  onClick={() => choose(i)}
-                  class={`w-full text-left px-4 py-2 hover:bg-toolbox-content flex flex-col text-toolbox-text ${isActive ? "bg-toolbox-content" : ""}`}
-                >
-                  <span class="flex items-center gap-2">
-                    <span class="flex-1">{hit.item.label}</span>
-                    {hit.item.description ? (
-                      <span class="text-xs text-toolbox-muted">{hit.item.description}</span>
-                    ) : null}
-                  </span>
-                  {hit.item.detail ? (
-                    <span class="text-xs text-toolbox-muted">{hit.item.detail}</span>
-                  ) : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </div>
+    <FilterableList<IndexedItem>
+      overlayZClass="z-50"
+      title={request.options.title}
+      placeholder={request.options.placeholder ?? "Type to filter…"}
+      filter={(query) =>
+        fuzzyFilter(query, indexed, (x) => `${x.item.label} ${x.item.description ?? ""}`)
+      }
+      itemKey={(x) => x.i}
+      onChoose={(x) => onResolve(request.id, x.i)}
+      onDismiss={() => onResolve(request.id, null)}
+      renderItem={(x, { active, choose }) => (
+        <button
+          type="button"
+          onClick={choose}
+          class={`w-full text-left px-4 py-2 hover:bg-toolbox-content flex flex-col text-toolbox-text ${active ? "bg-toolbox-content" : ""}`}
+        >
+          <span class="flex items-center gap-2">
+            <span class="flex-1">{x.item.label}</span>
+            {x.item.description ? (
+              <span class="text-xs text-toolbox-muted">{x.item.description}</span>
+            ) : null}
+          </span>
+          {x.item.detail ? <span class="text-xs text-toolbox-muted">{x.item.detail}</span> : null}
+        </button>
+      )}
+    />
   );
 }
 
