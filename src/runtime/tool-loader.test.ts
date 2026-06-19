@@ -21,6 +21,7 @@ describe("loadTool", () => {
         row() {},
         textInput() {},
         textarea() {},
+        checkbox() {},
         file() {},
       },
       requestUpdate: () => {},
