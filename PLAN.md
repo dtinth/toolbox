@@ -56,8 +56,10 @@ has yet rendered:
   file-handling utilities.~~ **Superseded:** file _intake_ is now the `ui.file`
   primitive — see [ADR-0005](docs/adr/0005-file-intake-via-ui-file.md). Generic
   `ui.dropArea` (inter-tool DnD) remains a separate, deferred concern.
-- A **menu-using tool** (e.g. a tool that has File / Edit / Help menus)
-  would drive the `ui.menu` / `ui.menuItem` renderer.
+- ~~A **menu-using tool** (e.g. a tool that has File / Edit / Help menus)
+  would drive the `ui.menu` / `ui.menuItem` renderer.~~ **Done:** the
+  **uploader** tool drives `ui.menu` / `ui.menuItem` / `ui.menuSeparator`
+  (see [ADR-0006](docs/adr/0006-menu-as-collector-primitive.md)).
 - A **pop-out / projector implementation** would let the user tear off a
   window into a real browser popup (ADR 0002 is the plan; not yet
   implemented).
@@ -117,10 +119,14 @@ Build contract-first (add to `api.d.ts` first, then implement to conform):
 
 ### Runtime capabilities (typed but unrendered)
 
-- [ ] **`ui.menu` / `ui.menuItem` / `ui.menuSeparator`** — types existed
-      in old `src/runtime/collector.ts` but were removed in the collector
-      refactor (menu types were never rendered by any tool). The next tool
-      that needs an in-window menu will re-introduce them.
+- [x] **`ui.menu` / `ui.menuItem` / `ui.menuSeparator`** — re-introduced as
+      collector primitives, rendered as a top-of-window menu bar with dropdowns
+      portaled out of the clipped window (the `ui.file` `…` menu mechanism).
+      Driven by the **uploader** tool. See
+      [ADR-0006](docs/adr/0006-menu-as-collector-primitive.md).
+- [x] **`ui.checkbox`** and **`ui.copyableText`** — added alongside the
+      uploader: a labelled boolean toggle, and a click-to-copy / drag-out
+      (`text/plain`) read-only text pill. See the CONTEXT.md terms.
 - [ ] **`ui.dropArea`** _(generic inter-tool DnD — distinct from `ui.file`
       intake; see [ADR-0005](docs/adr/0005-file-intake-via-ui-file.md))_ — never
       typed or rendered. DnD plumbing not started.
@@ -145,9 +151,9 @@ Build contract-first (add to `api.d.ts` first, then implement to conform):
       `src/runtime/runtime.ts`, not yet implemented. Should be scoped
       to the focused window (`runtime.activeWindowId` is now available).
       Decide the combo string format (`"CmdOrCtrl+S"`, `"Cmd+K"`, etc.).
-- [ ] **`api.dialog.confirm` / `input` / `message`** — types once existed
-      in collector and runtime, not yet implemented. The renderer needs
-      a modal overlay that blocks the calling window.
+- [x] **`api.dialog.input`** — host-rendered modal text prompt, the sibling
+      of `api.dialog.pick` (see the **Input dialog** term in CONTEXT.md).
+      **`confirm` / `message`** remain unbuilt.
 
 ### Launcher / embed
 
