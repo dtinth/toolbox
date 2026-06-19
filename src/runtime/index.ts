@@ -2,6 +2,8 @@ export { createRuntime, createTestRuntime } from "./runtime.ts";
 export type {
   Api,
   Dialog,
+  InputOptions,
+  InputRequest,
   PickRequest,
   QuickPickItem,
   QuickPickOptions,

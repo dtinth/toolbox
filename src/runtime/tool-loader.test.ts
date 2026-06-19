@@ -31,7 +31,7 @@ describe("loadTool", () => {
       requestUpdate: () => {},
       tick: () => () => {},
       toast: { show: () => ({ update() {}, dismiss() {} }) },
-      dialog: { pick: () => Promise.resolve(undefined) },
+      dialog: { pick: () => Promise.resolve(undefined), input: () => Promise.resolve(undefined) },
       withProgress: (_options, task) => task({ report() {} }),
       dispose: () => {},
     };

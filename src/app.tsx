@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type {
+  InputRequest,
   ManifestEntry,
   PickRequest,
   QuickPickItem,
@@ -167,6 +168,92 @@ function PickLayer({
   return <PickModal key={active.id} request={active} onResolve={onResolve} />;
 }
 
+function InputModal({
+  request,
+  onResolve,
+}: {
+  request: InputRequest;
+  onResolve: (id: number, value: string | null) => void;
+}) {
+  const [text, setText] = useState(request.value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (el) {
+      el.focus();
+      el.select();
+    }
+  }, []);
+
+  const submit = () => onResolve(request.id, text);
+  const dismiss = () => onResolve(request.id, null);
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      dismiss();
+    }
+  };
+
+  return (
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center"
+      data-toolbox-chrome
+      onClick={dismiss}
+    >
+      <div
+        class="bg-toolbox-surface border border-toolbox-border rounded-lg shadow-xl p-4 w-80 flex flex-col gap-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {request.options.title ? (
+          <div class="text-toolbox-text font-medium">{request.options.title}</div>
+        ) : null}
+        <input
+          ref={inputRef}
+          type="text"
+          value={text}
+          placeholder={request.options.placeholder ?? ""}
+          class="w-full bg-toolbox-deepest border border-toolbox-border rounded px-2 py-1.5 text-toolbox-text text-sm focus:outline-none focus:ring-1 focus:ring-toolbox-accent"
+          onInput={(e) => setText((e.target as HTMLInputElement).value)}
+          onKeyDown={onKeyDown}
+        />
+        <div class="flex justify-end gap-2">
+          <button
+            type="button"
+            class="px-3 py-1 text-sm text-toolbox-muted hover:text-toolbox-text"
+            onClick={dismiss}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="px-3 py-1 text-sm bg-toolbox-accent text-toolbox-deepest rounded hover:bg-toolbox-accent-yellow"
+            onClick={submit}
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InputLayer({
+  inputs,
+  onResolve,
+}: {
+  inputs: InputRequest[];
+  onResolve: (id: number, value: string | null) => void;
+}) {
+  const active = inputs[0];
+  if (!active) return null;
+  return <InputModal key={active.id} request={active} onResolve={onResolve} />;
+}
+
 export interface HostProps {
   runtime: Runtime;
   manifest: ManifestEntry[];
@@ -183,6 +270,7 @@ export function EmbedHost({ runtime }: EmbedHostProps) {
   const [vnode, setVnode] = useState(() => runtime.render());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [picks, setPicks] = useState<PickRequest[]>(() => runtime.pendingPicks());
+  const [inputs, setInputs] = useState<InputRequest[]>(() => runtime.pendingInputs());
 
   useEffect(() => {
     // The animation loop runs only while a tool has a tick subscriber; an idle
@@ -199,6 +287,7 @@ export function EmbedHost({ runtime }: EmbedHostProps) {
       setVnode(runtime.render());
       setToasts(runtime.toasts());
       setPicks(runtime.pendingPicks());
+      setInputs(runtime.pendingInputs());
       ensureTicking();
     });
     ensureTicking();
@@ -213,6 +302,7 @@ export function EmbedHost({ runtime }: EmbedHostProps) {
       {vnode}
       <ToastLayer toasts={toasts} onDismiss={(id) => runtime.dismissToast(id)} />
       <PickLayer picks={picks} onResolve={(id, index) => runtime.resolvePick(id, index)} />
+      <InputLayer inputs={inputs} onResolve={(id, v) => runtime.resolveInput(id, v)} />
     </div>
   );
 }
@@ -221,6 +311,7 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
   const [vnode, setVnode] = useState(() => runtime.render());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [picks, setPicks] = useState<PickRequest[]>(() => runtime.pendingPicks());
+  const [inputs, setInputs] = useState<InputRequest[]>(() => runtime.pendingInputs());
   const [instances, setInstances] = useState<ReadonlyArray<ToolInstanceInfo>>(() =>
     runtime.toolInstances(),
   );
@@ -244,6 +335,7 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
       setVnode(runtime.render());
       setToasts(runtime.toasts());
       setPicks(runtime.pendingPicks());
+      setInputs(runtime.pendingInputs());
       setInstances(runtime.toolInstances());
       ensureTicking();
     });
@@ -290,6 +382,7 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
       {vnode}
       <ToastLayer toasts={toasts} onDismiss={(id) => runtime.dismissToast(id)} />
       <PickLayer picks={picks} onResolve={(id, index) => runtime.resolvePick(id, index)} />
+      <InputLayer inputs={inputs} onResolve={(id, v) => runtime.resolveInput(id, v)} />
       {!visibility.isOpen ? (
         <button
           type="button"

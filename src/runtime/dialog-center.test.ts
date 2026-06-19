@@ -63,4 +63,53 @@ describe("dialog center", () => {
     const dc = createDialogCenter({ onChange: () => {} });
     expect(() => dc.resolve(999, 0)).not.toThrow();
   });
+
+  describe("input", () => {
+    it("creates a pending input visible via listInputs with initial value and options", () => {
+      const onChange = vi.fn();
+      const dc = createDialogCenter({ onChange });
+      void dc
+        .forInstance("inst-1")
+        .input({ title: "Enter name", value: "hello", placeholder: "name…" });
+      expect(onChange).toHaveBeenCalledTimes(1);
+      const list = dc.listInputs();
+      expect(list).toHaveLength(1);
+      expect(list[0]!.value).toBe("hello");
+      expect(list[0]!.options.title).toBe("Enter name");
+      expect(list[0]!.options.placeholder).toBe("name…");
+    });
+
+    it("resolveInput with a string resolves the promise with that string", async () => {
+      const dc = createDialogCenter({ onChange: () => {} });
+      const promise = dc.forInstance("inst-1").input({ value: "initial" });
+      const id = dc.listInputs()[0]!.id;
+      dc.resolveInput(id, "typed value");
+      await expect(promise).resolves.toBe("typed value");
+      expect(dc.listInputs()).toHaveLength(0);
+    });
+
+    it("resolveInput with null resolves the promise with undefined (dismissed)", async () => {
+      const dc = createDialogCenter({ onChange: () => {} });
+      const promise = dc.forInstance("inst-1").input();
+      const id = dc.listInputs()[0]!.id;
+      dc.resolveInput(id, null);
+      await expect(promise).resolves.toBeUndefined();
+    });
+
+    it("cancelForInstance resolves pending input with undefined", async () => {
+      const dc = createDialogCenter({ onChange: () => {} });
+      const promise = dc.forInstance("inst-1").input({ title: "Cancel me" });
+      dc.cancelForInstance("inst-1");
+      await expect(promise).resolves.toBeUndefined();
+      expect(dc.listInputs()).toHaveLength(0);
+    });
+
+    it("reset resolves all pending inputs with undefined", async () => {
+      const dc = createDialogCenter({ onChange: () => {} });
+      const promise = dc.forInstance("inst-1").input();
+      dc.reset();
+      await expect(promise).resolves.toBeUndefined();
+      expect(dc.listInputs()).toHaveLength(0);
+    });
+  });
 });
