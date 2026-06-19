@@ -9,11 +9,23 @@ import {
   type WindowState,
 } from "./window-manager.ts";
 import { createToastCenter, type Toast, type ToastHandle } from "./toast-center.ts";
-import { createDialogCenter, type Dialog, type PickRequest } from "./dialog-center.ts";
+import {
+  createDialogCenter,
+  type Dialog,
+  type InputRequest,
+  type PickRequest,
+} from "./dialog-center.ts";
 
 export type { WindowState } from "./window-manager.ts";
 export type { Toast, ToastHandle } from "./toast-center.ts";
-export type { Dialog, PickRequest, QuickPickItem, QuickPickOptions } from "./dialog-center.ts";
+export type {
+  Dialog,
+  InputOptions,
+  InputRequest,
+  PickRequest,
+  QuickPickItem,
+  QuickPickOptions,
+} from "./dialog-center.ts";
 
 export interface Progress {
   report(value: { message?: string; increment?: number }): void;
@@ -65,6 +77,8 @@ export interface Runtime {
   dismissToast(id: number): void;
   pendingPicks(): PickRequest[];
   resolvePick(id: number, index: number | null): void;
+  pendingInputs(): InputRequest[];
+  resolveInput(id: number, value: string | null): void;
   windowStates: ReadonlyMap<string, WindowState>;
   focusWindow(id: string): void;
   moveWindow(id: string, x: number, y: number): void;
@@ -387,6 +401,8 @@ function build(): TestRuntime {
     dismissToast: (id) => toastCenter.dismiss(id),
     pendingPicks: () => dialogCenter.list(),
     resolvePick: (id, index) => dialogCenter.resolve(id, index),
+    pendingInputs: () => dialogCenter.listInputs(),
+    resolveInput: (id, value) => dialogCenter.resolveInput(id, value),
     get updateCount() {
       return updates;
     },

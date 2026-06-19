@@ -1,7 +1,8 @@
-// Dialog center: owns pending modal dialogs (currently quick picks) that the
-// host renders as chrome. Each `pick` returns a Promise the runtime resolves
-// when the host reports a selection or dismissal. Mirrors toast-center's
-// onChange dependency injection so a pending/resolved pick triggers a redraw.
+// Dialog center: owns pending modal dialogs (quick picks and input prompts)
+// that the host renders as chrome. Each `pick`/`input` returns a Promise the
+// runtime resolves when the host reports a selection or dismissal. Mirrors
+// toast-center's onChange dependency injection so a pending/resolved dialog
+// triggers a redraw.
 
 export interface QuickPickItem {
   label: string;
@@ -14,8 +15,18 @@ export interface QuickPickOptions {
   placeholder?: string;
 }
 
+export interface InputOptions {
+  title?: string;
+  placeholder?: string;
+}
+
 export interface Dialog {
   pick: <T extends QuickPickItem>(items: T[], opts?: QuickPickOptions) => Promise<T | undefined>;
+  input: (opts?: {
+    title?: string;
+    value?: string;
+    placeholder?: string;
+  }) => Promise<string | undefined>;
 }
 
 /** A pending pick, as exposed to the host for rendering (no resolver). */
@@ -25,9 +36,22 @@ export interface PickRequest {
   options: QuickPickOptions;
 }
 
-interface InternalRequest extends PickRequest {
+/** A pending input request, as exposed to the host for rendering (no resolver). */
+export interface InputRequest {
+  id: number;
+  options: InputOptions;
+  /** The initial text value to prefill the input. */
+  value: string;
+}
+
+interface InternalPickRequest extends PickRequest {
   instanceId: string;
   resolve: (value: QuickPickItem | undefined) => void;
+}
+
+interface InternalInputRequest extends InputRequest {
+  instanceId: string;
+  resolve: (value: string | undefined) => void;
 }
 
 export interface DialogCenter {
@@ -37,14 +61,19 @@ export interface DialogCenter {
   list(): PickRequest[];
   /** Resolve a pick: `index` into the request's items, or `null` to dismiss. */
   resolve(id: number, index: number | null): void;
-  /** Dismiss (resolve `undefined`) every pick opened by an instance. */
+  /** Pending input requests, in creation order, for the host to render. */
+  listInputs(): InputRequest[];
+  /** Resolve an input: the entered string, or `null` to dismiss (→ undefined). */
+  resolveInput(id: number, value: string | null): void;
+  /** Dismiss (resolve `undefined`) every pick/input opened by an instance. */
   cancelForInstance(instanceId: string): void;
-  /** Dismiss all pending picks and reset the id counter. */
+  /** Dismiss all pending picks/inputs and reset the id counter. */
   reset(): void;
 }
 
 export function createDialogCenter({ onChange }: { onChange: () => void }): DialogCenter {
-  const requests: InternalRequest[] = [];
+  const requests: InternalPickRequest[] = [];
+  const inputRequests: InternalInputRequest[] = [];
   let nextId = 1;
 
   function pick<T extends QuickPickItem>(
@@ -65,44 +94,84 @@ export function createDialogCenter({ onChange }: { onChange: () => void }): Dial
     });
   }
 
-  function take(id: number): InternalRequest | undefined {
+  function input(
+    instanceId: string,
+    opts?: { title?: string; value?: string; placeholder?: string },
+  ): Promise<string | undefined> {
+    return new Promise<string | undefined>((resolvePromise) => {
+      const id = nextId++;
+      inputRequests.push({
+        id,
+        instanceId,
+        value: opts?.value ?? "",
+        options: { title: opts?.title, placeholder: opts?.placeholder },
+        resolve: resolvePromise,
+      });
+      onChange();
+    });
+  }
+
+  function takePick(id: number): InternalPickRequest | undefined {
     const i = requests.findIndex((r) => r.id === id);
     if (i < 0) return undefined;
     return requests.splice(i, 1)[0];
   }
 
+  function takeInput(id: number): InternalInputRequest | undefined {
+    const i = inputRequests.findIndex((r) => r.id === id);
+    if (i < 0) return undefined;
+    return inputRequests.splice(i, 1)[0];
+  }
+
   function resolve(id: number, index: number | null): void {
-    const req = take(id);
+    const req = takePick(id);
     if (!req) return;
     req.resolve(index === null ? undefined : req.items[index]);
     onChange();
   }
 
+  function resolveInput(id: number, value: string | null): void {
+    const req = takeInput(id);
+    if (!req) return;
+    req.resolve(value === null ? undefined : value);
+    onChange();
+  }
+
   function cancelForInstance(instanceId: string): void {
-    const mine = requests.filter((r) => r.instanceId === instanceId);
-    if (mine.length === 0) return;
-    for (const req of mine) {
-      take(req.id);
+    const minePicks = requests.filter((r) => r.instanceId === instanceId);
+    const mineInputs = inputRequests.filter((r) => r.instanceId === instanceId);
+    if (minePicks.length === 0 && mineInputs.length === 0) return;
+    for (const req of minePicks) {
+      takePick(req.id);
+      req.resolve(undefined);
+    }
+    for (const req of mineInputs) {
+      takeInput(req.id);
       req.resolve(undefined);
     }
     onChange();
   }
 
   function reset(): void {
-    const all = requests.splice(0, requests.length);
-    for (const req of all) req.resolve(undefined);
+    const allPicks = requests.splice(0, requests.length);
+    const allInputs = inputRequests.splice(0, inputRequests.length);
+    for (const req of allPicks) req.resolve(undefined);
+    for (const req of allInputs) req.resolve(undefined);
     nextId = 1;
-    if (all.length > 0) onChange();
+    if (allPicks.length > 0 || allInputs.length > 0) onChange();
   }
 
   return {
     forInstance(instanceId) {
       return {
         pick: (items, opts) => pick(instanceId, items, opts),
+        input: (opts) => input(instanceId, opts),
       };
     },
     list: () => requests.map((r) => ({ id: r.id, items: r.items, options: r.options })),
     resolve,
+    listInputs: () => inputRequests.map((r) => ({ id: r.id, value: r.value, options: r.options })),
+    resolveInput,
     cancelForInstance,
     reset,
   };

@@ -43,7 +43,7 @@ export interface QuickPickOptions {
 /**
  * Modal, Promise-returning dialogs rendered by the host (not `ui.*` collector
  * nodes). Scoped to the calling tool. Currently only `pick` is implemented;
- * `confirm` / `input` / `message` are planned (see PLAN.md).
+ * `confirm` / `message` are planned (see PLAN.md).
  */
 export interface Dialog {
   /**
@@ -52,6 +52,15 @@ export interface Dialog {
    * the user can type to fuzzy-filter.
    */
   pick: <T extends QuickPickItem>(items: T[], opts?: QuickPickOptions) => Promise<T | undefined>;
+  /**
+   * Show a modal text-input prompt. Resolves with the entered string, or
+   * `undefined` if dismissed (Escape / backdrop / Cancel).
+   */
+  input: (opts?: {
+    title?: string;
+    value?: string;
+    placeholder?: string;
+  }) => Promise<string | undefined>;
 }
 
 /**
