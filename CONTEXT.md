@@ -136,7 +136,8 @@ on touch) the box shows a `…` menu with explicit _Choose file…_ and _Paste f
 clipboard_ actions, so it works without a keyboard (mobile-friendly); the menu's
 paste uses the async Clipboard API (`navigator.clipboard.read()`). Empty, the
 box is blank; once a file is set it shows an icon + metadata. The `…` menu is
-chrome the runtime draws, _not_ the (removed) `ui.menu` primitive. It always
+chrome the runtime draws, _not_ the in-window `ui.menu` collector primitive
+(though both share the portal-out-of-the-window dropdown mechanism). It always
 yields _exactly one_ File via `onFile`; any ambiguity — several dropped files,
 or a clipboard payload with multiple representations — is resolved through a
 **Quick pick**, never a silent guess. Distinct from the deferred, generic
@@ -148,6 +149,41 @@ _external_ data _into_ a tool. Once a file is present it can also leave: the
 the intake entirely — no drop / paste / choose — keeping just the metadata, the
 drag-out handle, and the export menu; tools use it for results.
 _Avoid_: file picker, upload, dropzone, dropArea
+
+**Menu**:
+An in-window menu bar declared with `ui.menu(label, cb)`; each
+`ui.menuItem(label, { onClick })` inside the callback is an action item (with
+`ui.menuSeparator()` for grouping). The runtime renders the menus as a strip at
+the top of the window body; clicking a menu opens its dropdown, which is
+portaled to `document.body` and positioned with floating-ui so it escapes the
+window's `overflow-hidden` — the same mechanism as the **File input** `…` menu. A
+_collector_ primitive (re-declared each frame), distinct from the host-drawn
+`api.dialog` family. See [ADR-0006](docs/adr/0006-menu-as-collector-primitive.md).
+_Avoid_: menubar, toolbar, dropdown (the dropdown is just a menu's open state)
+
+**Checkbox**:
+The `ui.checkbox(label, { checked, onChange })` primitive — a labelled boolean
+toggle collected into the current **Window**.
+_Avoid_: toggle, switch, tickbox
+
+**Copyable text**:
+The `ui.copyableText(text)` primitive — a read-only text pill for handing a
+value (e.g. an uploaded URL) back to the user. A plain click copies the whole
+value to the clipboard (with a brief inline "Copied" confirmation — it is a pure
+`ui.*` node with no `api` dependency); dragging it exports `text/plain` to other
+apps. Click and drag are distinct gestures (like a
+**Window** title bar), so there is no free-text selection. Distinct from a
+**File input**'s drag-out, which exports a _File_ to the OS; this exports
+_text_.
+_Avoid_: output, readout, copy button
+
+**Input dialog**:
+`api.dialog.input(opts) -> Promise<string | undefined>` — a modal, host-rendered
+prompt with a single text field, resolving with the entered string or
+`undefined` when dismissed (Escape / backdrop / Cancel). The text sibling of
+**Quick pick** in the `api.dialog` family; like it, imperative host chrome (not a
+`ui.*` node), so it works regardless of **Projector** state.
+_Avoid_: prompt, modal, textbox
 
 ## Relationships
 
