@@ -271,42 +271,69 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
 
 function childToPreact(child: ChildNode, ctx: RenderContext): VNode {
   if (child.kind === "window") {
-    return windowToPreact(child, ctx);
+    return h(Window, { w: child, ctx, key: child.id }) as VNode;
   }
   return renderNode(child, (c) => childToPreact(c, ctx));
 }
 
-function windowToPreact(w: WindowNode, ctx: RenderContext): VNode {
-  const { windowStates, activeWindowId, onFocusWindow, onMoveWindow } = ctx;
-  const state = windowStates.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
-  const isActive = w.id === activeWindowId;
+interface WindowDrag {
+  containerRef: { current: HTMLDivElement | null };
+  onTitlePointerDown: (e: PointerEvent) => void;
+}
 
-  const handleTitleBarPointerDown = (e: PointerEvent) => {
-    onFocusWindow(w.id);
-    const titleBar = e.currentTarget as HTMLElement;
-    const container = titleBar.parentElement;
+// Title-bar drag. Mutates the container element directly during the drag (no
+// per-move re-render / collector re-run) and commits the final position on
+// pointerup. The global listeners self-remove on pointerup; the unmount cleanup
+// covers a window that closes mid-drag.
+function useWindowDrag(w: WindowNode, ctx: RenderContext): WindowDrag {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => cleanupRef.current?.(), []);
+
+  const onTitlePointerDown = (e: PointerEvent) => {
+    ctx.onFocusWindow(w.id);
+    const container = containerRef.current;
     if (!container) return;
+    const state = ctx.windowStates.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
     const startX = e.clientX;
     const startY = e.clientY;
     const startLeft = state.x;
     const startTop = state.y;
 
-    const onPointerMove = (moveEvent: PointerEvent) => {
-      container.style.left = `${startLeft + moveEvent.clientX - startX}px`;
-      container.style.top = `${startTop + moveEvent.clientY - startY}px`;
+    const onPointerMove = (ev: PointerEvent) => {
+      container.style.left = `${startLeft + ev.clientX - startX}px`;
+      container.style.top = `${startTop + ev.clientY - startY}px`;
     };
-
-    const onPointerUp = (upEvent: PointerEvent) => {
+    const cleanup = () => {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
-      const finalX = startLeft + upEvent.clientX - startX;
-      const finalY = startTop + upEvent.clientY - startY;
-      onMoveWindow(w.id, finalX, finalY);
+      cleanupRef.current = null;
+    };
+    const onPointerUp = (ev: PointerEvent) => {
+      cleanup();
+      ctx.onMoveWindow(w.id, startLeft + ev.clientX - startX, startTop + ev.clientY - startY);
     };
 
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
+    cleanupRef.current = cleanup;
   };
+
+  return { containerRef, onTitlePointerDown };
+}
+
+// A floating window. The interaction (drag/focus, and later resize/pop-out)
+// lives here as a component so it has a real lifecycle + a container ref; the
+// pure markup is built by windowToPreact (kept separate and unit-testable).
+function Window({ w, ctx }: { w: WindowNode; ctx: RenderContext }): VNode {
+  const drag = useWindowDrag(w, ctx);
+  return windowToPreact(w, ctx, drag);
+}
+
+export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDrag): VNode {
+  const { windowStates, activeWindowId, onFocusWindow } = ctx;
+  const state = windowStates.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
+  const isActive = w.id === activeWindowId;
 
   const titleBarChildren: VNode[] = [];
   titleBarChildren.push(
@@ -330,7 +357,7 @@ function windowToPreact(w: WindowNode, ctx: RenderContext): VNode {
   const titleBar = h("div", {
     class:
       "flex items-center h-9 bg-toolbox-deepest border-b border-toolbox-border px-3 cursor-default select-none",
-    onPointerDown: handleTitleBarPointerDown,
+    onPointerDown: drag.onTitlePointerDown,
     children: titleBarChildren,
   });
 
@@ -340,6 +367,7 @@ function windowToPreact(w: WindowNode, ctx: RenderContext): VNode {
   });
 
   return h("div", {
+    ref: drag.containerRef,
     class: containerClass,
     style: { left: state.x, top: state.y, zIndex: state.zIndex } as any,
     "data-toolbox-window": w.id,
@@ -358,6 +386,6 @@ export function toPreact(
   const ctx: RenderContext = { windowStates, activeWindowId, onFocusWindow, onMoveWindow };
   return h("div", {
     class: "fixed inset-0",
-    children: windows.map((w) => windowToPreact(w, ctx)),
+    children: windows.map((w) => h(Window, { w, ctx, key: w.id })),
   }) as VNode;
 }

@@ -1,72 +1,87 @@
 import { describe, expect, it } from "vite-plus/test";
-import { toPreact, renderNode } from "./renderer.tsx";
+import { type RenderContext, toPreact, renderNode, windowToPreact } from "./renderer.tsx";
 import type { WindowNode, ChildNode } from "./collector.ts";
 import type { WindowState } from "./runtime.ts";
 import { h } from "preact";
 import type { VNode } from "preact";
 
+const noop = () => {};
+
+// Build a RenderContext + an inert drag (containerRef/handler) for testing the
+// pure window markup directly, without mounting the Window component.
+function makeCtx(states: Map<string, WindowState>, active: string | null = null): RenderContext {
+  return { windowStates: states, activeWindowId: active, onFocusWindow: noop, onMoveWindow: noop };
+}
+const inertDrag = { containerRef: { current: null }, onTitlePointerDown: noop };
+
 describe("toPreact", () => {
-  const noop = () => {};
-
-  it("renders a window with a label inside the desktop container", () => {
+  it("renders one keyed Window component per window in the desktop container", () => {
     const tree: WindowNode[] = [
-      { kind: "window", id: "__main__", title: "Hello", children: [{ kind: "label", text: "Hi" }] },
+      { kind: "window", id: "a", title: "A", children: [] },
+      { kind: "window", id: "b", title: "B", children: [] },
     ];
-    const states = new Map<string, WindowState>([["__main__", { x: 100, y: 100, zIndex: 1 }]]);
-    const el = toPreact(tree, states, "__main__", noop, noop) as ReturnType<typeof h>;
-    expect(el).toBeTruthy();
+    const states = new Map<string, WindowState>();
+    const el = toPreact(tree, states, null, noop, noop) as any;
+    expect(el.type).toBe("div");
+    const children = el.props.children;
+    expect(children).toHaveLength(2);
+    // Each window is a component vnode keyed by its id (so per-window state
+    // survives reconciliation as windows open/close/reorder).
+    expect(typeof children[0].type).toBe("function");
+    expect(children[0].key).toBe("a");
+    expect(children[1].key).toBe("b");
+  });
+});
+
+describe("windowToPreact (pure window markup)", () => {
+  it("marks the window container with data-toolbox-window and wires the container ref", () => {
+    const w: WindowNode = { kind: "window", id: "win1", title: "Win", children: [] };
+    const drag = { containerRef: { current: null }, onTitlePointerDown: noop };
+    const el = windowToPreact(w, makeCtx(new Map()), drag) as any;
+    expect(el.props["data-toolbox-window"]).toBe("win1");
+    // preact lifts `ref` onto the vnode, not into props
+    expect(el.ref).toBe(drag.containerRef);
   });
 
-  it("marks the window container with data-toolbox-window attribute", () => {
-    const tree: WindowNode[] = [{ kind: "window", id: "win1", title: "Win", children: [] }];
-    const states = new Map<string, WindowState>([["win1", { x: 0, y: 0, zIndex: 0 }]]);
-    const el = toPreact(tree, states, null, noop, noop) as ReturnType<typeof h>;
-    const windowDiv = (el as any).props.children[0];
-    expect(windowDiv.props["data-toolbox-window"]).toBe("win1");
+  it("wires the title bar's pointer-down to the drag handler", () => {
+    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [] };
+    let down = false;
+    const drag = { containerRef: { current: null }, onTitlePointerDown: () => (down = true) };
+    const el = windowToPreact(w, makeCtx(new Map()), drag) as any;
+    const titleBar = el.props.children[0];
+    titleBar.props.onPointerDown(new Event("pointerdown") as PointerEvent);
+    expect(down).toBe(true);
   });
 
-  it("renders a close button when window has an onClose handler", () => {
-    const tree: WindowNode[] = [
-      { kind: "window", id: "w", title: "W", children: [], onClose: () => {} },
-    ];
-    const states = new Map<string, WindowState>([["w", { x: 0, y: 0, zIndex: 0 }]]);
-    const el = toPreact(tree, states, null, noop, noop) as ReturnType<typeof h>;
-    const windowDiv = (el as any).props.children[0];
-    const titleBar = windowDiv.props.children[0];
-    const closeBtn = titleBar.props.children[1];
-    expect(closeBtn).toBeTruthy();
+  it("renders a close button when the window has an onClose handler", () => {
+    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [], onClose: () => {} };
+    const el = windowToPreact(w, makeCtx(new Map()), inertDrag) as any;
+    const titleBar = el.props.children[0];
+    expect(titleBar.props.children[1]).toBeTruthy();
   });
 
-  it("does not render close button when onClose is undefined", () => {
-    const tree: WindowNode[] = [{ kind: "window", id: "w", title: "W", children: [] }];
-    const states = new Map<string, WindowState>([["w", { x: 0, y: 0, zIndex: 0 }]]);
-    const el = toPreact(tree, states, null, noop, noop) as ReturnType<typeof h>;
-    const windowDiv = (el as any).props.children[0];
-    const titleBar = windowDiv.props.children[0];
+  it("does not render a close button when onClose is undefined", () => {
+    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [] };
+    const el = windowToPreact(w, makeCtx(new Map()), inertDrag) as any;
+    const titleBar = el.props.children[0];
     expect(titleBar.props.children.length).toBe(1);
   });
 
   it("applies the focus ring class to the active window", () => {
-    const tree: WindowNode[] = [{ kind: "window", id: "w", title: "W", children: [] }];
-    const states = new Map<string, WindowState>([["w", { x: 0, y: 0, zIndex: 0 }]]);
-    const el = toPreact(tree, states, "w", noop, noop) as ReturnType<typeof h>;
-    const windowDiv = (el as any).props.children[0];
-    expect(windowDiv.props.class).toContain("ring-focused");
+    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [] };
+    const el = windowToPreact(w, makeCtx(new Map(), "w"), inertDrag) as any;
+    expect(el.props.class).toContain("ring-focused");
   });
 
-  it("renders a spinner node with data-toolbox-spinner", () => {
-    const tree: WindowNode[] = [
-      {
-        kind: "window",
-        id: "w",
-        title: "Loading",
-        children: [{ kind: "spinner" }],
-      },
-    ];
-    const states = new Map<string, WindowState>([["w", { x: 0, y: 0, zIndex: 0 }]]);
-    const el = toPreact(tree, states, "w", noop, noop) as ReturnType<typeof h>;
-    const windowDiv = (el as any).props.children[0];
-    const body = windowDiv.props.children[1];
+  it("renders a spinner child with data-toolbox-spinner", () => {
+    const w: WindowNode = {
+      kind: "window",
+      id: "w",
+      title: "Loading",
+      children: [{ kind: "spinner" }],
+    };
+    const el = windowToPreact(w, makeCtx(new Map(), "w"), inertDrag) as any;
+    const body = el.props.children[1];
     const children = body.props.children;
     const spinnerContainer = Array.isArray(children) ? children[0] : children;
     expect(spinnerContainer.props["data-toolbox-spinner"]).toBe("");
