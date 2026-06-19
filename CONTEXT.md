@@ -131,7 +131,9 @@ yields _exactly one_ File via `onFile`; any ambiguity — several dropped files,
 or a clipboard payload with multiple representations — is resolved through a
 **Quick pick**, never a silent guess. Distinct from the deferred, generic
 `ui.dropArea` / `ui.draggable` (inter-tool drag-and-drop): `ui.file` brings
-_external_ data _into_ a tool.
+_external_ data _into_ a tool. Once a file is present it can also leave: the
+`…` menu offers _Download_, and the file icon is draggable straight out to the
+OS desktop (Chromium `DownloadURL` trick).
 _Avoid_: file picker, upload, dropzone, dropArea
 
 ## Relationships

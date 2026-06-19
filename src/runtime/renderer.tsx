@@ -111,6 +111,35 @@ function openFileDialog(node: Extract<Node, { kind: "file" }>): void {
   input.click();
 }
 
+// Save the current file to disk.
+function downloadFile(file: File): void {
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Drag the file out of the browser onto the OS desktop using the Chromium
+// "DownloadURL" DataTransfer trick (https://dt.in.th/DownloadURL). Module-
+// scoped because the runtime re-renders often: dragstart and dragend must
+// share the same object-URL across re-renders during a single drag.
+let dragOutUrl: string | null = null;
+function startFileDragOut(e: DragEvent, file: File): void {
+  if (!e.dataTransfer) return;
+  dragOutUrl = URL.createObjectURL(file);
+  const mime = file.type || "application/octet-stream";
+  e.dataTransfer.setData("DownloadURL", `${mime}:${file.name}:${dragOutUrl}`);
+  e.dataTransfer.effectAllowed = "copy";
+}
+function endFileDragOut(): void {
+  const url = dragOutUrl;
+  dragOutUrl = null;
+  // Revoke late: the OS may still be reading the URL to write the file.
+  if (url) setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 // The `…` menu. Anchored to the ⋯ button but rendered into a detached host on
 // document.body and positioned with floating-ui, so it floats over (and past)
 // the clipped window — windows keep their overflow-hidden; popovers escape,
@@ -134,6 +163,27 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
     };
     const itemClass =
       "text-left px-3 py-1.5 text-sm text-toolbox-text hover:bg-toolbox-content whitespace-nowrap";
+    const file = node.file;
+    const item = (label: string, onClick: () => void): VNode =>
+      h("button", { type: "button", class: itemClass, onClick }, label) as VNode;
+    const menuItems: VNode[] = [
+      item(
+        "Choose file…",
+        run(() => openFileDialog(node)),
+      ),
+      item(
+        "Paste from clipboard",
+        run(() => void pasteFromClipboard(node)),
+      ),
+    ];
+    if (file) {
+      menuItems.push(
+        item(
+          "Download",
+          run(() => downloadFile(file)),
+        ),
+      );
+    }
     render(
       h(
         "div",
@@ -142,18 +192,7 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
             "fixed left-0 top-0 z-50 min-w-44 bg-toolbox-surface border border-toolbox-border rounded shadow-xl flex flex-col py-1",
           onClick: (e: Event) => e.stopPropagation(),
         },
-        [
-          h(
-            "button",
-            { type: "button", class: itemClass, onClick: run(() => openFileDialog(node)) },
-            "Choose file…",
-          ),
-          h(
-            "button",
-            { type: "button", class: itemClass, onClick: run(() => void pasteFromClipboard(node)) },
-            "Paste from clipboard",
-          ),
-        ],
+        menuItems,
       ),
       host,
     );
@@ -216,7 +255,18 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
   const body: VNode = f
     ? (h("div", { class: "flex flex-col gap-1" }, [
         h("div", { class: "flex items-center gap-2" }, [
-          h("span", { class: "text-toolbox-accent" }, "📄"),
+          // Draggable icon: drag the file out to the OS (Chromium DownloadURL).
+          h(
+            "span",
+            {
+              class: "text-toolbox-accent cursor-grab active:cursor-grabbing",
+              draggable: true,
+              title: "Drag to save this file",
+              onDragStart: (e: DragEvent) => startFileDragOut(e, f),
+              onDragEnd: endFileDragOut,
+            },
+            "📄",
+          ),
           h("span", { class: "flex-1 truncate text-toolbox-text" }, f.name),
         ]),
         h(
