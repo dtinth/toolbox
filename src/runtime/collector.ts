@@ -22,7 +22,8 @@ export type Node =
       resolve: (files: File[]) => void;
     }
   | { kind: "spinner" }
-  | { kind: "checkbox"; label: string; checked: boolean; onChange?: (checked: boolean) => void };
+  | { kind: "checkbox"; label: string; checked: boolean; onChange?: (checked: boolean) => void }
+  | { kind: "copyableText"; text: string };
 
 export type ChildNode = Node | WindowNode;
 
@@ -50,6 +51,7 @@ export interface Ui {
     opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
   ): void;
   checkbox(label: string, opts: { checked: boolean; onChange?: (checked: boolean) => void }): void;
+  copyableText(text: string): void;
   file(
     file: File | null,
     opts: {
@@ -147,6 +149,9 @@ export function collect(declarator: (ui: Ui) => void, deps: CollectDeps = {}): W
         checked: opts.checked,
         onChange: opts.onChange,
       });
+    },
+    copyableText(text) {
+      stack[stack.length - 1]!.children.push({ kind: "copyableText", text });
     },
     file(file, opts) {
       const onFile = opts.onFile;

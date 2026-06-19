@@ -80,6 +80,7 @@ export interface Ui {
     opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
   ): void;
   checkbox(label: string, opts: { checked: boolean; onChange?: (checked: boolean) => void }): void;
+  copyableText(text: string): void;
   /**
    * A focusable intake box that yields a File from choose-a-file, drop, or
    * paste. Pass the tool's current file (or null) for the metadata display;

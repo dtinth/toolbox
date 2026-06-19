@@ -22,6 +22,7 @@ describe("loadTool", () => {
         textInput() {},
         textarea() {},
         checkbox() {},
+        copyableText() {},
         file() {},
       },
       requestUpdate: () => {},

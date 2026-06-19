@@ -129,6 +129,7 @@ function build(): TestRuntime {
     textInput() {},
     textarea() {},
     checkbox() {},
+    copyableText() {},
     file() {},
   };
 
