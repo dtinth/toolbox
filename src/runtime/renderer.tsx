@@ -1,7 +1,7 @@
 import { h, render, type VNode } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
-import type { ChildNode, Node, WindowNode } from "./collector.ts";
+import type { ChildNode, MenuNode, Node, WindowNode } from "./collector.ts";
 import type { WindowState } from "./runtime.ts";
 import { filesFromClipboardItems, filesFromDataTransfer } from "./file-intake.ts";
 
@@ -445,6 +445,115 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
   }) as VNode;
 }
 
+function MenuBarItem({ menu }: { menu: MenuNode }): VNode {
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
+  // Keep the latest menu in a ref so that the effect (keyed only on `open`) reads
+  // fresh items without tearing the dropdown down on every re-render.
+  const menuRef = useRef(menu);
+  menuRef.current = menu;
+
+  useEffect(() => {
+    const anchor = anchorRef.current;
+    if (!open || !anchor) return;
+
+    const host = document.createElement("div");
+    host.setAttribute("data-toolbox-chrome", "");
+    document.body.appendChild(host);
+
+    const renderDropdown = () => {
+      const items = menuRef.current.items.map((item) => {
+        if (item.kind === "menuSeparator") {
+          return h("div", { class: "my-1 border-t border-toolbox-border" }) as VNode;
+        }
+        return h(
+          "button",
+          {
+            type: "button",
+            class:
+              "text-left px-3 py-1.5 text-sm text-toolbox-text hover:bg-toolbox-content whitespace-nowrap",
+            onClick: () => {
+              setOpen(false);
+              item.onClick?.();
+            },
+          },
+          item.label,
+        ) as VNode;
+      });
+      render(
+        h(
+          "div",
+          {
+            class:
+              "fixed left-0 top-0 z-50 min-w-44 bg-toolbox-surface border border-toolbox-border rounded shadow-xl flex flex-col py-1",
+            onClick: (e: Event) => e.stopPropagation(),
+          },
+          items,
+        ),
+        host,
+      );
+    };
+
+    renderDropdown();
+
+    const pop = host.firstElementChild as HTMLElement;
+    const stop = autoUpdate(
+      anchor,
+      pop,
+      () => {
+        void computePosition(anchor, pop, {
+          placement: "bottom-start",
+          middleware: [offset(4), flip(), shift({ padding: 8 })],
+        }).then(({ x, y }) => {
+          pop.style.left = `${x}px`;
+          pop.style.top = `${y}px`;
+        });
+      },
+      { animationFrame: true },
+    );
+
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as globalThis.Node;
+      if (!host.contains(target) && !anchor.contains(target)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKey);
+
+    return () => {
+      stop();
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKey);
+      render(null, host);
+      host.remove();
+    };
+  }, [open]);
+
+  return h(
+    "button",
+    {
+      ref: anchorRef,
+      type: "button",
+      class: "px-2 py-0.5 text-xs text-toolbox-text rounded hover:bg-toolbox-content",
+      onClick: () => setOpen((o) => !o),
+    },
+    menu.label,
+  ) as VNode;
+}
+
+function WindowMenuBar({ menus }: { menus: MenuNode[] }): VNode {
+  return h(
+    "div",
+    {
+      class:
+        "flex items-center gap-1 px-2 h-8 bg-toolbox-deepest border-b border-toolbox-border select-none",
+    },
+    menus.map((menu) => h(MenuBarItem, { menu, key: menu.label })),
+  ) as VNode;
+}
+
 function childToPreact(child: ChildNode, ctx: RenderContext): VNode {
   if (child.kind === "window") {
     return h(Window, { w: child, ctx, key: child.id }) as VNode;
@@ -577,13 +686,15 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDr
     children: w.children.map((child) => childToPreact(child, ctx)),
   });
 
+  const menuBar = w.menus.length > 0 ? h(WindowMenuBar, { menus: w.menus }) : null;
+
   return h("div", {
     ref: drag.containerRef,
     class: containerClass,
     style: { left: state.x, top: state.y, zIndex: state.zIndex } as any,
     "data-toolbox-window": w.id,
     onPointerDown: () => onFocusWindow(w.id),
-    children: [titleBar, body],
+    children: menuBar ? [titleBar, menuBar, body] : [titleBar, body],
   }) as VNode;
 }
 

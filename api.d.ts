@@ -81,6 +81,9 @@ export interface Ui {
   ): void;
   checkbox(label: string, opts: { checked: boolean; onChange?: (checked: boolean) => void }): void;
   copyableText(text: string): void;
+  menu(label: string, cb: () => void): void;
+  menuItem(label: string, opts?: { onClick?: () => void }): void;
+  menuSeparator(): void;
   /**
    * A focusable intake box that yields a File from choose-a-file, drop, or
    * paste. Pass the tool's current file (or null) for the metadata display;

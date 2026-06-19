@@ -130,6 +130,9 @@ function build(): TestRuntime {
     textarea() {},
     checkbox() {},
     copyableText() {},
+    menu() {},
+    menuItem() {},
+    menuSeparator() {},
     file() {},
   };
 
@@ -262,6 +265,7 @@ function build(): TestRuntime {
           id: scopeId(instanceId, "__main__"),
           title: instance.info.name,
           children: [{ kind: "spinner" }],
+          menus: [],
           onClose: () => instance.api.dispose(),
         };
         allWindows.push(loadingWindow);
