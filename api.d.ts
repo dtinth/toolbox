@@ -77,6 +77,13 @@ export interface Ui {
     (id: string, title: string, cb: () => void): void;
     /** Override the current window's display title for this frame. */
     setTitle(newTitle: string): void;
+    /**
+     * Fix the current window's content width to `width` CSS pixels for this
+     * frame. Without it a window sizes to its content (long, unbreakable text
+     * can push it past the viewport); with it the window keeps that width and
+     * its contents clip / truncate instead.
+     */
+    setWidth(width: number): void;
     /** Set the current window's close handler. */
     onClose(handler: () => void): void;
   };

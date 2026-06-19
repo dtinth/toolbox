@@ -23,6 +23,28 @@ describe("collector", () => {
     expect(result[0]!.title).toBe("My App");
   });
 
+  it("sets main window width via ui.window.setWidth", () => {
+    const result = collect((ui) => {
+      ui.window.setWidth(420);
+    });
+    expect(result[0]!.width).toBe(420);
+  });
+
+  it("leaves window width undefined when setWidth is not called", () => {
+    const result = collect(() => {});
+    expect(result[0]!.width).toBeUndefined();
+  });
+
+  it("sets a sub-window's width via setWidth inside its callback", () => {
+    const result = collect((ui) => {
+      ui.window("sub", () => {
+        ui.window.setWidth(300);
+      });
+    });
+    expect(result[1]!.width).toBe(300);
+    expect(result[0]!.width).toBeUndefined();
+  });
+
   it("creates a sub-window with id as default title", () => {
     const result = collect((ui) => {
       ui.window("sub", () => {

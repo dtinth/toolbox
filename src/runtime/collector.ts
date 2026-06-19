@@ -39,6 +39,7 @@ export type WindowNode = {
   title: string;
   children: ChildNode[];
   menus: MenuNode[];
+  width?: number;
   onClose?: () => void;
 };
 
@@ -47,6 +48,7 @@ export interface Ui {
     (id: string, cb: () => void): void;
     (id: string, title: string, cb: () => void): void;
     setTitle(newTitle: string): void;
+    setWidth(width: number): void;
     onClose(handler: () => void): void;
   };
   label(text: string): void;
@@ -112,6 +114,12 @@ export function collect(declarator: (ui: Ui) => void, deps: CollectDeps = {}): W
         const current = stack[stack.length - 1];
         if ("kind" in current) {
           (current as WindowNode).title = newTitle;
+        }
+      },
+      setWidth(width: number) {
+        const current = stack[stack.length - 1];
+        if ("kind" in current) {
+          (current as WindowNode).width = width;
         }
       },
       onClose(handler: () => void) {
