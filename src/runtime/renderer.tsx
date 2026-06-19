@@ -121,6 +121,29 @@ function downloadFile(file: File): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// Open the file (blob URL) in a new tab — doubles as a preview.
+function openInNewTab(file: File): void {
+  const url = URL.createObjectURL(file);
+  window.open(url, "_blank", "noopener");
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+// Only text and PNG can be put on the clipboard (browser-supported types).
+function canCopyToClipboard(file: File): boolean {
+  return file.type === "text/plain" || file.type === "image/png";
+}
+async function copyFileToClipboard(file: File): Promise<void> {
+  try {
+    if (file.type === "text/plain") {
+      await navigator.clipboard.writeText(await file.text());
+    } else if (file.type === "image/png") {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": file })]);
+    }
+  } catch {
+    // permission denied / unsupported — no-op
+  }
+}
+
 // Drag the file out of the browser onto the OS desktop using the Chromium
 // "DownloadURL" DataTransfer trick (https://dt.in.th/DownloadURL). Module-
 // scoped because the runtime re-renders often: dragstart and dragend must
@@ -177,6 +200,20 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
       ),
     ];
     if (file) {
+      menuItems.push(
+        item(
+          "Open in new tab",
+          run(() => openInNewTab(file)),
+        ),
+      );
+      if (canCopyToClipboard(file)) {
+        menuItems.push(
+          item(
+            "Copy to clipboard",
+            run(() => void copyFileToClipboard(file)),
+          ),
+        );
+      }
       menuItems.push(
         item(
           "Download",
