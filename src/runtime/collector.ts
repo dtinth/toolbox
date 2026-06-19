@@ -21,7 +21,8 @@ export type Node =
       readOnly?: boolean;
       resolve: (files: File[]) => void;
     }
-  | { kind: "spinner" };
+  | { kind: "spinner" }
+  | { kind: "checkbox"; label: string; checked: boolean; onChange?: (checked: boolean) => void };
 
 export type ChildNode = Node | WindowNode;
 
@@ -48,6 +49,7 @@ export interface Ui {
     value: string,
     opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
   ): void;
+  checkbox(label: string, opts: { checked: boolean; onChange?: (checked: boolean) => void }): void;
   file(
     file: File | null,
     opts: {
@@ -136,6 +138,14 @@ export function collect(declarator: (ui: Ui) => void, deps: CollectDeps = {}): W
         placeholder: opts?.placeholder,
         onChange: opts?.onChange,
         rows: opts?.rows,
+      });
+    },
+    checkbox(label, opts) {
+      stack[stack.length - 1]!.children.push({
+        kind: "checkbox",
+        label,
+        checked: opts.checked,
+        onChange: opts.onChange,
       });
     },
     file(file, opts) {

@@ -122,4 +122,26 @@ describe("collector", () => {
     // No onFile provided — resolve must not throw.
     expect(() => node.resolve([new File(["y"], "y.bin")])).not.toThrow();
   });
+
+  it("collects a checkbox node with label and checked state", () => {
+    const result = collect((ui) => {
+      ui.checkbox("Enable feature", { checked: true });
+    });
+    const node = result[0]!.children[0]!;
+    expect(node.kind).toBe("checkbox");
+    if (node.kind !== "checkbox") throw new Error("expected checkbox node");
+    expect(node.label).toBe("Enable feature");
+    expect(node.checked).toBe(true);
+  });
+
+  it("collects a checkbox node whose onChange forwards the value", () => {
+    const received: boolean[] = [];
+    const result = collect((ui) => {
+      ui.checkbox("Toggle me", { checked: false, onChange: (v) => received.push(v) });
+    });
+    const node = result[0]!.children[0]!;
+    if (node.kind !== "checkbox") throw new Error("expected checkbox node");
+    node.onChange?.(true);
+    expect(received).toEqual([true]);
+  });
 });

@@ -128,6 +128,7 @@ function build(): TestRuntime {
     row() {},
     textInput() {},
     textarea() {},
+    checkbox() {},
     file() {},
   };
 

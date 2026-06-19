@@ -66,6 +66,24 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
         class:
           "bg-toolbox-deepest border border-toolbox-border rounded px-2 py-1 text-sm text-toolbox-text placeholder-toolbox-muted font-mono w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
       }) as VNode;
+    case "checkbox":
+      return h(
+        "label",
+        {
+          class:
+            "flex flex-row items-center gap-2 cursor-pointer select-none text-toolbox-text text-sm",
+        },
+        h("input", {
+          type: "checkbox",
+          checked: node.checked,
+          class: "accent-toolbox-accent",
+          onChange: (e: Event) => {
+            const checked = (e.currentTarget as HTMLInputElement).checked;
+            node.onChange?.(checked);
+          },
+        }),
+        h("span", null, node.label),
+      ) as VNode;
     case "spinner":
       return h("div", {
         class: "flex items-center justify-center py-6",
