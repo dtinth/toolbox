@@ -1,4 +1,6 @@
-import { h, type VNode } from "preact";
+import { h, render, type VNode } from "preact";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 import type { ChildNode, Node, WindowNode } from "./collector.ts";
 import type { WindowState } from "./runtime.ts";
 import { filesFromClipboardItems, filesFromDataTransfer } from "./file-intake.ts";
@@ -97,17 +99,115 @@ async function pasteFromClipboard(node: Extract<Node, { kind: "file" }>): Promis
   }
 }
 
-function fileBox(el: HTMLElement): Element | null {
-  return el.closest("[data-toolbox-file]");
+// Open the native file chooser via an ephemeral input (no hidden input lives in
+// the box, so nothing depends on DOM traversal from the portaled menu).
+function openFileDialog(node: Extract<Node, { kind: "file" }>): void {
+  const input = document.createElement("input");
+  input.type = "file";
+  if (node.accept) input.accept = node.accept;
+  input.addEventListener("change", () => {
+    node.resolve(Array.from(input.files ?? []));
+  });
+  input.click();
 }
 
-function clickHiddenInput(el: HTMLElement): void {
-  fileBox(el)?.querySelector<HTMLInputElement>('input[type="file"]')?.click();
-}
+// The `…` menu. Anchored to the ⋯ button but rendered into a detached host on
+// document.body and positioned with floating-ui, so it floats over (and past)
+// the clipped window — windows keep their overflow-hidden; popovers escape,
+// like other host chrome. Rendering the popover and wiring its position happen
+// in one effect so the element always exists before it is positioned.
+function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
 
-function closeMenu(el: HTMLElement): void {
-  const details = el.closest("details");
-  if (details) (details as HTMLDetailsElement).open = false;
+  useEffect(() => {
+    const anchor = anchorRef.current;
+    if (!open || !anchor) return;
+
+    const host = document.createElement("div");
+    host.setAttribute("data-toolbox-chrome", "");
+    document.body.appendChild(host);
+
+    const run = (fn: () => void) => () => {
+      setOpen(false);
+      fn();
+    };
+    const itemClass =
+      "text-left px-3 py-1.5 text-sm text-toolbox-text hover:bg-toolbox-content whitespace-nowrap";
+    render(
+      h(
+        "div",
+        {
+          class:
+            "fixed left-0 top-0 z-50 min-w-44 bg-toolbox-surface border border-toolbox-border rounded shadow-xl flex flex-col py-1",
+          onClick: (e: Event) => e.stopPropagation(),
+        },
+        [
+          h(
+            "button",
+            { type: "button", class: itemClass, onClick: run(() => openFileDialog(node)) },
+            "Choose file…",
+          ),
+          h(
+            "button",
+            { type: "button", class: itemClass, onClick: run(() => void pasteFromClipboard(node)) },
+            "Paste from clipboard",
+          ),
+        ],
+      ),
+      host,
+    );
+
+    const pop = host.firstElementChild as HTMLElement;
+    const stop = autoUpdate(
+      anchor,
+      pop,
+      () => {
+        void computePosition(anchor, pop, {
+          placement: "bottom-end",
+          middleware: [offset(4), flip(), shift({ padding: 8 })],
+        }).then(({ x, y }) => {
+          pop.style.left = `${x}px`;
+          pop.style.top = `${y}px`;
+        });
+      },
+      { animationFrame: true },
+    );
+
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as globalThis.Node;
+      if (!host.contains(target) && !anchor.contains(target)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKey);
+
+    return () => {
+      stop();
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKey);
+      render(null, host);
+      host.remove();
+    };
+  }, [open, node]);
+
+  return h(
+    "button",
+    {
+      ref: anchorRef,
+      type: "button",
+      "aria-label": "File options",
+      class:
+        "shrink-0 px-1 text-toolbox-muted hover:text-toolbox-text select-none opacity-60 hover:opacity-100",
+      onClick: (e: Event) => {
+        e.stopPropagation();
+        setOpen((o) => !o);
+      },
+    },
+    "⋯",
+  ) as VNode;
 }
 
 function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
@@ -130,71 +230,6 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
         { class: "text-toolbox-muted text-sm" },
         node.label ?? "Click and paste, drop a file, or use the ⋯ menu",
       ) as VNode);
-
-  const hiddenInput = h("input", {
-    type: "file",
-    accept: node.accept,
-    class: "hidden",
-    onChange: (e: Event) => {
-      const input = e.currentTarget as HTMLInputElement;
-      node.resolve(Array.from(input.files ?? []));
-      input.value = "";
-    },
-  });
-
-  const menuItemClass =
-    "text-left px-3 py-1.5 text-sm text-toolbox-text hover:bg-toolbox-content whitespace-nowrap";
-  const menu = h(
-    "details",
-    {
-      class: "relative shrink-0 opacity-60 hover:opacity-100",
-      onClick: (e: Event) => e.stopPropagation(),
-    },
-    [
-      h(
-        "summary",
-        {
-          class:
-            "list-none cursor-pointer px-1 text-toolbox-muted hover:text-toolbox-text select-none",
-          "aria-label": "File options",
-        },
-        "⋯",
-      ),
-      h(
-        "div",
-        {
-          class:
-            "absolute right-0 mt-1 z-10 min-w-44 bg-toolbox-surface border border-toolbox-border rounded shadow-xl flex flex-col py-1",
-        },
-        [
-          h(
-            "button",
-            {
-              type: "button",
-              class: menuItemClass,
-              onClick: (e: Event) => {
-                closeMenu(e.currentTarget as HTMLElement);
-                clickHiddenInput(e.currentTarget as HTMLElement);
-              },
-            },
-            "Choose file…",
-          ),
-          h(
-            "button",
-            {
-              type: "button",
-              class: menuItemClass,
-              onClick: (e: Event) => {
-                closeMenu(e.currentTarget as HTMLElement);
-                void pasteFromClipboard(node);
-              },
-            },
-            "Paste from clipboard",
-          ),
-        ],
-      ),
-    ],
-  );
 
   const setDragActive = (e: Event, active: boolean) => {
     const box = e.currentTarget as HTMLElement;
@@ -228,9 +263,8 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
     children: [
       h("div", { class: "flex items-start gap-2" }, [
         h("div", { class: "flex-1 min-w-0" }, body),
-        menu,
+        h(FileMenu, { node }),
       ]),
-      hiddenInput,
     ],
   }) as VNode;
 }

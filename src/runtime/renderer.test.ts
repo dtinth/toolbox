@@ -179,10 +179,7 @@ describe("renderNode (pure node renderer)", () => {
     expect(rendered).toEqual([labelA, labelB]);
   });
 
-  const fileInputOf = (el: any) =>
-    findVNode(el, (n) => n.type === "input" && n.props?.type === "file");
-
-  it("renders a focusable empty file box with the placeholder label and a hidden input", () => {
+  it("renders a focusable empty file box with the placeholder label", () => {
     const el = renderNode(
       { kind: "file", file: null, label: "Drop a blob", resolve: () => {} },
       noChild,
@@ -191,8 +188,6 @@ describe("renderNode (pure node renderer)", () => {
     expect(el.props.tabindex).toBe(0);
     expect(el.props["data-toolbox-file"]).toBe("");
     expect(collectText(el)).toContain("Drop a blob");
-    const input = fileInputOf(el);
-    expect(input.props.class).toContain("hidden");
   });
 
   it("renders file metadata (name, type, size) when a file is present", () => {
@@ -201,17 +196,6 @@ describe("renderNode (pure node renderer)", () => {
     const text = collectText(el);
     expect(text).toContain("note.txt");
     expect(text).toContain("text/plain · 5 B");
-  });
-
-  it("delivers selected files through resolve via the hidden input onChange", () => {
-    const delivered: File[][] = [];
-    const el = renderNode(
-      { kind: "file", file: null, resolve: (files) => delivered.push(files) },
-      noChild,
-    ) as any;
-    const file = new File(["x"], "x.bin", { type: "application/octet-stream" });
-    fileInputOf(el).props.onChange({ currentTarget: { files: [file], value: "" } });
-    expect(delivered).toEqual([[file]]);
   });
 
   it("delivers dropped files through resolve and prevents default", () => {
@@ -263,12 +247,11 @@ describe("renderNode (pure node renderer)", () => {
     expect(delivered[0]).toEqual([file]);
   });
 
-  it("offers a … menu with Choose file… and Paste from clipboard actions", () => {
+  it("mounts a … menu component (portaled popover; rendered/positioned in the browser)", () => {
     const el = renderNode({ kind: "file", file: null, resolve: () => {} }, noChild) as any;
-    const text = collectText(el);
-    expect(text).toContain("Choose file…");
-    expect(text).toContain("Paste from clipboard");
-    // The menu uses a native <details> so it toggles without component state.
-    expect(findVNode(el, (n) => n.type === "details")).toBeTruthy();
+    // The menu is a component (FileMenu) so it can use hooks + floating-ui +
+    // a portal; its actions are verified end-to-end in the browser, not here.
+    const component = findVNode(el, (n) => typeof n.type === "function");
+    expect(component).toBeTruthy();
   });
 });
