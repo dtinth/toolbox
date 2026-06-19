@@ -17,9 +17,6 @@ jobs:
       # defaults to true), so no separate pnpm/corepack/setup-node steps.
       - uses: voidzero-dev/setup-vp@v1
         with:
-          # Match the local dev vp CLI; newer vp can't resolve the test runner
-          # against the pinned vite-plus-test@0.1.24.
-          version: "0.1.20"
           node-version: "24"
           cache: true
 
@@ -27,10 +24,8 @@ jobs:
       - name: Check
         run: vp check
 
-      # NOTE: `vp test run` is run locally, not here. In CI the curl-installed
-      # vp resolves the project's vite-plus-test@0.1.24, which is skewed against
-      # vite-plus-core@0.2.1 (the catalog pins each to `latest` independently);
-      # the local mise vp is self-contained and sidesteps it. Tracked separately.
+      - name: Test
+        run: vp test run
 
       # Full build: prebuild lint gate + tsc + tool bundles + Vite client.
       - name: Build
