@@ -108,6 +108,38 @@ describe("runtime", () => {
     expect(redraws).toBe(2);
   });
 
+  it("tick() does not redraw when no tool has a tick subscriber", () => {
+    const runtime = createTestRuntime();
+    runtime.loadTool((api) => {
+      api.onRender = () => {};
+    });
+    runtime.render();
+    expect(runtime.hasTickSubscribers()).toBe(false);
+    const before = runtime.updateCount;
+    runtime.tick();
+    expect(runtime.updateCount).toBe(before);
+  });
+
+  it("hasTickSubscribers tracks subscriptions; tick() redraws only while subscribed", () => {
+    const runtime = createTestRuntime();
+    let unsub = () => {};
+    runtime.loadTool((api) => {
+      api.onRender = () => {};
+      unsub = api.tick(() => {});
+    });
+    expect(runtime.hasTickSubscribers()).toBe(true);
+
+    const before = runtime.updateCount;
+    runtime.tick();
+    expect(runtime.updateCount).toBeGreaterThan(before);
+
+    unsub();
+    expect(runtime.hasTickSubscribers()).toBe(false);
+    const after = runtime.updateCount;
+    runtime.tick();
+    expect(runtime.updateCount).toBe(after);
+  });
+
   it("api.toast.show returns a handle with update and dismiss", () => {
     const runtime = createTestRuntime();
     let handle: unknown = null;

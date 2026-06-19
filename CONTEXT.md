@@ -331,4 +331,6 @@ the DOM.
 
 `api.tick(cb)` registers a per-frame callback (rAF); `api.tick(rateHz, cb)`
 registers a fixed-rate callback. After each tick fires, the runtime
-triggers a redraw.
+triggers a redraw. The runtime runs the animation loop **only while at least
+one tool has an active tick subscriber** — an idle toolbox does no per-frame
+work (no ticks → no redraws).

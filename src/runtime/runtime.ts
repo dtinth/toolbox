@@ -60,6 +60,7 @@ export interface Runtime {
   requestUpdate(): void;
   subscribe(onChange: () => void): () => void;
   tick(): void;
+  hasTickSubscribers(): boolean;
   toasts(): Toast[];
   dismissToast(id: number): void;
   pendingPicks(): PickRequest[];
@@ -308,12 +309,24 @@ function build(): TestRuntime {
     });
   }
 
-  function fireTicks() {
+  function fireTicks(): boolean {
+    let fired = false;
     for (const instanceId of instanceOrder) {
       const instance = instances.get(instanceId);
       if (!instance) continue;
-      for (const cb of instance.tickSubscribers) cb();
+      for (const cb of instance.tickSubscribers) {
+        cb();
+        fired = true;
+      }
     }
+    return fired;
+  }
+
+  function hasTickSubscribers(): boolean {
+    for (const instanceId of instanceOrder) {
+      if ((instances.get(instanceId)?.tickSubscribers.size ?? 0) > 0) return true;
+    }
+    return false;
   }
 
   function focusWindow(id: string) {
@@ -359,9 +372,11 @@ function build(): TestRuntime {
       return lastButtonRef;
     },
     tick: () => {
-      fireTicks();
-      requestUpdate();
+      // Only redraw when a tick actually fired — keeps an idle toolbox (no
+      // animating tools) from re-rendering every animation frame.
+      if (fireTicks()) requestUpdate();
     },
+    hasTickSubscribers,
     toasts: () => toastCenter.list(),
     dismissToast: (id) => toastCenter.dismiss(id),
     pendingPicks: () => dialogCenter.list(),

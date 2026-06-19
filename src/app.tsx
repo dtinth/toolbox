@@ -185,17 +185,23 @@ export function EmbedHost({ runtime }: EmbedHostProps) {
   const [picks, setPicks] = useState<PickRequest[]>(() => runtime.pendingPicks());
 
   useEffect(() => {
+    // The animation loop runs only while a tool has a tick subscriber; an idle
+    // toolbox does no per-frame work.
+    let rafId: number | null = null;
+    const loop = () => {
+      runtime.tick();
+      rafId = runtime.hasTickSubscribers() ? requestAnimationFrame(loop) : null;
+    };
+    const ensureTicking = () => {
+      if (rafId === null && runtime.hasTickSubscribers()) rafId = requestAnimationFrame(loop);
+    };
     const unsubscribe = runtime.subscribe(() => {
       setVnode(runtime.render());
       setToasts(runtime.toasts());
       setPicks(runtime.pendingPicks());
+      ensureTicking();
     });
-    let rafId: number | null = null;
-    const loop = () => {
-      runtime.tick();
-      rafId = requestAnimationFrame(loop);
-    };
-    rafId = requestAnimationFrame(loop);
+    ensureTicking();
     return () => {
       unsubscribe();
       if (rafId !== null) cancelAnimationFrame(rafId);
@@ -224,18 +230,24 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
   const lastInstancesLengthRef = useRef(instances.length);
 
   useEffect(() => {
+    // The animation loop runs only while a tool has a tick subscriber; an idle
+    // toolbox does no per-frame work.
+    let rafId: number | null = null;
+    const loop = () => {
+      runtime.tick();
+      rafId = runtime.hasTickSubscribers() ? requestAnimationFrame(loop) : null;
+    };
+    const ensureTicking = () => {
+      if (rafId === null && runtime.hasTickSubscribers()) rafId = requestAnimationFrame(loop);
+    };
     const unsubscribe = runtime.subscribe(() => {
       setVnode(runtime.render());
       setToasts(runtime.toasts());
       setPicks(runtime.pendingPicks());
       setInstances(runtime.toolInstances());
+      ensureTicking();
     });
-    let rafId: number | null = null;
-    const loop = () => {
-      runtime.tick();
-      rafId = requestAnimationFrame(loop);
-    };
-    rafId = requestAnimationFrame(loop);
+    ensureTicking();
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
