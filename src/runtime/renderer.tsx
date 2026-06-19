@@ -380,41 +380,76 @@ interface WindowDrag {
   onTitlePointerDown: (e: PointerEvent) => void;
 }
 
-// Title-bar drag. Mutates the container element directly during the drag (no
-// per-move re-render / collector re-run) and commits the final position on
-// pointerup. The global listeners self-remove on pointerup; the unmount cleanup
-// covers a window that closes mid-drag.
+// Title-bar drag. During the drag the window is moved with a compositor-only
+// `transform` (no per-frame layout / collector re-run, and re-renders never
+// clobber it because `transform` isn't part of the vnode style). On release the
+// offset is baked into `left`/`top` atomically — so a static (non-ticking) tool
+// that never re-renders doesn't snap back.
+//
+// Tracking is done with `window` listeners rather than `setPointerCapture`:
+// explicit capture interacts badly with touch (a fast flick makes the browser
+// fire `pointercancel`, which would abort the drag the moment the finger moves
+// off the handle). The pointer is implicitly captured by the handle for touch,
+// and `window` sees every in-viewport move regardless, so the window follows the
+// cursor/finger anywhere. `touch-action: none` on the handle keeps the browser
+// from claiming the gesture for scrolling, and `user-select: none` on the root
+// (plus preventDefault) suppresses the body text-selection that, repainted over
+// the re-rendering DOM, is the other source of jank. The listeners self-remove
+// on release; the unmount cleanup covers a window that closes mid-drag.
 function useWindowDrag(w: WindowNode, ctx: RenderContext): WindowDrag {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   useEffect(() => () => cleanupRef.current?.(), []);
 
   const onTitlePointerDown = (e: PointerEvent) => {
+    // Primary button / touch / pen only; let title-bar controls (e.g. the ×
+    // close button) handle their own clicks instead of starting a drag.
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("button")) return;
+
+    e.preventDefault();
     ctx.onFocusWindow(w.id);
     const container = containerRef.current;
     if (!container) return;
+
     const state = ctx.windowStates.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
     const startX = e.clientX;
     const startY = e.clientY;
     const startLeft = state.x;
     const startTop = state.y;
+    let dx = 0;
+    let dy = 0;
+
+    const prevUserSelect = document.documentElement.style.userSelect;
+    document.documentElement.style.userSelect = "none";
 
     const onPointerMove = (ev: PointerEvent) => {
-      container.style.left = `${startLeft + ev.clientX - startX}px`;
-      container.style.top = `${startTop + ev.clientY - startY}px`;
+      dx = ev.clientX - startX;
+      dy = ev.clientY - startY;
+      container.style.transform = `translate(${dx}px, ${dy}px)`;
     };
     const cleanup = () => {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      document.documentElement.style.userSelect = prevUserSelect;
       cleanupRef.current = null;
     };
-    const onPointerUp = (ev: PointerEvent) => {
+    const onPointerUp = () => {
       cleanup();
-      ctx.onMoveWindow(w.id, startLeft + ev.clientX - startX, startTop + ev.clientY - startY);
+      // Bake the transform offset into left/top in one shot, then commit to the
+      // window manager so future re-renders agree with the DOM.
+      const finalLeft = startLeft + dx;
+      const finalTop = startTop + dy;
+      container.style.transform = "";
+      container.style.left = `${finalLeft}px`;
+      container.style.top = `${finalTop}px`;
+      ctx.onMoveWindow(w.id, finalLeft, finalTop);
     };
 
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
     cleanupRef.current = cleanup;
   };
 
@@ -455,7 +490,7 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDr
 
   const titleBar = h("div", {
     class:
-      "flex items-center h-9 bg-toolbox-deepest border-b border-toolbox-border px-3 cursor-default select-none",
+      "flex items-center h-9 bg-toolbox-deepest border-b border-toolbox-border px-3 cursor-move select-none touch-none",
     onPointerDown: drag.onTitlePointerDown,
     children: titleBarChildren,
   });
