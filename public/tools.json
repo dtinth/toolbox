@@ -27,6 +27,11 @@
       "id": "blob-inspector",
       "name": "Blob Inspector",
       "description": "Inspect a blob received via file picker, drop, or paste."
+    },
+    {
+      "id": "ipad-frame",
+      "name": "iPad Frame",
+      "description": "Drop an iPad screenshot into a device bezel."
     }
   ]
 }
