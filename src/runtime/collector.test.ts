@@ -144,4 +144,14 @@ describe("collector", () => {
     node.onChange?.(true);
     expect(received).toEqual([true]);
   });
+
+  it("collects a copyableText node carrying the text through", () => {
+    const result = collect((ui) => {
+      ui.copyableText("https://example.com/result");
+    });
+    const node = result[0]!.children[0]!;
+    expect(node.kind).toBe("copyableText");
+    if (node.kind !== "copyableText") throw new Error("expected copyableText node");
+    expect(node.text).toBe("https://example.com/result");
+  });
 });

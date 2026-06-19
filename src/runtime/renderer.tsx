@@ -95,7 +95,42 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
       }) as VNode;
     case "file":
       return fileToPreact(node);
+    case "copyableText":
+      return h(CopyableText, { node }) as VNode;
   }
+}
+
+function CopyableText({ node }: { node: Extract<Node, { kind: "copyableText" }> }): VNode {
+  const [copied, setCopied] = useState(false);
+  const textRef = useRef(node.text);
+  textRef.current = node.text;
+
+  return h(
+    "div",
+    {
+      draggable: true,
+      title: "Click to copy · drag to export",
+      class:
+        "border border-toolbox-border rounded px-3 py-2 bg-toolbox-deepest flex items-center gap-2 cursor-pointer select-none",
+      onClick: () => {
+        void navigator.clipboard
+          .writeText(textRef.current)
+          .then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1200);
+          })
+          .catch(() => {});
+      },
+      onDragStart: (e: DragEvent) => {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData("text/plain", textRef.current);
+          e.dataTransfer.effectAllowed = "copy";
+        }
+      },
+    },
+    h("span", { class: "flex-1 truncate font-mono text-sm text-toolbox-text" }, node.text),
+    h("span", { class: "text-xs text-toolbox-muted shrink-0" }, copied ? "Copied" : "⧉"),
+  ) as VNode;
 }
 
 function formatBytes(n: number): string {
