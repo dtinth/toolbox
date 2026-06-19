@@ -171,6 +171,12 @@ function endFileDragOut(): void {
 function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLButtonElement | null>(null);
+  // The runtime re-renders every frame, so `node` is a fresh object each frame.
+  // Keep it in a ref and depend the effect only on `open`, otherwise the menu
+  // host would be torn down + rebuilt every frame, breaking real (multi-frame)
+  // clicks. Handlers read nodeRef.current so they act on the latest node.
+  const nodeRef = useRef(node);
+  nodeRef.current = node;
 
   useEffect(() => {
     const anchor = anchorRef.current;
@@ -184,42 +190,32 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
       setOpen(false);
       fn();
     };
+    const withFile = (fn: (file: File) => void) => () => {
+      const file = nodeRef.current.file;
+      if (file) fn(file);
+    };
     const itemClass =
       "text-left px-3 py-1.5 text-sm text-toolbox-text hover:bg-toolbox-content whitespace-nowrap";
-    const file = node.file;
     const item = (label: string, onClick: () => void): VNode =>
       h("button", { type: "button", class: itemClass, onClick }, label) as VNode;
     const menuItems: VNode[] = [
       item(
         "Choose file…",
-        run(() => openFileDialog(node)),
+        run(() => openFileDialog(nodeRef.current)),
       ),
       item(
         "Paste from clipboard",
-        run(() => void pasteFromClipboard(node)),
+        run(() => void pasteFromClipboard(nodeRef.current)),
       ),
     ];
-    if (file) {
-      menuItems.push(
-        item(
-          "Open in new tab",
-          run(() => openInNewTab(file)),
-        ),
-      );
-      if (canCopyToClipboard(file)) {
+    if (nodeRef.current.file) {
+      menuItems.push(item("Open in new tab", run(withFile(openInNewTab))));
+      if (canCopyToClipboard(nodeRef.current.file)) {
         menuItems.push(
-          item(
-            "Copy to clipboard",
-            run(() => void copyFileToClipboard(file)),
-          ),
+          item("Copy to clipboard", run(withFile((f) => void copyFileToClipboard(f)))),
         );
       }
-      menuItems.push(
-        item(
-          "Download",
-          run(() => downloadFile(file)),
-        ),
-      );
+      menuItems.push(item("Download", run(withFile(downloadFile))));
     }
     render(
       h(
@@ -267,7 +263,7 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
       render(null, host);
       host.remove();
     };
-  }, [open, node]);
+  }, [open]);
 
   return h(
     "button",
