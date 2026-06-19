@@ -27,8 +27,10 @@ jobs:
       - name: Check
         run: vp check
 
-      - name: Test
-        run: vp test run
+      # NOTE: `vp test run` is run locally, not here. In CI the curl-installed
+      # vp resolves the project's vite-plus-test@0.1.24, which is skewed against
+      # vite-plus-core@0.2.1 (the catalog pins each to `latest` independently);
+      # the local mise vp is self-contained and sidesteps it. Tracked separately.
 
       # Full build: prebuild lint gate + tsc + tool bundles + Vite client.
       - name: Build
