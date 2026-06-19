@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { collect, type Ui } from "./collector.ts";
 
 describe("collector", () => {
@@ -153,5 +153,54 @@ describe("collector", () => {
     expect(node.kind).toBe("copyableText");
     if (node.kind !== "copyableText") throw new Error("expected copyableText node");
     expect(node.text).toBe("https://example.com/result");
+  });
+
+  it("collects a menu with items on the main window's menus array", () => {
+    const onClick = vi.fn();
+    const result = collect((ui) => {
+      ui.menu("File", () => {
+        ui.menuItem("New", { onClick });
+        ui.menuSeparator();
+        ui.menuItem("Quit");
+      });
+    });
+    const mainWindow = result[0]!;
+    expect(mainWindow.menus).toHaveLength(1);
+    const menu = mainWindow.menus[0]!;
+    expect(menu.kind).toBe("menu");
+    expect(menu.label).toBe("File");
+    expect(menu.items).toHaveLength(3);
+
+    const item0 = menu.items[0]!;
+    expect(item0.kind).toBe("menuItem");
+    if (item0.kind !== "menuItem") throw new Error("expected menuItem");
+    expect(item0.label).toBe("New");
+    item0.onClick?.();
+    expect(onClick).toHaveBeenCalledTimes(1);
+
+    expect(menu.items[1]!.kind).toBe("menuSeparator");
+
+    const item2 = menu.items[2]!;
+    expect(item2.kind).toBe("menuItem");
+    if (item2.kind !== "menuItem") throw new Error("expected menuItem");
+    expect(item2.label).toBe("Quit");
+  });
+
+  it("collects two menus independently on the same window", () => {
+    const result = collect((ui) => {
+      ui.menu("File", () => {
+        ui.menuItem("Open");
+      });
+      ui.menu("Edit", () => {
+        ui.menuItem("Cut");
+        ui.menuItem("Paste");
+      });
+    });
+    const mainWindow = result[0]!;
+    expect(mainWindow.menus).toHaveLength(2);
+    expect(mainWindow.menus[0]!.label).toBe("File");
+    expect(mainWindow.menus[0]!.items).toHaveLength(1);
+    expect(mainWindow.menus[1]!.label).toBe("Edit");
+    expect(mainWindow.menus[1]!.items).toHaveLength(2);
   });
 });

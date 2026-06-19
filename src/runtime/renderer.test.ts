@@ -17,8 +17,8 @@ const inertDrag = { containerRef: { current: null }, onTitlePointerDown: noop };
 describe("toPreact", () => {
   it("renders one keyed Window component per window in the desktop container", () => {
     const tree: WindowNode[] = [
-      { kind: "window", id: "a", title: "A", children: [] },
-      { kind: "window", id: "b", title: "B", children: [] },
+      { kind: "window", id: "a", title: "A", children: [], menus: [] },
+      { kind: "window", id: "b", title: "B", children: [], menus: [] },
     ];
     const states = new Map<string, WindowState>();
     const el = toPreact(tree, states, null, noop, noop) as any;
@@ -35,7 +35,7 @@ describe("toPreact", () => {
 
 describe("windowToPreact (pure window markup)", () => {
   it("marks the window container with data-toolbox-window and wires the container ref", () => {
-    const w: WindowNode = { kind: "window", id: "win1", title: "Win", children: [] };
+    const w: WindowNode = { kind: "window", id: "win1", title: "Win", children: [], menus: [] };
     const drag = { containerRef: { current: null }, onTitlePointerDown: noop };
     const el = windowToPreact(w, makeCtx(new Map()), drag) as any;
     expect(el.props["data-toolbox-window"]).toBe("win1");
@@ -44,7 +44,7 @@ describe("windowToPreact (pure window markup)", () => {
   });
 
   it("wires the title bar's pointer-down to the drag handler", () => {
-    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [] };
+    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [], menus: [] };
     let down = false;
     const drag = { containerRef: { current: null }, onTitlePointerDown: () => (down = true) };
     const el = windowToPreact(w, makeCtx(new Map()), drag) as any;
@@ -54,21 +54,28 @@ describe("windowToPreact (pure window markup)", () => {
   });
 
   it("renders a close button when the window has an onClose handler", () => {
-    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [], onClose: () => {} };
+    const w: WindowNode = {
+      kind: "window",
+      id: "w",
+      title: "W",
+      children: [],
+      menus: [],
+      onClose: () => {},
+    };
     const el = windowToPreact(w, makeCtx(new Map()), inertDrag) as any;
     const titleBar = el.props.children[0];
     expect(titleBar.props.children[1]).toBeTruthy();
   });
 
   it("does not render a close button when onClose is undefined", () => {
-    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [] };
+    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [], menus: [] };
     const el = windowToPreact(w, makeCtx(new Map()), inertDrag) as any;
     const titleBar = el.props.children[0];
     expect(titleBar.props.children.length).toBe(1);
   });
 
   it("applies the focus ring class to the active window", () => {
-    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [] };
+    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [], menus: [] };
     const el = windowToPreact(w, makeCtx(new Map(), "w"), inertDrag) as any;
     expect(el.props.class).toContain("ring-focused");
   });
@@ -79,6 +86,7 @@ describe("windowToPreact (pure window markup)", () => {
       id: "w",
       title: "Loading",
       children: [{ kind: "spinner" }],
+      menus: [],
     };
     const el = windowToPreact(w, makeCtx(new Map(), "w"), inertDrag) as any;
     const body = el.props.children[1];

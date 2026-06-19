@@ -27,11 +27,18 @@ export type Node =
 
 export type ChildNode = Node | WindowNode;
 
+export type MenuItemNode =
+  | { kind: "menuItem"; label: string; onClick?: () => void }
+  | { kind: "menuSeparator" };
+
+export type MenuNode = { kind: "menu"; label: string; items: MenuItemNode[] };
+
 export type WindowNode = {
   kind: "window";
   id: string;
   title: string;
   children: ChildNode[];
+  menus: MenuNode[];
   onClose?: () => void;
 };
 
@@ -52,6 +59,9 @@ export interface Ui {
   ): void;
   checkbox(label: string, opts: { checked: boolean; onChange?: (checked: boolean) => void }): void;
   copyableText(text: string): void;
+  menu(label: string, cb: () => void): void;
+  menuItem(label: string, opts?: { onClick?: () => void }): void;
+  menuSeparator(): void;
   file(
     file: File | null,
     opts: {
@@ -69,9 +79,16 @@ export interface CollectDeps {
 }
 
 export function collect(declarator: (ui: Ui) => void, deps: CollectDeps = {}): WindowNode[] {
-  const mainWindow: WindowNode = { kind: "window", id: "__main__", title: "", children: [] };
+  const mainWindow: WindowNode = {
+    kind: "window",
+    id: "__main__",
+    title: "",
+    children: [],
+    menus: [],
+  };
   const stack: { children: ChildNode[] }[] = [mainWindow];
   const subWindows: WindowNode[] = [];
+  let currentMenu: MenuItemNode[] | null = null;
 
   const windowFn = Object.assign(
     (id: string, titleOrCb: string | (() => void), cb?: () => void) => {
@@ -84,7 +101,7 @@ export function collect(declarator: (ui: Ui) => void, deps: CollectDeps = {}): W
         title = titleOrCb;
         callback = cb!;
       }
-      const node: WindowNode = { kind: "window", id, title, children: [] };
+      const node: WindowNode = { kind: "window", id, title, children: [], menus: [] };
       stack.push(node);
       callback();
       stack.pop();
@@ -152,6 +169,33 @@ export function collect(declarator: (ui: Ui) => void, deps: CollectDeps = {}): W
     },
     copyableText(text) {
       stack[stack.length - 1]!.children.push({ kind: "copyableText", text });
+    },
+    menu(label, cb) {
+      // Find the nearest window frame on the stack, defaulting to mainWindow.
+      let targetWindow: WindowNode = mainWindow;
+      for (let i = stack.length - 1; i >= 0; i--) {
+        const frame = stack[i]!;
+        if ("menus" in frame) {
+          targetWindow = frame as WindowNode;
+          break;
+        }
+      }
+      const menuNode: MenuNode = { kind: "menu", label, items: [] };
+      targetWindow.menus.push(menuNode);
+      const prevMenu = currentMenu;
+      currentMenu = menuNode.items;
+      cb();
+      currentMenu = prevMenu;
+    },
+    menuItem(label, opts) {
+      if (currentMenu) {
+        currentMenu.push({ kind: "menuItem", label, onClick: opts?.onClick });
+      }
+    },
+    menuSeparator() {
+      if (currentMenu) {
+        currentMenu.push({ kind: "menuSeparator" });
+      }
     },
     file(file, opts) {
       const onFile = opts.onFile;
