@@ -32,6 +32,11 @@
       "id": "ipad-frame",
       "name": "iPad Frame",
       "description": "Drop an iPad screenshot into a device bezel."
+    },
+    {
+      "id": "uploader",
+      "name": "Uploader",
+      "description": "Upload a file to your endpoint and copy the resulting URL."
     }
   ]
 }
