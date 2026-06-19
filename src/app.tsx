@@ -71,24 +71,42 @@ function ToastLayer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: nu
   if (toasts.length === 0) return null;
   return (
     <div class="fixed bottom-4 right-4 flex flex-col gap-2 z-50" data-toolbox-chrome>
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          class="bg-toolbox-surface border border-toolbox-border text-toolbox-text text-sm rounded-lg shadow-xl px-3 py-2 flex items-center gap-2 min-w-60"
-        >
-          {t.loading ? (
-            <span class="inline-block w-3 h-3 border-2 border-toolbox-accent border-t-transparent rounded-full animate-spin" />
-          ) : null}
-          <span class="flex-1">{t.message}</span>
-          <button
-            type="button"
-            class="text-toolbox-muted hover:text-toolbox-accent-yellow"
-            onClick={() => onDismiss(t.id)}
+      {toasts.map((t) => {
+        const isError = t.intent === "error";
+        const determinate = t.progress !== undefined;
+        return (
+          <div
+            key={t.id}
+            class={`bg-toolbox-surface border text-toolbox-text text-sm rounded-lg shadow-xl px-3 py-2 flex flex-col gap-1.5 min-w-60 ${
+              isError ? "border-red-500/60" : "border-toolbox-border"
+            }`}
           >
-            ×
-          </button>
-        </div>
-      ))}
+            <div class="flex items-center gap-2">
+              {isError ? (
+                <span class="text-red-400">⚠</span>
+              ) : t.loading && !determinate ? (
+                <span class="inline-block w-3 h-3 border-2 border-toolbox-accent border-t-transparent rounded-full animate-spin" />
+              ) : null}
+              <span class={`flex-1 ${isError ? "text-red-300" : ""}`}>{t.message}</span>
+              <button
+                type="button"
+                class="text-toolbox-muted hover:text-toolbox-accent-yellow"
+                onClick={() => onDismiss(t.id)}
+              >
+                ×
+              </button>
+            </div>
+            {determinate ? (
+              <div class="h-1 w-full bg-toolbox-deepest rounded overflow-hidden">
+                <div
+                  class="h-full bg-toolbox-accent transition-[width] duration-150"
+                  style={{ width: `${Math.max(0, Math.min(100, t.progress ?? 0))}%` }}
+                />
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }

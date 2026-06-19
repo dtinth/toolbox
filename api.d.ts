@@ -12,6 +12,21 @@ export interface ToastHandle {
   dismiss(): void;
 }
 
+/** Reporter passed to a `withProgress` task. */
+export interface Progress {
+  /**
+   * Advance the task's progress. `increment` (0–100) moves the bar by that
+   * delta; `message` updates the detail line. The bar is indeterminate until
+   * the first `increment`.
+   */
+  report(value: { message?: string; increment?: number }): void;
+}
+
+/** Options for `withProgress`. */
+export interface ProgressOptions {
+  title: string;
+}
+
 /** An entry shown in a quick pick (see `api.dialog.pick`). */
 export interface QuickPickItem {
   label: string;
@@ -89,6 +104,15 @@ export interface Api {
     show(message: string, opts?: { loading?: boolean; duration?: number }): ToastHandle;
   };
   dialog: Dialog;
+  /**
+   * Run `task` while showing a progress toast titled `options.title`. Resolves
+   * with the task's result and dismisses the toast; if the task throws, shows
+   * an error toast and rethrows. VS Code-style.
+   */
+  withProgress: <T>(
+    options: ProgressOptions,
+    task: (progress: Progress) => Promise<T>,
+  ) => Promise<T>;
   /** Close this tool instance. */
   dispose: () => void;
 }

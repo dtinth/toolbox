@@ -690,6 +690,48 @@ describe("runtime", () => {
     });
   });
 
+  describe("withProgress", () => {
+    it("shows a progress toast, applies increments, resolves and dismisses", async () => {
+      const runtime = createTestRuntime();
+      let api!: Api;
+      runtime.loadTool((a) => {
+        api = a;
+        a.onRender = () => {};
+      });
+
+      const result = await api.withProgress({ title: "Loading" }, async (progress) => {
+        expect(runtime.toasts()).toHaveLength(1);
+        expect(runtime.toasts()[0]!.message).toBe("Loading");
+        progress.report({ increment: 50, message: "half" });
+        expect(runtime.toasts()[0]!.progress).toBe(50);
+        progress.report({ increment: 80 }); // clamps at 100
+        expect(runtime.toasts()[0]!.progress).toBe(100);
+        return "done";
+      });
+
+      expect(result).toBe("done");
+      expect(runtime.toasts()).toHaveLength(0);
+    });
+
+    it("shows an error toast and rethrows when the task throws", async () => {
+      const runtime = createTestRuntime();
+      let api!: Api;
+      runtime.loadTool((a) => {
+        api = a;
+        a.onRender = () => {};
+      });
+
+      await expect(
+        api.withProgress({ title: "Fetch" }, () => Promise.reject(new Error("nope"))),
+      ).rejects.toThrow("nope");
+
+      const toasts = runtime.toasts();
+      expect(toasts).toHaveLength(1);
+      expect(toasts[0]!.intent).toBe("error");
+      expect(toasts[0]!.message).toContain("nope");
+    });
+  });
+
   describe("dialog.pick", () => {
     it("surfaces a pending pick and resolves it on selection", async () => {
       const runtime = createTestRuntime();

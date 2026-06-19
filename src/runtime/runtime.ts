@@ -15,6 +15,14 @@ export type { WindowState } from "./window-manager.ts";
 export type { Toast, ToastHandle } from "./toast-center.ts";
 export type { Dialog, PickRequest, QuickPickItem, QuickPickOptions } from "./dialog-center.ts";
 
+export interface Progress {
+  report(value: { message?: string; increment?: number }): void;
+}
+
+export interface ProgressOptions {
+  title: string;
+}
+
 export interface Api {
   onRender: () => void;
   ui: Ui;
@@ -24,6 +32,10 @@ export interface Api {
     show(message: string, opts?: { loading?: boolean; duration?: number }): ToastHandle;
   };
   dialog: Dialog;
+  withProgress: <T>(
+    options: ProgressOptions,
+    task: (progress: Progress) => Promise<T>,
+  ) => Promise<T>;
   dispose: () => void;
 }
 
@@ -138,6 +150,34 @@ function build(): TestRuntime {
         show: (message, opts) => toastCenter.show(instance.info.instanceId, message, opts),
       },
       dialog: dialogCenter.forInstance(instance.info.instanceId),
+      withProgress: async (options, task) => {
+        const instanceId = instance.info.instanceId;
+        const handle = toastCenter.show(instanceId, options.title, { loading: true });
+        let current = 0;
+        const progress: Progress = {
+          report({ message, increment }) {
+            if (increment !== undefined) {
+              current = Math.max(0, Math.min(100, current + increment));
+              handle.update({ progress: current, message });
+            } else if (message !== undefined) {
+              handle.update({ message });
+            }
+          },
+        };
+        try {
+          const result = await task(progress);
+          handle.dismiss();
+          return result;
+        } catch (err) {
+          handle.dismiss();
+          const message = err instanceof Error ? err.message : String(err);
+          toastCenter.show(instanceId, `${options.title}: ${message}`, {
+            intent: "error",
+            duration: 6000,
+          });
+          throw err;
+        }
+      },
       dispose: () => {
         closeTool(instance.info.instanceId);
       },

@@ -1,5 +1,12 @@
+export type ToastIntent = "info" | "error";
+
 export interface ToastHandle {
-  update(opts: { message?: string; loading?: boolean }): void;
+  update(opts: {
+    message?: string;
+    loading?: boolean;
+    progress?: number;
+    intent?: ToastIntent;
+  }): void;
   dismiss(): void;
 }
 
@@ -8,13 +15,16 @@ export interface Toast {
   message: string;
   loading: boolean;
   createdAt: number;
+  /** 0–100 for a determinate bar; undefined = indeterminate (spinner). */
+  progress?: number;
+  intent: ToastIntent;
 }
 
 export interface ToastCenter {
   show(
     instanceId: string,
     message: string,
-    opts?: { loading?: boolean; duration?: number },
+    opts?: { loading?: boolean; duration?: number; progress?: number; intent?: ToastIntent },
   ): ToastHandle;
   dismiss(id: number): void;
   dismissForInstance(instanceId: string): void;
@@ -57,12 +67,19 @@ export function createToastCenter({ onChange }: { onChange: () => void }): Toast
   function show(
     instanceId: string,
     message: string,
-    opts?: { loading?: boolean; duration?: number },
+    opts?: { loading?: boolean; duration?: number; progress?: number; intent?: ToastIntent },
   ): ToastHandle {
     const id = nextToastId++;
     const loading = opts?.loading ?? false;
     const duration = opts?.duration ?? 2000;
-    const toast: Toast = { id, message, loading, createdAt: Date.now() };
+    const toast: Toast = {
+      id,
+      message,
+      loading,
+      createdAt: Date.now(),
+      progress: opts?.progress,
+      intent: opts?.intent ?? "info",
+    };
     toasts.push(toast);
     if (!instanceToasts.has(instanceId)) {
       instanceToasts.set(instanceId, new Set());
@@ -75,6 +92,8 @@ export function createToastCenter({ onChange }: { onChange: () => void }): Toast
         const t = toasts.find((x) => x.id === id);
         if (!t) return;
         if (updateOpts.message !== undefined) t.message = updateOpts.message;
+        if (updateOpts.progress !== undefined) t.progress = updateOpts.progress;
+        if (updateOpts.intent !== undefined) t.intent = updateOpts.intent;
         if (updateOpts.loading !== undefined) {
           t.loading = updateOpts.loading;
           if (updateOpts.loading) {

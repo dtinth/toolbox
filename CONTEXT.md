@@ -117,6 +117,16 @@ so it works regardless of pop-out (**Projector**) state. It reuses the same
 search-input + fuzzy-filter + arrow-nav UX as the Cmd-K palette.
 _Avoid_: dropdown, combobox, menu, modal list
 
+**Progress**:
+`api.withProgress(options, task)` runs a Promise-returning `task` while showing
+a progress **Toast** titled `options.title`. The task gets a reporter —
+`progress.report({ message?, increment? })`, VS Code-style: `increment` (0–100)
+advances the bar by that delta, indeterminate (spinner) until the first one.
+On resolve the toast is dismissed and the result returned; on throw an
+_error_-intent toast is shown and the error rethrown. Like **Toast** and
+**Quick pick** it is imperative host chrome, not a `ui.*` node.
+_Avoid_: spinner API, loader, busy indicator
+
 **File input**:
 The `ui.file(opts)` primitive — a focusable box (its own `tabindex`) that
 yields a **File** from three sources: choose-a-file, drop, and paste. Paste is

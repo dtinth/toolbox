@@ -27,6 +27,7 @@ describe("loadTool", () => {
       tick: () => () => {},
       toast: { show: () => ({ update() {}, dismiss() {} }) },
       dialog: { pick: () => Promise.resolve(undefined) },
+      withProgress: (_options, task) => task({ report() {} }),
       dispose: () => {},
     };
     tool(api);

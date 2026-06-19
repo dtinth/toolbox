@@ -30,7 +30,7 @@ describe("createToastCenter", () => {
     const tc = createToastCenter({ onChange: () => {} });
     tc.show("inst-1", "hello");
     const first = tc.list();
-    first.push({ id: 999, message: "injected", loading: false, createdAt: 0 });
+    first.push({ id: 999, message: "injected", loading: false, createdAt: 0, intent: "info" });
     expect(tc.list()).toHaveLength(1);
   });
 
@@ -39,6 +39,25 @@ describe("createToastCenter", () => {
     const tc = createToastCenter({ onChange });
     tc.show("inst-1", "hello");
     expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("carries progress + intent and updates them", () => {
+    const tc = createToastCenter({ onChange: () => {} });
+    const handle = tc.show("inst-1", "Working", { loading: true, progress: 0 });
+    expect(tc.list()[0]).toMatchObject({ loading: true, progress: 0, intent: "info" });
+
+    handle.update({ progress: 40, message: "almost" });
+    expect(tc.list()[0]).toMatchObject({ progress: 40, message: "almost" });
+
+    handle.update({ loading: false, intent: "error", message: "boom" });
+    expect(tc.list()[0]).toMatchObject({ intent: "error", message: "boom" });
+  });
+
+  it("defaults intent to info and leaves progress undefined", () => {
+    const tc = createToastCenter({ onChange: () => {} });
+    tc.show("inst-1", "hi");
+    expect(tc.list()[0]!.intent).toBe("info");
+    expect(tc.list()[0]!.progress).toBeUndefined();
   });
 
   it("non-loading toast auto-dismisses after duration (default 2000ms)", () => {
