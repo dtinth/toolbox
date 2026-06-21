@@ -32,6 +32,7 @@ describe("loadTool", () => {
         file() {},
       },
       preact: preactApi,
+      tw: () => "",
       requestUpdate: () => {},
       tick: () => () => {},
       toast: { show: () => ({ update() {}, dismiss() {} }) },

@@ -195,6 +195,19 @@ export interface Api {
    * widget's render closure.
    */
   preact: Preact;
+  /**
+   * Build a class string and register its CSS at runtime (UnoCSS, Tailwind-v4
+   * vocabulary). Use this to style a tool instead of bare class names — Tailwind
+   * is an implementation detail of the runtime's chrome, not something tools
+   * rely on. Classes are namespaced (`tw-…`) so they can't clash with the
+   * chrome. Dynamic values still go through inline `style`. See ADR-0009.
+   *
+   *     h("button", { class: api.tw`rounded-full bg-toolbox-accent` })
+   */
+  tw: (
+    strings: TemplateStringsArray,
+    ...exprs: (string | number | false | null | undefined)[]
+  ) => string;
   /** Request a redraw (re-runs `onRender`). */
   requestUpdate: () => void;
   /** Register a per-frame tick callback; returns an unsubscribe function. */
