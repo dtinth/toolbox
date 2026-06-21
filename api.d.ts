@@ -148,6 +148,22 @@ export interface Ui {
   menuItem(label: string, opts?: { onClick?: () => void }): void;
   menuSeparator(): void;
   /**
+   * A **Custom widget**: a leaf whose subtree is live Preact. `render` returns a
+   * vnode (built with `api.preact.h`) and runs in Preact's own lifecycle, not in
+   * the declarator — so it must not call `ui.*`. Drive it with **Signals**
+   * (`api.preact`); mutating one repaints the widget without re-running
+   * `onRender`. See ADR-0007.
+   */
+  custom(render: () => VNode): void;
+  /**
+   * Open a new identity group for the nodes that follow in this container. A
+   * node's reconciliation identity is `(group, positionWithinGroup)`. With no
+   * argument the group is the next ordinal (`2`, `3`, …); with `key` it is named.
+   * Use it to keep a stable region's identity (and any **Custom widget** state)
+   * from being disturbed by a variable region before it.
+   */
+  identityGroup(key?: string): void;
+  /**
    * A focusable intake box that yields a File from choose-a-file, drop, or
    * paste. Pass the tool's current file (or null) for the metadata display;
    * `onFile` delivers a newly supplied one. Ambiguity (several files, or a

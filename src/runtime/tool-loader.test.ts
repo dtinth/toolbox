@@ -27,6 +27,8 @@ describe("loadTool", () => {
         menu() {},
         menuItem() {},
         menuSeparator() {},
+        custom() {},
+        identityGroup() {},
         file() {},
       },
       preact: preactApi,
