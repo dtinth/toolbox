@@ -1,6 +1,6 @@
 import { collect, ui, type ChildNode, type Node, type Ui, type WindowNode } from "./collector.ts";
 import { preactApi } from "./preact-api.ts";
-import { toPreact } from "./renderer.tsx";
+import { toPreact, toPreactInstance } from "./renderer.tsx";
 import type { Preact } from "../../api.d.ts";
 import type { VNode } from "preact";
 import {
@@ -72,6 +72,8 @@ export interface Runtime {
   toolInstances(): ReadonlyArray<ToolInstanceInfo>;
   readonly isEmpty: boolean;
   render(): VNode;
+  /** Render a single instance into its own root (ADR-0008); null once gone. */
+  renderInstance(instanceId: string): VNode | null;
   requestUpdate(): void;
   subscribe(onChange: () => void): () => void;
   tick(): void;
@@ -116,6 +118,11 @@ interface ToolInstance {
   api: Api;
   tickSubscribers: Set<() => void>;
   state: "loading" | "ready";
+  // Per-instance render isolation (ADR-0008): `dirty` marks that this instance's
+  // declarator must be re-run; `cache` holds its last collected (scoped) windows
+  // so a redraw of one instance never re-runs another's onRender.
+  dirty: boolean;
+  cache: WindowNode[] | null;
 }
 
 function build(): TestRuntime {
@@ -148,6 +155,7 @@ function build(): TestRuntime {
       ui,
       preact: preactApi,
       requestUpdate: () => {
+        instance.dirty = true;
         updates++;
         scheduleRender();
       },
@@ -220,6 +228,8 @@ function build(): TestRuntime {
       api: undefined as unknown as Api,
       tickSubscribers: new Set(),
       state: opts.loader ? "ready" : "loading",
+      dirty: true,
+      cache: null,
     };
     const api = buildApi(instance);
     instance.api = api;
@@ -236,6 +246,7 @@ function build(): TestRuntime {
     if (!instance) return;
     if (instance.state === "ready") return;
     instance.state = "ready";
+    instance.dirty = true;
     loader(instance.api);
     scheduleRender();
   }
@@ -257,43 +268,73 @@ function build(): TestRuntime {
     scheduleRender();
   }
 
-  function renderOnce(): VNode {
-    const allWindows: WindowNode[] = [];
-    for (const instanceId of instanceOrder) {
-      const instance = instances.get(instanceId);
-      if (!instance) continue;
-      if (instance.state === "loading") {
-        const loadingWindow: WindowNode = {
+  // Run one instance's declarator and return its scoped windows. Loading
+  // instances render a spinner placeholder. `api.ui` is the stable collector
+  // `ui`; `collect` installs the collection context for the duration of the
+  // declarator, so `ui.*` works here and throws anywhere else. Returning
+  // onRender's result lets collect reject a Promise-returning (async) declarator.
+  function collectInstance(instance: ToolInstance): WindowNode[] {
+    const instanceId = instance.info.instanceId;
+    if (instance.state === "loading") {
+      return [
+        {
           kind: "window",
           id: scopeId(instanceId, "__main__"),
           title: instance.info.name,
           children: [{ kind: "spinner" }],
           menus: [],
           onClose: () => instance.api.dispose(),
-        };
-        allWindows.push(loadingWindow);
-        continue;
+        },
+      ];
+    }
+    const windows = collect(() => instance.onRender(), { pick: instance.api.dialog.pick });
+    return windows.map((w) => {
+      const scoped: WindowNode = { ...w, id: scopeId(instanceId, w.id) };
+      if (w.id === "__main__" && !scoped.onClose) {
+        scoped.onClose = () => instance.api.dispose();
       }
-      // `api.ui` is the stable collector `ui`; `collect` installs the collection
-      // context for the duration of this declarator, so `ui.*` works here and
-      // throws anywhere else. Returning onRender's result lets collect reject a
-      // Promise-returning (async) declarator.
-      const instanceWindows = collect(() => instance.onRender(), {
-        pick: instance.api.dialog.pick,
-      });
-      for (const w of instanceWindows) {
-        const scoped: WindowNode = { ...w, id: scopeId(instanceId, w.id) };
-        if (w.id === "__main__" && !scoped.onClose) {
-          scoped.onClose = () => instance.api.dispose();
-        }
-        allWindows.push(scoped);
-      }
+      return scoped;
+    });
+  }
+
+  // The isolation core: re-collect only when the instance is dirty (or has no
+  // cache yet); otherwise reuse the cached windows so this instance's onRender
+  // is not re-run for another instance's redraw.
+  function instanceWindows(instance: ToolInstance): WindowNode[] {
+    if (!instance.dirty && instance.cache) return instance.cache;
+    const windows = collectInstance(instance);
+    instance.cache = windows;
+    instance.dirty = false;
+    return windows;
+  }
+
+  // Combined composition (single root) — used by tests and as a fallback path.
+  function renderOnce(): VNode {
+    const allWindows: WindowNode[] = [];
+    for (const instanceId of instanceOrder) {
+      const instance = instances.get(instanceId);
+      if (!instance) continue;
+      allWindows.push(...instanceWindows(instance));
     }
     lastTree = allWindows;
     lastButtonRef = findLastButton(allWindows);
     wm.place(allWindows.map((w) => w.id));
     const active = wm.activeId();
     return toPreact(allWindows, wm.states, active, focusWindow, moveWindow) as VNode;
+  }
+
+  // Per-instance composition (one Preact root per instance, ADR-0008). Returns
+  // that instance's windows as a fragment for the host to mount into the
+  // instance's own container; null once the instance is gone.
+  function renderInstance(instanceId: string): VNode | null {
+    const instance = instances.get(instanceId);
+    if (!instance) return null;
+    const windows = instanceWindows(instance);
+    // Keep lastTree/lastButton coherent for callers that only drive per-instance
+    // rendering; placement is idempotent per id.
+    wm.place(windows.map((w) => w.id));
+    const active = wm.activeId();
+    return toPreactInstance(windows, wm.states, active, focusWindow, moveWindow);
   }
 
   function requestUpdate(): void {
@@ -321,6 +362,8 @@ function build(): TestRuntime {
       for (const cb of instance.tickSubscribers) {
         cb();
         fired = true;
+        // A tick is an animation frame for this instance — re-collect it.
+        instance.dirty = true;
       }
     }
     return fired;
@@ -366,6 +409,7 @@ function build(): TestRuntime {
       return instanceOrder.length === 0;
     },
     render: renderOnce,
+    renderInstance,
     requestUpdate,
     subscribe(onChange) {
       subscribers.add(onChange);
