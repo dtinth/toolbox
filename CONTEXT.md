@@ -11,7 +11,7 @@ A single-purpose web utility that runs inside the toolbox. Declares its UI
 declaratively via an IMGUI-style API: calls like `api.ui.button("OK", { onClick })`
 are collected by the runtime during the tool's declarator and turned into a
 vDOM tree that Preact renders and diffs across redraws.
-_Avoid_: app, extension, plugin, widget
+_Avoid_: app, extension, plugin
 
 **Window**:
 A visual container holding one tool's UI. A tool can have any number of
@@ -68,7 +68,12 @@ _Avoid_: notification service, snackbar manager
 A function the runtime calls to render a tool instance's UI for one frame.
 The tool assigns it via `api.onRender = () => { ... }`. The runtime invokes
 it on demand, after state changes, callback fires, or `requestUpdate()` is
-called. Not a per-frame loop.
+called. Not a per-frame loop. It must be **synchronous**: returning a Promise
+throws (`"onRender must be synchronous"`), and `ui.*` collection calls are valid
+only while it is executing — calling `ui.*` outside it (after an `await`, in a
+`setTimeout`, or inside a **Custom widget**'s Preact render) throws
+(`"ui.* called outside onRender"`). `api.preact.*` and `requestUpdate()` are not
+gated.
 _Avoid_: render function, draw function
 
 **IMGUI**:
@@ -86,10 +91,15 @@ by `?tool=<id>` query param.
 _Avoid_: single-tool mode, kiosk
 
 **Projector**:
-A pop-out (or future PiP) window is a "dumb" display of the main instance's
-state. The tool's JS does not re-execute in the popup; the runtime ships
-vDOM updates and routes input events back.
-_Avoid_: mirror, replica, child window
+A pop-out (or future PiP) window displays a **Window** that physically lives in
+another browser document while staying logically in the main instance's render
+tree. It is a live **Portal**: the runtime re-targets the window subtree's DOM
+into the popup document (a hand-rolled `render`-into-host, _not_ Preact/compat's
+`createPortal`), so the tool's JS, closures, and **Signals** never leave the main
+document and event handlers fire there for free. (Earlier this was a _serialized_
+vDOM projection; revised once **Custom widgets** made live Preact unserializable —
+see ADR-0002, amended.)
+_Avoid_: mirror, replica, child window, serialized projection
 
 **Blob**:
 An immutable chunk of bytes with a MIME `type` — the web platform's `Blob`.
@@ -184,6 +194,67 @@ prompt with a single text field, resolving with the entered string or
 **Quick pick** in the `api.dialog` family; like it, imperative host chrome (not a
 `ui.*` node), so it works regardless of **Projector** state.
 _Avoid_: prompt, modal, textbox
+
+**Custom widget**:
+The `ui.custom(render)` primitive — a _leaf_ in the IMGUI tree whose subtree is
+live Preact, not collected `ui.*` nodes. `render` is a closure returning a Preact
+vnode built with `api.preact.h`; it runs in **Preact's own render lifecycle, not**
+during the tool's **Declarator**. Data-flow is _signal-driven, mounted once_: the
+tool owns **Signals** (created in `init` scope, never in `onRender`), the closure
+reads them, and mutating a signal repaints _only that widget's_ subtree — bypassing
+`onRender` / `requestUpdate`. A widget may also hold ephemeral internal state via
+`api.preact.useSignal` / `useComputed`, but durable state belongs in tool-owned
+signals (see the caveat under **Identity group**). The closure must not call `ui.*`
+(it runs outside collection, which throws); imgui-land and Preact-land meet only at
+this node. A Custom widget is a sub-element inside a **Window**, never a whole
+**Tool**. The escape hatch for canvases, charting libs, editors, etc.
+_Avoid_: widget (bare), component, canvas, embed
+
+**Reactive surface** (`api.preact`):
+The hand-declared subset of Preact a **Custom widget** is built from: `h`,
+`Fragment`; the signal factories `signal` / `computed` / `effect` / `batch`
+(callable anywhere, including `init` scope where durable state lives); and the
+signal hooks `useSignal` / `useComputed` / `useSignalEffect` (valid only inside a
+render closure — Preact enforces this). We declare this subset in `api.d.ts` rather
+than re-exporting Preact's types, so the contract stays self-contained (ADR-0004);
+the runtime's real Preact bindings are asserted to conform to it. Unlike `ui.*`,
+`api.preact.*` is never gated by the collection window. There is deliberately no
+`useRef` / `useEffect` — DOM wiring uses a callback `ref` plus a **Signal**.
+_Avoid_: preact API, hooks namespace, runtime preact
+
+**Signal**:
+A Preact signal (`api.preact.signal(initial)`) — the canonical holder of a tool's
+durable, reactive state. Created in `init` scope so it persists across redraws;
+read inside a **Custom widget**'s render closure to drive autonomous repaints, and
+freely mutated from event handlers. Mutating it repaints subscribed widgets without
+re-running the **Declarator**.
+_Avoid_: store, observable, state atom
+
+**Identity group**:
+How the collector assigns reconciliation identity. A node's identity is
+`(currentGroup, positionWithinGroup)`, _not_ absolute call order. Each container
+(a **Window** body, a row) starts at group `1`, position `0`; every `ui.*` call
+advances the position. `ui.identityGroup()` opens the next ordinal group
+(`2`, `3`, …) and resets position; `ui.identityGroup(key)` opens a group named
+`key`. This pins a stable region's identity so a variable region before it can't
+shift it. A node keeps its live state (a **Custom widget**'s internal `useSignal`,
+an input's focus/cursor) only while its `(group, position)` is unchanged — which is
+why tools **prefer `disabled` over conditional show/hide**: static structure keeps
+positions stable. State that must survive restructuring belongs in a tool-owned
+**Signal**, not in component-internal hooks.
+_Avoid_: key, id stack, push id
+
+**Instance root**:
+Each running **Tool** instance renders into its **own** Preact root — a container
+the **Runtime** owns under the desktop element. A `requestUpdate` re-runs only that
+instance's **Declarator** and re-renders only its root; one instance's redraw never
+re-runs another's. Cross-cutting chrome (the focus ring) re-renders just the
+affected instances; z-order and position stay pure CSS. The Runtime owns mounting
+(`render(vnode, container)` per dirty instance, `render(null, container)` on close)
+— there is no single combined tree. This per-instance partitioning is also what
+makes the **Projector** a live Portal into a popup document rather than a serialized
+projection. See ADR-0008.
+_Avoid_: render pass, frame, global tree
 
 ## Relationships
 
@@ -318,6 +389,16 @@ There is **no** "current window" global. The window context is purely
 lexical: whichever `ui.window(...)` callback is on the call stack
 determines where `ui.button(...)` etc. land. This is the same model
 Dear ImGui uses with `ImGui::Begin/End`.
+
+The declarator runs **synchronously** inside a single collection window. The
+runtime exposes a stable `api.ui` whose methods dispatch on a "currently
+collecting" context: outside that window they throw, so an `await`-ing
+`onRender`, a `setTimeout`, or a **Custom widget**'s Preact render cannot
+silently emit nodes. Node identity is positional within an **Identity group**
+(`(group, position)`), refined by `ui.identityGroup`. A `ui.custom(render)` node
+is a leaf — its Preact subtree renders in Preact's own lifecycle, _outside_ this
+collection window (see ADR-0007), and reactive state flows through **Signals**
+(`api.preact`) rather than redraws.
 
 ## API surface (v1)
 
