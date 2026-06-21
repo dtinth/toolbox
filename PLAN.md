@@ -104,6 +104,38 @@ Build contract-first (add to `api.d.ts` first, then implement to conform):
       without collisions. Toasts are aggregated across instances.
       See commits `d5fc030` … `849d5b2` and `9ecbb1c` … `849d5b2`.
 
+### Custom widgets + reactive surface (designed via grill, unbuilt)
+
+Resolved in a `grill-with-docs` session; see the **Custom widget**, **Reactive
+surface**, **Signal**, **Identity group**, and **Instance root** terms in
+`CONTEXT.md` (and the planned ADR-0007 / ADR-0008 + ADR-0002 amendment). Build in
+dependency order:
+
+1. **Synchronous-collection enforcement** — make `api.ui` a single stable object
+   that dispatches on a "currently collecting" context: `ui.*` outside the
+   collection window throws (`"ui.* called outside onRender"`), and an `onRender`
+   returning a Promise throws (`"onRender must be synchronous"`). Refactors
+   `collect()` to publish a current-collection context rather than returning a
+   fresh `ui`. `api.preact.*` / `requestUpdate` stay ungated.
+2. **Per-instance Preact roots** — the Runtime owns a `Map<instanceId, container>`
+   under a desktop element and mounts each instance independently; `requestUpdate`
+   re-renders only the dirty instance; `focusWindow` re-renders the two affected
+   instances. Drops the single combined `runtime.render(): VNode`; Host shrinks to
+   the desktop element + chrome layers + palette. (ADR-0008)
+3. **`api.preact`** — hand-declare the subset (`h`, `Fragment`, `signal`,
+   `computed`, `effect`, `batch`, `useSignal`, `useComputed`, `useSignalEffect`) in
+   `api.d.ts`; bind it to the runtime's real Preact and assert conformance.
+4. **`ui.identityGroup(key?)`** — `(group, position)` identity cursor in the
+   collector; keys flow through to Preact reconciliation.
+5. **`ui.custom(render)`** — the live-Preact leaf node + a stable wrapper component
+   that holds the latest render closure so positional diffing keeps the mount.
+   (ADR-0007)
+6. **A first tool** that drives `ui.custom` end-to-end (e.g. a canvas/scribble or
+   a chart), to prove the reactive surface like every other primitive.
+7. **(future)** Pop-out as a live Portal of a window subtree into a popup document
+   — supersedes ADR-0002's serialized projection (caveats: inject the stylesheet,
+   confirm Preact creates nodes in the target `ownerDocument`).
+
 ## Open issues
 
 ### Build / tooling
