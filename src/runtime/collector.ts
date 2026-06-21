@@ -80,20 +80,49 @@ export interface CollectDeps {
   pick?: Dialog["pick"];
 }
 
-export function collect(declarator: (ui: Ui) => void, deps: CollectDeps = {}): WindowNode[] {
-  const mainWindow: WindowNode = {
-    kind: "window",
-    id: "__main__",
-    title: "",
-    children: [],
-    menus: [],
-  };
-  const stack: { children: ChildNode[] }[] = [mainWindow];
-  const subWindows: WindowNode[] = [];
-  let currentMenu: MenuItemNode[] | null = null;
+type Frame = { children: ChildNode[] };
 
-  const windowFn = Object.assign(
+interface CollectState {
+  mainWindow: WindowNode;
+  stack: Frame[];
+  subWindows: WindowNode[];
+  currentMenu: MenuItemNode[] | null;
+  pick?: Dialog["pick"];
+}
+
+// The collection is synchronous and non-reentrant, so a single module-level
+// context is enough: `collect` installs it for the duration of the declarator,
+// and the stable `ui` below reads it. Outside a collection it is null, which is
+// how `ui.*` calls made after `onRender` returns (or inside a Custom widget's
+// Preact render) are caught.
+let active: CollectState | null = null;
+
+function need(): CollectState {
+  if (!active) throw new Error("ui.* called outside onRender");
+  return active;
+}
+
+function top(state: CollectState): Frame {
+  return state.stack[state.stack.length - 1]!;
+}
+
+function currentWindow(state: CollectState): WindowNode {
+  for (let i = state.stack.length - 1; i >= 0; i--) {
+    const frame = state.stack[i]!;
+    if ("kind" in frame) return frame as WindowNode;
+  }
+  return state.mainWindow;
+}
+
+/**
+ * The single, stable `ui` object every tool instance receives as `api.ui`. Its
+ * methods dispatch on the current collection context; calling one outside a
+ * collection window throws.
+ */
+export const ui: Ui = {
+  window: Object.assign(
     (id: string, titleOrCb: string | (() => void), cb?: () => void) => {
+      const state = need();
       let title: string;
       let callback: () => void;
       if (typeof titleOrCb === "function") {
@@ -104,131 +133,137 @@ export function collect(declarator: (ui: Ui) => void, deps: CollectDeps = {}): W
         callback = cb!;
       }
       const node: WindowNode = { kind: "window", id, title, children: [], menus: [] };
-      stack.push(node);
+      state.stack.push(node);
       callback();
-      stack.pop();
-      subWindows.push(node);
+      state.stack.pop();
+      state.subWindows.push(node);
     },
     {
       setTitle(newTitle: string) {
-        const current = stack[stack.length - 1];
-        if ("kind" in current) {
-          (current as WindowNode).title = newTitle;
-        }
+        currentWindow(need()).title = newTitle;
       },
       setWidth(width: number) {
-        const current = stack[stack.length - 1];
-        if ("kind" in current) {
-          (current as WindowNode).width = width;
-        }
+        currentWindow(need()).width = width;
       },
       onClose(handler: () => void) {
-        const current = stack[stack.length - 1];
-        if ("kind" in current) {
-          (current as WindowNode).onClose = handler;
-        }
+        currentWindow(need()).onClose = handler;
       },
     },
-  );
-
-  const ui: Ui = {
-    window: windowFn,
-    label(text) {
-      stack[stack.length - 1]!.children.push({ kind: "label", text });
-    },
-    button(label, opts) {
-      stack[stack.length - 1]!.children.push({
-        kind: "button",
-        label,
-        onClick: opts?.onClick,
-      });
-    },
-    row(cb) {
-      const node: Node = { kind: "row", children: [] };
-      stack.push(node as { children: ChildNode[] });
-      cb();
-      stack.pop();
-      stack[stack.length - 1]!.children.push(node);
-    },
-    textInput(value, opts) {
-      stack[stack.length - 1]!.children.push({
-        kind: "textInput",
-        value,
-        placeholder: opts?.placeholder,
-        onChange: opts?.onChange,
-      });
-    },
-    textarea(value, opts) {
-      stack[stack.length - 1]!.children.push({
-        kind: "textarea",
-        value,
-        placeholder: opts?.placeholder,
-        onChange: opts?.onChange,
-        rows: opts?.rows,
-      });
-    },
-    checkbox(label, opts) {
-      stack[stack.length - 1]!.children.push({
-        kind: "checkbox",
-        label,
-        checked: opts.checked,
-        onChange: opts.onChange,
-      });
-    },
-    copyableText(text) {
-      stack[stack.length - 1]!.children.push({ kind: "copyableText", text });
-    },
-    menu(label, cb) {
-      // Find the nearest window frame on the stack, defaulting to mainWindow.
-      let targetWindow: WindowNode = mainWindow;
-      for (let i = stack.length - 1; i >= 0; i--) {
-        const frame = stack[i]!;
-        if ("menus" in frame) {
-          targetWindow = frame as WindowNode;
-          break;
+  ),
+  label(text) {
+    top(need()).children.push({ kind: "label", text });
+  },
+  button(label, opts) {
+    top(need()).children.push({ kind: "button", label, onClick: opts?.onClick });
+  },
+  row(cb) {
+    const state = need();
+    const node: Node = { kind: "row", children: [] };
+    state.stack.push(node as Frame);
+    cb();
+    state.stack.pop();
+    top(state).children.push(node);
+  },
+  textInput(value, opts) {
+    top(need()).children.push({
+      kind: "textInput",
+      value,
+      placeholder: opts?.placeholder,
+      onChange: opts?.onChange,
+    });
+  },
+  textarea(value, opts) {
+    top(need()).children.push({
+      kind: "textarea",
+      value,
+      placeholder: opts?.placeholder,
+      onChange: opts?.onChange,
+      rows: opts?.rows,
+    });
+  },
+  checkbox(label, opts) {
+    top(need()).children.push({
+      kind: "checkbox",
+      label,
+      checked: opts.checked,
+      onChange: opts.onChange,
+    });
+  },
+  copyableText(text) {
+    top(need()).children.push({ kind: "copyableText", text });
+  },
+  menu(label, cb) {
+    const state = need();
+    const menuNode: MenuNode = { kind: "menu", label, items: [] };
+    currentWindow(state).menus.push(menuNode);
+    const prevMenu = state.currentMenu;
+    state.currentMenu = menuNode.items;
+    cb();
+    state.currentMenu = prevMenu;
+  },
+  menuItem(label, opts) {
+    const state = need();
+    if (state.currentMenu) {
+      state.currentMenu.push({ kind: "menuItem", label, onClick: opts?.onClick });
+    }
+  },
+  menuSeparator() {
+    const state = need();
+    if (state.currentMenu) {
+      state.currentMenu.push({ kind: "menuSeparator" });
+    }
+  },
+  file(file, opts) {
+    const state = need();
+    const onFile = opts.onFile;
+    const pick = state.pick;
+    top(state).children.push({
+      kind: "file",
+      file,
+      accept: opts.accept,
+      label: opts.label,
+      readOnly: opts.readOnly,
+      // Deliver one File to the tool. A single candidate is delivered
+      // synchronously; more than one is disambiguated via the quick pick.
+      // (No-op when readOnly / no onFile — the renderer also disables intake.)
+      resolve: (files: File[]) => {
+        if (!onFile || files.length === 0) return;
+        if (files.length === 1) {
+          onFile(files[0]!);
+          return;
         }
-      }
-      const menuNode: MenuNode = { kind: "menu", label, items: [] };
-      targetWindow.menus.push(menuNode);
-      const prevMenu = currentMenu;
-      currentMenu = menuNode.items;
-      cb();
-      currentMenu = prevMenu;
-    },
-    menuItem(label, opts) {
-      if (currentMenu) {
-        currentMenu.push({ kind: "menuItem", label, onClick: opts?.onClick });
-      }
-    },
-    menuSeparator() {
-      if (currentMenu) {
-        currentMenu.push({ kind: "menuSeparator" });
-      }
-    },
-    file(file, opts) {
-      const onFile = opts.onFile;
-      stack[stack.length - 1]!.children.push({
-        kind: "file",
-        file,
-        accept: opts.accept,
-        label: opts.label,
-        readOnly: opts.readOnly,
-        // Deliver one File to the tool. A single candidate is delivered
-        // synchronously; more than one is disambiguated via the quick pick.
-        // (No-op when readOnly / no onFile — the renderer also disables intake.)
-        resolve: (files: File[]) => {
-          if (!onFile || files.length === 0) return;
-          if (files.length === 1) {
-            onFile(files[0]!);
-            return;
-          }
-          void chooseFile(files, deps.pick).then((file) => {
-            if (file) onFile(file);
-          });
-        },
-      });
-    },
+        void chooseFile(files, pick).then((chosen) => {
+          if (chosen) onFile(chosen);
+        });
+      },
+    });
+  },
+};
+
+export function collect(declarator: (ui: Ui) => unknown, deps: CollectDeps = {}): WindowNode[] {
+  if (active) throw new Error("collect is not re-entrant");
+  const mainWindow: WindowNode = {
+    kind: "window",
+    id: "__main__",
+    title: "",
+    children: [],
+    menus: [],
   };
-  declarator(ui);
-  return [mainWindow, ...subWindows];
+  const state: CollectState = {
+    mainWindow,
+    stack: [mainWindow],
+    subWindows: [],
+    currentMenu: null,
+    pick: deps.pick,
+  };
+  active = state;
+  try {
+    const result = declarator(ui);
+    if (result != null && typeof (result as { then?: unknown }).then === "function") {
+      throw new Error("onRender must be synchronous");
+    }
+  } finally {
+    active = null;
+  }
+  return [mainWindow, ...state.subWindows];
 }
