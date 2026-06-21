@@ -46,10 +46,12 @@ export default function init(api: Api) {
         {
           type: "button",
           onPointerDown: tap,
-          class:
-            "self-center w-40 h-40 rounded-full font-mono text-2xl tracking-widest select-none touch-manipulation " +
-            "bg-toolbox-accent text-toolbox-deepest shadow-xl transition-transform duration-100 " +
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
+          class: api.tw`
+            self-center w-40 h-40 rounded-full font-mono text-2xl tracking-widest
+            select-none touch-manipulation bg-toolbox-accent text-toolbox-deepest
+            shadow-xl transition-transform duration-100
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused
+          `,
           style: { transform: lit.value ? "scale(0.93)" : "scale(1)" },
         },
         "TAP",
