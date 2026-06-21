@@ -1,5 +1,6 @@
 import { collect, ui, type ChildNode, type Node, type Ui, type WindowNode } from "./collector.ts";
 import { preactApi } from "./preact-api.ts";
+import { tw } from "./tw.ts";
 import { toPreact, toPreactInstance } from "./renderer.tsx";
 import type { Preact } from "../../api.d.ts";
 import type { VNode } from "preact";
@@ -41,6 +42,10 @@ export interface Api {
   onRender: () => void;
   ui: Ui;
   preact: Preact;
+  tw: (
+    strings: TemplateStringsArray,
+    ...exprs: (string | number | false | null | undefined)[]
+  ) => string;
   requestUpdate: () => void;
   tick: (cb: () => void) => () => void;
   toast: {
@@ -154,6 +159,7 @@ function build(): TestRuntime {
       onRender: () => {},
       ui,
       preact: preactApi,
+      tw,
       requestUpdate: () => {
         instance.dirty = true;
         updates++;
