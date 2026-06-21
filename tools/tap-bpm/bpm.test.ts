@@ -14,4 +14,29 @@ describe("estimateBpm", () => {
     const { confidence } = estimateBpm([0, 500, 1000, 1500, 2000]);
     expect(confidence).toBe(1);
   });
+
+  it("has no tempo with fewer than 2 taps", () => {
+    expect(estimateBpm([]).bpm).toBeNull();
+    expect(estimateBpm([1000]).bpm).toBeNull();
+  });
+
+  it("cannot estimate confidence from fewer than 3 taps", () => {
+    const { bpm, confidence } = estimateBpm([0, 500]);
+    expect(bpm).toBeCloseTo(120, 6);
+    expect(confidence).toBeNull();
+  });
+
+  it("grows more confident as more consistent taps accrue", () => {
+    // Oscillating +/-15ms jitter around a 500ms beat (not absorbed by the
+    // slope, so residual scatter is real), more samples.
+    const jitter = (i: number) => (i % 2 === 0 ? 15 : -15);
+    const tapsAt = (count: number) => Array.from({ length: count }, (_, i) => i * 500 + jitter(i));
+
+    const few = estimateBpm(tapsAt(4)).confidence!;
+    const many = estimateBpm(tapsAt(16)).confidence!;
+
+    expect(few).toBeGreaterThan(0);
+    expect(few).toBeLessThan(1);
+    expect(many).toBeGreaterThan(few);
+  });
 });
