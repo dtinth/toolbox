@@ -238,4 +238,37 @@ describe("collector", () => {
     expect(mainWindow.menus[1]!.label).toBe("Edit");
     expect(mainWindow.menus[1]!.items).toHaveLength(2);
   });
+
+  it("collects a custom widget node carrying its render closure", () => {
+    const render = () => ({ type: "div", props: {}, key: null });
+    const result = collect((u) => {
+      u.custom(render);
+    });
+    const node = result[0]!.children[0]!;
+    expect(node.kind).toBe("custom");
+    if (node.kind !== "custom") throw new Error("expected custom node");
+    expect(node.render).toBe(render);
+  });
+
+  it("emits identity-group markers, explicit and anonymous", () => {
+    const result = collect((u) => {
+      u.label("a");
+      u.identityGroup("editors");
+      u.label("b");
+      u.identityGroup();
+      u.label("c");
+    });
+    const children = result[0]!.children;
+    expect(children.map((c) => c.kind)).toEqual([
+      "label",
+      "identityGroup",
+      "label",
+      "identityGroup",
+      "label",
+    ]);
+    const markers = children.filter((c) => c.kind === "identityGroup");
+    expect(markers[0]).toMatchObject({ group: "editors" });
+    if (markers[1]!.kind !== "identityGroup") throw new Error("expected marker");
+    expect(markers[1]!.group).toBeUndefined();
+  });
 });

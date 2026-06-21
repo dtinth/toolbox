@@ -40,7 +40,7 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
       return h(
         "div",
         { class: "flex flex-row items-center gap-2" },
-        ...node.children.map((child) => renderChild(child)),
+        ...mapChildren(node.children, renderChild),
       ) as VNode;
     case "textInput":
       return h("input", {
@@ -97,7 +97,48 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
       return fileToPreact(node);
     case "copyableText":
       return h(CopyableText, { node }) as VNode;
+    case "custom":
+      return h(CustomWidget, { render: node.render }) as VNode;
+    case "identityGroup":
+      // A collector marker, stripped by mapChildren before it ever reaches here;
+      // present only for switch exhaustiveness.
+      throw new Error("identityGroup is a collector marker, not a renderable node");
   }
+}
+
+// A Custom widget (ADR-0007): a stable component wrapper so the tool's live
+// Preact subtree — its signal subscriptions and any internal hook state —
+// survives redraws as long as its (group, position) key is stable. Reading a
+// signal inside render() auto-subscribes this component (@preact/signals), so a
+// signal write repaints just this widget, without re-running onRender.
+function CustomWidget({ render }: { render: () => unknown }): VNode {
+  return render() as VNode;
+}
+
+/**
+ * Map a container's children to keyed VNodes. A node's identity is
+ * `(group, position)`: an `identityGroup` marker resets the position cursor (and
+ * takes the next ordinal group when anonymous), so a stable region keeps its keys
+ * — and any custom widget's mount — across redraws even as a variable region
+ * above it changes shape.
+ */
+function mapChildren(children: ChildNode[], renderOne: (child: ChildNode) => VNode): VNode[] {
+  let group = "1";
+  let pos = 0;
+  let anon = 1;
+  const out: VNode[] = [];
+  for (const child of children) {
+    if (child.kind === "identityGroup") {
+      group = child.group ?? String(++anon);
+      pos = 0;
+      continue;
+    }
+    const vnode = renderOne(child);
+    vnode.key = `${group}:${pos}`;
+    pos++;
+    out.push(vnode);
+  }
+  return out;
 }
 
 function CopyableText({ node }: { node: Extract<Node, { kind: "copyableText" }> }): VNode {
@@ -685,7 +726,7 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDr
 
   const body = h("div", {
     class: "flex-1 bg-toolbox-surface p-3 flex flex-col gap-1 min-h-0",
-    children: w.children.map((child) => childToPreact(child, ctx)),
+    children: mapChildren(w.children, (child) => childToPreact(child, ctx)),
   });
 
   const menuBar = w.menus.length > 0 ? h(WindowMenuBar, { menus: w.menus }) : null;

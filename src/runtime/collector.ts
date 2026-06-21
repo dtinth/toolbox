@@ -1,5 +1,6 @@
 import { chooseFile } from "./file-intake.ts";
 import type { Dialog } from "./dialog-center.ts";
+import type { VNode } from "../../api.d.ts";
 
 export type Node =
   | { kind: "label"; text: string }
@@ -23,7 +24,11 @@ export type Node =
     }
   | { kind: "spinner" }
   | { kind: "checkbox"; label: string; checked: boolean; onChange?: (checked: boolean) => void }
-  | { kind: "copyableText"; text: string };
+  | { kind: "copyableText"; text: string }
+  | { kind: "custom"; render: () => VNode }
+  // A collector-only marker: never rendered itself, it resets the identity
+  // cursor for the nodes that follow (group defaults to the next ordinal).
+  | { kind: "identityGroup"; group?: string };
 
 export type ChildNode = Node | WindowNode;
 
@@ -64,6 +69,8 @@ export interface Ui {
   menu(label: string, cb: () => void): void;
   menuItem(label: string, opts?: { onClick?: () => void }): void;
   menuSeparator(): void;
+  custom(render: () => VNode): void;
+  identityGroup(key?: string): void;
   file(
     file: File | null,
     opts: {
@@ -212,6 +219,12 @@ export const ui: Ui = {
     if (state.currentMenu) {
       state.currentMenu.push({ kind: "menuSeparator" });
     }
+  },
+  custom(render) {
+    top(need()).children.push({ kind: "custom", render });
+  },
+  identityGroup(key) {
+    top(need()).children.push({ kind: "identityGroup", group: key });
   },
   file(file, opts) {
     const state = need();

@@ -278,3 +278,44 @@ describe("renderNode (pure node renderer)", () => {
     expect(component).toBeTruthy();
   });
 });
+
+describe("custom widgets and identity groups", () => {
+  it("renders a custom node via a component that runs its render closure", () => {
+    const marker = h("canvas", { id: "scribble" }) as VNode;
+    const w: WindowNode = {
+      kind: "window",
+      id: "w",
+      title: "W",
+      menus: [],
+      children: [{ kind: "custom", render: () => marker }],
+    };
+    const el = windowToPreact(w, makeCtx(new Map()), inertDrag) as any;
+    const body = el.props.children[1];
+    const custom = body.props.children[0];
+    // A stable component wrapper (so the live Preact mount survives redraws).
+    expect(typeof custom.type).toBe("function");
+    expect(custom.key).toBe("1:0");
+    // Invoking the wrapper runs the tool's render closure.
+    expect(custom.type(custom.props)).toBe(marker);
+  });
+
+  it("keys children by (group, position) and skips identityGroup markers", () => {
+    const w: WindowNode = {
+      kind: "window",
+      id: "w",
+      title: "W",
+      menus: [],
+      children: [
+        { kind: "label", text: "a" },
+        { kind: "identityGroup", group: "editors" },
+        { kind: "label", text: "b" },
+        { kind: "identityGroup" },
+        { kind: "label", text: "c" },
+      ],
+    };
+    const el = windowToPreact(w, makeCtx(new Map()), inertDrag) as any;
+    const kids = el.props.children[1].props.children;
+    expect(kids).toHaveLength(3);
+    expect(kids.map((k: any) => k.key)).toEqual(["1:0", "editors:0", "2:0"]);
+  });
+});
