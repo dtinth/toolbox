@@ -25,6 +25,22 @@ describe("runtime", () => {
     expect(typeof api.dispose).toBe("function");
   });
 
+  it("exposes a reactive surface (api.preact) with working signals", () => {
+    const runtime = createTestRuntime();
+    let captured: Api | null = null;
+    runtime.loadTool((api) => {
+      captured = api;
+    });
+    const preact = captured!.preact;
+    const count = preact.signal(1);
+    expect(count.value).toBe(1);
+    count.value = 5;
+    expect(count.value).toBe(5);
+    const doubled = preact.computed(() => count.value * 2);
+    expect(doubled.value).toBe(10);
+    expect(typeof preact.h).toBe("function");
+  });
+
   it("captures a button click handler and runs requestUpdate on click", () => {
     const runtime = createTestRuntime();
     runtime.loadTool((api) => {

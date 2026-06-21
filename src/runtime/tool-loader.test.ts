@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { loadTool } from "./tool-loader.ts";
+import { preactApi } from "./preact-api.ts";
 import type { Api } from "./runtime.ts";
 
 describe("loadTool", () => {
@@ -28,6 +29,7 @@ describe("loadTool", () => {
         menuSeparator() {},
         file() {},
       },
+      preact: preactApi,
       requestUpdate: () => {},
       tick: () => () => {},
       toast: { show: () => ({ update() {}, dismiss() {} }) },
