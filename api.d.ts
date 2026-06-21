@@ -64,6 +64,53 @@ export interface Dialog {
 }
 
 /**
+ * A Preact virtual node, produced by `api.preact.h`. Opaque to tools — only
+ * passed back to the runtime (as a Custom widget's render result).
+ */
+export interface VNode {
+  type: unknown;
+  props: unknown;
+  key: unknown;
+}
+
+/** A writable reactive value (Preact signal). */
+export interface Signal<T> {
+  value: T;
+  /** Read without subscribing the current reactive context. */
+  peek(): T;
+}
+
+/** A derived, read-only reactive value. */
+export interface ReadonlySignal<T> {
+  readonly value: T;
+  peek(): T;
+}
+
+/**
+ * The reactive / hyperscript surface a **Custom widget** is built from — the
+ * hand-declared subset of Preact we commit to (we do not re-export Preact's own
+ * types, so the contract stays self-contained; the runtime's real bindings are
+ * asserted to conform). Unlike `ui.*`, these are never gated by the collection
+ * window: the signal factories are callable anywhere (create durable state in
+ * `init` scope), while the `use*` hooks are valid only inside a render closure
+ * (Preact enforces this). There is deliberately no `useRef` / `useEffect` — wire
+ * DOM with a callback `ref` plus a signal.
+ */
+export interface Preact {
+  /** Hyperscript: build a vnode. */
+  h(type: any, props?: any, ...children: any[]): VNode;
+  /** Group children without a wrapper element. */
+  Fragment: unknown;
+  signal<T>(value: T): Signal<T>;
+  computed<T>(fn: () => T): ReadonlySignal<T>;
+  effect(fn: () => void | (() => void)): () => void;
+  batch<T>(fn: () => T): T;
+  useSignal<T>(value: T): Signal<T>;
+  useComputed<T>(fn: () => T): ReadonlySignal<T>;
+  useSignalEffect(fn: () => void | (() => void)): void;
+}
+
+/**
  * The IMGUI primitive surface. Calls are collected by the runtime during the
  * tool's declarator and turned into a vDOM tree. The current window is the one
  * whose `window(...)` callback is on the call stack (the implicit main window
@@ -126,6 +173,12 @@ export interface Api {
   /** The declarator: assign a function that declares the tool's UI for a frame. */
   onRender: () => void;
   ui: Ui;
+  /**
+   * The reactive / hyperscript surface for **Custom widgets** (`ui.custom`).
+   * Not gated by the collection window — usable in `init` scope and inside a
+   * widget's render closure.
+   */
+  preact: Preact;
   /** Request a redraw (re-runs `onRender`). */
   requestUpdate: () => void;
   /** Register a per-frame tick callback; returns an unsubscribe function. */

@@ -1,5 +1,7 @@
 import { collect, ui, type ChildNode, type Node, type Ui, type WindowNode } from "./collector.ts";
+import { preactApi } from "./preact-api.ts";
 import { toPreact } from "./renderer.tsx";
+import type { Preact } from "../../api.d.ts";
 import type { VNode } from "preact";
 import {
   createWindowManager,
@@ -38,6 +40,7 @@ export interface ProgressOptions {
 export interface Api {
   onRender: () => void;
   ui: Ui;
+  preact: Preact;
   requestUpdate: () => void;
   tick: (cb: () => void) => () => void;
   toast: {
@@ -143,6 +146,7 @@ function build(): TestRuntime {
     const api: Api = {
       onRender: () => {},
       ui,
+      preact: preactApi,
       requestUpdate: () => {
         updates++;
         scheduleRender();
