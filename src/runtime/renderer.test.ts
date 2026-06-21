@@ -221,6 +221,22 @@ describe("renderNode (pure node renderer)", () => {
     expect(text).toContain("text/plain · 5 B");
   });
 
+  it("makes the whole box the drag-out handle when a file is present", () => {
+    const file = new File(["abcde"], "note.txt", { type: "text/plain" });
+    const el = renderNode({ kind: "file", file, resolve: () => {} }, noChild) as any;
+    // The box itself is draggable and carries the drag-out handlers (not just a
+    // tiny icon) — easier to grab, and select-none stops touch text-selection.
+    expect(el.props.draggable).toBe(true);
+    expect(typeof el.props.onDragStart).toBe("function");
+    expect(typeof el.props.onDragEnd).toBe("function");
+    expect(el.props.class).toContain("select-none");
+  });
+
+  it("does not make an empty file box draggable", () => {
+    const el = renderNode({ kind: "file", file: null, resolve: () => {} }, noChild) as any;
+    expect(el.props.draggable).toBeFalsy();
+  });
+
   it("delivers dropped files through resolve and prevents default", () => {
     const delivered: File[][] = [];
     const el = renderNode(

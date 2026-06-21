@@ -410,18 +410,9 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
   const body: VNode = f
     ? (h("div", { class: "flex flex-col gap-1" }, [
         h("div", { class: "flex items-center gap-2" }, [
-          // Draggable icon: drag the file out to the OS (Chromium DownloadURL).
-          h(
-            "span",
-            {
-              class: "text-toolbox-accent cursor-grab active:cursor-grabbing",
-              draggable: true,
-              title: "Drag to save this file",
-              onDragStart: (e: DragEvent) => startFileDragOut(e, f),
-              onDragEnd: endFileDragOut,
-            },
-            "📄",
-          ),
+          // The whole box is the drag-out handle (see below) — the icon is just a
+          // cue, so there is no tiny target to miss / text-select on touch.
+          h("span", { class: "text-toolbox-accent" }, "📄"),
           h("span", { class: "flex-1 truncate text-toolbox-text" }, f.name),
         ]),
         h(
@@ -473,10 +464,23 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
         },
       };
 
+  // Drag the whole box out (to the OS via Chromium DownloadURL, or to another
+  // ui.file in-app) when a file is present — a big, touch-friendly handle, and
+  // select-none stops iPad from text-selecting the icon/name instead of dragging.
+  const dragOut = f
+    ? {
+        draggable: true,
+        title: "Drag this file out",
+        onDragStart: (e: DragEvent) => startFileDragOut(e, f),
+        onDragEnd: endFileDragOut,
+      }
+    : {};
+
   return h("div", {
     "data-toolbox-file": "",
-    class: `border ${readOnly ? "border-solid" : "border-dashed"} border-toolbox-border rounded px-3 py-4 bg-toolbox-deepest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused`,
+    class: `border ${readOnly ? "border-solid" : "border-dashed"} border-toolbox-border rounded px-3 py-4 bg-toolbox-deepest select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused${f ? " cursor-grab active:cursor-grabbing" : ""}`,
     ...intake,
+    ...dragOut,
     children: [
       h("div", { class: "flex items-start gap-2" }, [
         h("div", { class: "flex-1 min-w-0" }, body),
