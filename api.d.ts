@@ -98,16 +98,16 @@ export interface ReadonlySignal<T> {
  */
 export interface Preact {
   /** Hyperscript: build a vnode. */
-  h(type: any, props?: any, ...children: any[]): VNode;
+  h: (type: any, props?: any, ...children: any[]) => VNode;
   /** Group children without a wrapper element. */
   Fragment: unknown;
-  signal<T>(value: T): Signal<T>;
-  computed<T>(fn: () => T): ReadonlySignal<T>;
-  effect(fn: () => void | (() => void)): () => void;
-  batch<T>(fn: () => T): T;
-  useSignal<T>(value: T): Signal<T>;
-  useComputed<T>(fn: () => T): ReadonlySignal<T>;
-  useSignalEffect(fn: () => void | (() => void)): void;
+  signal: <T>(value: T) => Signal<T>;
+  computed: <T>(fn: () => T) => ReadonlySignal<T>;
+  effect: (fn: () => void | (() => void)) => () => void;
+  batch: <T>(fn: () => T) => T;
+  useSignal: <T>(value: T) => Signal<T>;
+  useComputed: <T>(fn: () => T) => ReadonlySignal<T>;
+  useSignalEffect: (fn: () => void | (() => void)) => void;
 }
 
 /**
