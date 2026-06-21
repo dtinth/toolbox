@@ -1,7 +1,20 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { collect, type Ui } from "./collector.ts";
+import { collect, ui, type Ui } from "./collector.ts";
 
 describe("collector", () => {
+  it("throws when a ui.* call happens outside a collection window", () => {
+    expect(() => ui.label("nope")).toThrow(/outside onRender/);
+  });
+
+  it("rejects an onRender that returns a Promise", () => {
+    expect(() => collect(() => Promise.resolve())).toThrow(/synchronous/);
+  });
+
+  it("clears the collection context after collect returns", () => {
+    collect((u) => u.label("ok"));
+    expect(() => ui.label("nope")).toThrow(/outside onRender/);
+  });
+
   it("returns main window even when declarator does nothing", () => {
     const result = collect((_ui: Ui) => {});
     expect(result).toHaveLength(1);

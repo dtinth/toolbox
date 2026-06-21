@@ -1,4 +1,4 @@
-import { collect, type ChildNode, type Node, type Ui, type WindowNode } from "./collector.ts";
+import { collect, ui, type ChildNode, type Node, type Ui, type WindowNode } from "./collector.ts";
 import { toPreact } from "./renderer.tsx";
 import type { VNode } from "preact";
 import {
@@ -135,21 +135,6 @@ function build(): TestRuntime {
     onChange: () => requestUpdate(),
   });
 
-  const noopUi: Ui = {
-    window: Object.assign(() => {}, { setTitle() {}, setWidth() {}, onClose() {} }),
-    label() {},
-    button() {},
-    row() {},
-    textInput() {},
-    textarea() {},
-    checkbox() {},
-    copyableText() {},
-    menu() {},
-    menuItem() {},
-    menuSeparator() {},
-    file() {},
-  };
-
   function notify() {
     for (const sub of subscribers) sub();
   }
@@ -157,7 +142,7 @@ function build(): TestRuntime {
   function buildApi(instance: ToolInstance): Api {
     const api: Api = {
       onRender: () => {},
-      ui: noopUi,
+      ui,
       requestUpdate: () => {
         updates++;
         scheduleRender();
@@ -285,18 +270,13 @@ function build(): TestRuntime {
         allWindows.push(loadingWindow);
         continue;
       }
-      const instanceWindows = collect(
-        (collectorUi) => {
-          const previousUi = instance.api.ui;
-          instance.api.ui = collectorUi;
-          try {
-            instance.onRender();
-          } finally {
-            instance.api.ui = previousUi;
-          }
-        },
-        { pick: instance.api.dialog.pick },
-      );
+      // `api.ui` is the stable collector `ui`; `collect` installs the collection
+      // context for the duration of this declarator, so `ui.*` works here and
+      // throws anywhere else. Returning onRender's result lets collect reject a
+      // Promise-returning (async) declarator.
+      const instanceWindows = collect(() => instance.onRender(), {
+        pick: instance.api.dialog.pick,
+      });
       for (const w of instanceWindows) {
         const scoped: WindowNode = { ...w, id: scopeId(instanceId, w.id) };
         if (w.id === "__main__" && !scoped.onClose) {
