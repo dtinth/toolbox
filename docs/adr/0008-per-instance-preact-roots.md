@@ -18,8 +18,9 @@ entire desktop.
 - The Runtime tracks a per-instance **dirty** set. A tool's `api.requestUpdate`
   marks _its_ instance dirty.
 - Collection is per-instance: `renderInstance(instanceId)` runs only that
-  instance's declarator and returns that instance's windows. The combined
-  `runtime.render(): VNode` is gone.
+  instance's declarator (reusing its cache when clean) and returns that
+  instance's windows as a fragment. The combined `render(): VNode` is retained
+  only as a composition for tests / as a fallback; the host no longer uses it.
 - The Runtime owns mounting: a `Map<instanceId, container>` under a desktop
   element; `render(vnode, container)` per dirty instance; `render(null, container)`
   - drop the node on close. The Host shrinks to the desktop element, the imperative
