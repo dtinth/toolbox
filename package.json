@@ -20,6 +20,8 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",
+    "@unocss/core": "^66.7.2",
+    "@unocss/preset-wind4": "^66.7.2",
     "tailwindcss": "^4.3.1",
     "typescript": "~6.0.2",
     "vite": "catalog:",
