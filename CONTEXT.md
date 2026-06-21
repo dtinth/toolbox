@@ -256,6 +256,20 @@ makes the **Projector** a live Portal into a popup document rather than a serial
 projection. See ADR-0008.
 _Avoid_: render pass, frame, global tree
 
+**Tool styling** (`api.tw`):
+How a **Tool** styles its UI. `api.tw\`w-40 rounded-full bg-toolbox-accent\``is a
+tagged template that returns a class string and registers the CSS at runtime
+(backed by UnoCSS`preset-wind4`, Tailwind-v4-aligned). Tailwind itself is an
+implementation detail of the **Runtime**'s chrome only — a tool never relies on
+ambient Tailwind classes being generated for it. Every utility is emitted in the
+`tw-` namespace (`bg-toolbox-accent`→`tw-bg-toolbox-accent`) so tool styles can
+never clash with, or be overridden by, the chrome's Tailwind; the two engines
+target disjoint selectors. The `toolbox-_`theme colors and fonts are single-
+sourced: UnoCSS references the same`var(--color-toolbox-_)`/`var(--font-\*)`the
+chrome's`@theme`emits. Dynamic _values_ (an animated transform, a computed
+colour) still go through inline`style`, not `api.tw`. See ADR-0009.
+_Avoid_: css-in-js, styled, classnames, tailwind (in tool-facing language)
+
 ## Relationships
 
 - A **Runtime** hosts zero or more **Tools** simultaneously
