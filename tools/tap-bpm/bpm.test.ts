@@ -8,4 +8,10 @@ describe("estimateBpm", () => {
     const { bpm } = estimateBpm(taps);
     expect(bpm).toBeCloseTo(120, 6);
   });
+
+  it("is fully confident when taps are perfectly periodic", () => {
+    // No residual scatter -> the slope is known exactly -> confidence 1.
+    const { confidence } = estimateBpm([0, 500, 1000, 1500, 2000]);
+    expect(confidence).toBe(1);
+  });
 });
