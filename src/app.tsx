@@ -1,3 +1,4 @@
+import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type {
   InputRequest,
@@ -266,8 +267,53 @@ export interface EmbedHostProps {
   runtime: Runtime;
 }
 
+// Mounts each running tool instance into its OWN Preact root (ADR-0008), so a
+// redraw of one instance never reconciles another's subtree. The desktop div is
+// a zero-size portal target; each instance container is a plain div whose
+// windows are `position: fixed`, so containers never overlap. We subscribe here
+// (separately from the host's chrome subscription) and re-render every live
+// instance's root on each change — renderInstance reuses clean instances' caches,
+// so this stays cheap and keeps the focus ring (cross-cutting) in sync.
+function DesktopRoots({ runtime }: { runtime: Runtime }) {
+  const deskRef = useRef<HTMLDivElement | null>(null);
+  const containers = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    const sync = () => {
+      const desk = deskRef.current;
+      if (!desk) return;
+      const map = containers.current;
+      const live = new Set(runtime.toolInstances().map((i) => i.instanceId));
+      for (const [id, el] of map) {
+        if (!live.has(id)) {
+          render(null, el);
+          el.remove();
+          map.delete(id);
+        }
+      }
+      for (const info of runtime.toolInstances()) {
+        let el = map.get(info.instanceId);
+        if (!el) {
+          el = document.createElement("div");
+          desk.appendChild(el);
+          map.set(info.instanceId, el);
+        }
+        render(runtime.renderInstance(info.instanceId), el);
+      }
+    };
+    sync();
+    const unsubscribe = runtime.subscribe(sync);
+    return () => {
+      unsubscribe();
+      for (const el of containers.current.values()) render(null, el);
+      containers.current.clear();
+    };
+  }, [runtime]);
+
+  return <div ref={deskRef} />;
+}
+
 export function EmbedHost({ runtime }: EmbedHostProps) {
-  const [vnode, setVnode] = useState(() => runtime.render());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [picks, setPicks] = useState<PickRequest[]>(() => runtime.pendingPicks());
   const [inputs, setInputs] = useState<InputRequest[]>(() => runtime.pendingInputs());
@@ -284,7 +330,6 @@ export function EmbedHost({ runtime }: EmbedHostProps) {
       if (rafId === null && runtime.hasTickSubscribers()) rafId = requestAnimationFrame(loop);
     };
     const unsubscribe = runtime.subscribe(() => {
-      setVnode(runtime.render());
       setToasts(runtime.toasts());
       setPicks(runtime.pendingPicks());
       setInputs(runtime.pendingInputs());
@@ -299,7 +344,7 @@ export function EmbedHost({ runtime }: EmbedHostProps) {
 
   return (
     <div class="toolbox-host fixed inset-0">
-      {vnode}
+      <DesktopRoots runtime={runtime} />
       <ToastLayer toasts={toasts} onDismiss={(id) => runtime.dismissToast(id)} />
       <PickLayer picks={picks} onResolve={(id, index) => runtime.resolvePick(id, index)} />
       <InputLayer inputs={inputs} onResolve={(id, v) => runtime.resolveInput(id, v)} />
@@ -308,7 +353,6 @@ export function EmbedHost({ runtime }: EmbedHostProps) {
 }
 
 export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLaunch }: HostProps) {
-  const [vnode, setVnode] = useState(() => runtime.render());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [picks, setPicks] = useState<PickRequest[]>(() => runtime.pendingPicks());
   const [inputs, setInputs] = useState<InputRequest[]>(() => runtime.pendingInputs());
@@ -332,7 +376,6 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
       if (rafId === null && runtime.hasTickSubscribers()) rafId = requestAnimationFrame(loop);
     };
     const unsubscribe = runtime.subscribe(() => {
-      setVnode(runtime.render());
       setToasts(runtime.toasts());
       setPicks(runtime.pendingPicks());
       setInputs(runtime.pendingInputs());
@@ -379,7 +422,7 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
 
   return (
     <div class="toolbox-host fixed inset-0">
-      {vnode}
+      <DesktopRoots runtime={runtime} />
       <ToastLayer toasts={toasts} onDismiss={(id) => runtime.dismissToast(id)} />
       <PickLayer picks={picks} onResolve={(id, index) => runtime.resolvePick(id, index)} />
       <InputLayer inputs={inputs} onResolve={(id, v) => runtime.resolveInput(id, v)} />
