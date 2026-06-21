@@ -1,4 +1,4 @@
-import { h, render, type VNode } from "preact";
+import { Fragment, h, render, type VNode } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 import type { ChildNode, MenuNode, Node, WindowNode } from "./collector.ts";
@@ -753,4 +753,22 @@ export function toPreact(
     class: "fixed inset-0",
     children: windows.map((w) => h(Window, { w, ctx, key: w.id })),
   }) as VNode;
+}
+
+/**
+ * Render one instance's windows for its own Preact root (ADR-0008). Unlike
+ * `toPreact` there is no `fixed inset-0` wrapper — the host mounts this into a
+ * zero-size per-instance container, and each Window is itself `position: fixed`,
+ * so containers never overlap or capture pointer events, and z-order stays pure
+ * CSS across instances.
+ */
+export function toPreactInstance(
+  windows: WindowNode[],
+  windowStates: ReadonlyMap<string, WindowState>,
+  activeWindowId: string | null,
+  onFocusWindow: (id: string) => void,
+  onMoveWindow: (id: string, x: number, y: number) => void,
+): VNode {
+  const ctx: RenderContext = { windowStates, activeWindowId, onFocusWindow, onMoveWindow };
+  return h(Fragment, null, ...windows.map((w) => h(Window, { w, ctx, key: w.id }))) as VNode;
 }

@@ -25,6 +25,58 @@ describe("runtime", () => {
     expect(typeof api.dispose).toBe("function");
   });
 
+  it("isolates redraws: requestUpdate on one instance does not re-run another's onRender", () => {
+    const runtime = createTestRuntime();
+    let aRenders = 0;
+    let bRenders = 0;
+    let apiA: Api | null = null;
+    runtime.launchTool({
+      manifestId: "a",
+      name: "A",
+      loader: (api) => {
+        apiA = api;
+        api.onRender = () => {
+          aRenders++;
+        };
+      },
+    });
+    runtime.launchTool({
+      manifestId: "b",
+      name: "B",
+      loader: (api) => {
+        api.onRender = () => {
+          bRenders++;
+        };
+      },
+    });
+
+    runtime.render();
+    expect(aRenders).toBe(1);
+    expect(bRenders).toBe(1);
+
+    apiA!.requestUpdate();
+    runtime.render();
+    expect(aRenders).toBe(2);
+    // B was clean, so its declarator was not re-run.
+    expect(bRenders).toBe(1);
+  });
+
+  it("renderInstance returns a vnode for a live instance and null once gone", () => {
+    const runtime = createTestRuntime();
+    const info = runtime.launchTool({
+      manifestId: "a",
+      name: "A",
+      loader: (api) => {
+        api.onRender = () => {
+          api.ui.label("hi");
+        };
+      },
+    });
+    expect(runtime.renderInstance(info.instanceId)).toBeTruthy();
+    runtime.closeTool(info.instanceId);
+    expect(runtime.renderInstance(info.instanceId)).toBeNull();
+  });
+
   it("exposes a reactive surface (api.preact) with working signals", () => {
     const runtime = createTestRuntime();
     let captured: Api | null = null;
