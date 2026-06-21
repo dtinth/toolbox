@@ -12,7 +12,11 @@ export default function init(api: Api) {
   // re-running the declarator (ADR-0007).
   const lit = signal(false);
 
-  const tap = () => {
+  // Register on pointer DOWN — a beat lands on the press, not the release, so
+  // tapping on down is what musicians expect and is the most accurate timing.
+  const tap = (e: PointerEvent) => {
+    if (e.button !== 0) return; // ignore secondary mouse buttons
+    e.preventDefault(); // suppress the focus/selection ghost + synthesized click
     const t = Date.now();
     if (taps.length && t - taps[taps.length - 1]! > RESET_GAP) taps = [];
     taps.push(t);
@@ -41,9 +45,9 @@ export default function init(api: Api) {
         "button",
         {
           type: "button",
-          onClick: tap,
+          onPointerDown: tap,
           class:
-            "self-center w-40 h-40 rounded-full font-mono text-2xl tracking-widest select-none " +
+            "self-center w-40 h-40 rounded-full font-mono text-2xl tracking-widest select-none touch-manipulation " +
             "bg-toolbox-accent text-toolbox-deepest shadow-xl transition-transform duration-100 " +
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
           style: { transform: lit.value ? "scale(0.93)" : "scale(1)" },
