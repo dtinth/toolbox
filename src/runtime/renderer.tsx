@@ -245,12 +245,13 @@ async function copyFileToClipboard(file: File): Promise<void> {
 //
 // `DownloadURL` is an OS-only channel — the browser never turns it back into a
 // File for an in-app drop. So the same drag also publishes the original File on
-// a module-level channel, tagged with a marker MIME type, so dropping the icon
-// into another ui.file widget delivers the identical bytes (no round-trip
-// through the blob URL). The File outlives a single re-render here and is
-// cleared on dragend; the receiving drop handler reads it before dragend fires
-// (drop precedes dragend).
-const APP_FILE_DRAG = "application/x-toolbox-file";
+// this module-level channel, so dropping the box into another ui.file widget
+// delivers the identical bytes (no round-trip through the blob URL). The File is
+// set on dragstart and cleared on dragend, so any drop happening while it is set
+// is one of ours — that's the signal the receiving handler trusts (drop precedes
+// dragend). We deliberately don't tag the DataTransfer with a custom marker MIME:
+// WebKit (every browser on iPad) strips non-standard types from `dataTransfer`,
+// so a marker would vanish on drop and the in-app drag would look like nothing.
 let dragOutUrl: string | null = null;
 let activeDragFile: File | null = null;
 function startFileDragOut(e: DragEvent, file: File): void {
@@ -259,7 +260,6 @@ function startFileDragOut(e: DragEvent, file: File): void {
   activeDragFile = file;
   const mime = file.type || "application/octet-stream";
   e.dataTransfer.setData("DownloadURL", `${mime}:${file.name}:${dragOutUrl}`);
-  e.dataTransfer.setData(APP_FILE_DRAG, file.name);
   e.dataTransfer.effectAllowed = "copy";
 }
 function endFileDragOut(): void {
@@ -268,12 +268,6 @@ function endFileDragOut(): void {
   activeDragFile = null;
   // Revoke late: the OS may still be reading the URL to write the file.
   if (url) setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
-
-// The File carried by an in-app icon drag, if this DataTransfer is one of ours.
-function appDragFile(dt: DataTransfer): File | null {
-  if (!activeDragFile) return null;
-  return Array.from(dt.types).includes(APP_FILE_DRAG) ? activeDragFile : null;
 }
 
 // The `…` menu. Anchored to the ⋯ button but rendered into a detached host on
@@ -457,10 +451,12 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
           setDragActive(e, false);
           const dt = e.dataTransfer;
           if (!dt) return;
-          // Prefer an in-app icon drag (identical bytes); else fall back to OS
-          // files / dropped text.
-          const inApp = appDragFile(dt);
-          node.resolve(inApp ? [inApp] : filesFromDataTransfer(dt));
+          // OS files / dropped text win when present (a foreign drag). An in-app
+          // box drag carries no such payload — only the live `activeDragFile` —
+          // so when nothing was dropped and a drag of ours is in flight, deliver
+          // those identical bytes.
+          const dropped = filesFromDataTransfer(dt);
+          node.resolve(dropped.length === 0 && activeDragFile ? [activeDragFile] : dropped);
         },
       };
 
