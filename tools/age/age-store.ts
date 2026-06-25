@@ -9,8 +9,8 @@ import { toRecipient } from "./age-crypto.ts";
 const KEY = "age.identity.v1";
 
 export interface StoredIdentity {
-  /** Non-secret passkey handle from createCredential (AGE-PLUGIN-FIDO2PRF-1…). */
-  passkey: string;
+  /** Relying-party id of the passkey, for discoverable assertions. */
+  rpId: string;
   /** Public recipient (age1…) — safe in clear, used to encrypt to self. */
   recipient: string;
   /** The secret (AGE-SECRET-KEY-1…), age-armored and encrypted to the passkey. */
@@ -31,11 +31,11 @@ export function loadStored(): StoredIdentity | null {
   try {
     const v = JSON.parse(raw) as Partial<StoredIdentity>;
     if (
-      typeof v.passkey === "string" &&
+      typeof v.rpId === "string" &&
       typeof v.recipient === "string" &&
       typeof v.wrappedSecret === "string"
     ) {
-      return { passkey: v.passkey, recipient: v.recipient, wrappedSecret: v.wrappedSecret };
+      return { rpId: v.rpId, recipient: v.recipient, wrappedSecret: v.wrappedSecret };
     }
   } catch {
     /* malformed — treat as absent */
@@ -52,9 +52,43 @@ export function storedRecipient(): string | null {
   return loadStored()?.recipient ?? null;
 }
 
-/** Create a passkey credential for wrapping. One passkey ceremony (create). */
-export function setupPasskey(keyName = "age identity 🔐"): Promise<string> {
-  return age.webauthn.createCredential({ keyName });
+// COSE algorithm ids typage's authenticators accept: Ed25519, ES256, RS256.
+const pubKeyCredParams: PublicKeyCredentialParameters[] = [
+  { type: "public-key", alg: -8 },
+  { type: "public-key", alg: -7 },
+  { type: "public-key", alg: -257 },
+];
+
+/**
+ * Create a discoverable, PRF-capable passkey ourselves.
+ *
+ * We deliberately do NOT use typage's `createCredential`, which rejects unless
+ * `getClientExtensionResults().prf.enabled` is true at *registration*. WebKit
+ * (every browser on iPad) doesn't report that flag at registration even though
+ * PRF works at *assertion* — so that gate is a false negative there. Instead we
+ * register with the PRF extension and let the first wrap (a `get()`) be the real
+ * PRF check: if the authenticator can't do PRF, that assertion throws.
+ */
+async function createPasskey(rpId: string, keyName = "age identity 🔐"): Promise<void> {
+  const cred = await navigator.credentials.create({
+    publicKey: {
+      rp: { name: "age", id: rpId },
+      user: {
+        name: keyName,
+        id: crypto.getRandomValues(new Uint8Array(8)),
+        displayName: keyName,
+      },
+      pubKeyCredParams,
+      authenticatorSelection: {
+        residentKey: "required",
+        requireResidentKey: true,
+        userVerification: "required", // PRF requires UV
+      },
+      extensions: { prf: {} },
+      challenge: crypto.getRandomValues(new Uint8Array(16)), // unused, no attestation
+    },
+  });
+  if (!cred) throw new Error("Passkey creation was cancelled");
 }
 
 /**
@@ -63,13 +97,15 @@ export function setupPasskey(keyName = "age identity 🔐"): Promise<string> {
  * session. Costs one passkey ceremony to wrap (plus one to create, first time).
  */
 export async function saveIdentity(identity: string): Promise<StoredIdentity> {
-  const passkey = loadStored()?.passkey ?? (await setupPasskey());
+  const existing = loadStored();
+  const rpId = existing?.rpId ?? location.hostname;
+  if (!existing) await createPasskey(rpId);
   const recipient = await toRecipient(identity);
   const e = new age.Encrypter();
-  e.addRecipient(new age.webauthn.WebAuthnRecipient({ identity: passkey }));
+  e.addRecipient(new age.webauthn.WebAuthnRecipient({ rpId }));
   const ciphertext = await e.encrypt(identity);
   const stored: StoredIdentity = {
-    passkey,
+    rpId,
     recipient,
     wrappedSecret: age.armor.encode(ciphertext),
   };
@@ -87,7 +123,7 @@ export async function unlockSecret(): Promise<string> {
   const stored = loadStored();
   if (!stored) throw new Error("No stored identity");
   const d = new age.Decrypter();
-  d.addIdentity(new age.webauthn.WebAuthnIdentity({ identity: stored.passkey }));
+  d.addIdentity(new age.webauthn.WebAuthnIdentity({ rpId: stored.rpId }));
   cachedSecret = await d.decrypt(age.armor.decode(stored.wrappedSecret), "text");
   return cachedSecret;
 }

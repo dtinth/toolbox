@@ -12,7 +12,7 @@ Persisted (localStorage), all non-secret or already-encrypted:
 
 ```
 {
-  passkey:       "AGE-PLUGIN-FIDO2PRF-1…",  // createCredential() handle (non-secret)
+  rpId:          "host.example",             // relying-party id of the passkey
   recipient:     "age1…",                    // public, for encrypt-to-self
   wrappedSecret: "<age armored ciphertext>"  // the secret, encrypted to the passkey
 }
@@ -35,9 +35,17 @@ the session.
 - **WebAuthn PRF is symmetric and key-material-free.** typage's `WebAuthnRecipient`
   / `WebAuthnIdentity` derive a symmetric key from the authenticator's PRF output
   for a per-message nonce; there is no extra secret to store or lose. We persist
-  only the **non-secret** `createCredential` handle and pin it as the `identity`
-  so the ceremony targets the right credential (an unspecified discoverable pick
-  "might include login credentials, which won't work").
+  only the non-secret `rpId` and use a **discoverable** credential, so wrap/unwrap
+  are plain `get()` assertions the user confirms.
+- **We create the passkey ourselves, not via typage's `createCredential`.** That
+  helper rejects unless `getClientExtensionResults().prf.enabled` is true at
+  _registration_ — but WebKit (every browser on iPad) doesn't report that flag at
+  registration even though PRF works at _assertion_, so the gate is a false
+  negative there (observed live on Safari/iPadOS). We register the credential with
+  the PRF extension directly and let the first wrap (`get()`) be the real PRF
+  check. Because the toolbox origin hosts no login passkeys, a discoverable pick
+  for this `rpId` surfaces only age passkeys, so dropping the pinned-credential
+  handle costs no practical safety.
 - **Wrap the secret, don't make the passkey the identity.** The alternative —
   encrypting blobs directly to a `WebAuthnRecipient` — would bind every ciphertext
   to that one authenticator: not decryptable by the `age` CLI, not portable, not
