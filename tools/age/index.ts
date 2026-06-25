@@ -184,13 +184,16 @@ export default function init(api: Api) {
     });
 
     const own = storedRecipient();
-    api.ui.label(
-      own
-        ? `Your key: ${shorten(own)}`
-        : webauthnSupported()
+    if (own) {
+      api.ui.label("Your public key:");
+      api.ui.copyableText(own);
+    } else {
+      api.ui.label(
+        webauthnSupported()
           ? "No identity yet — use the Identity menu, or paste keys below."
           : "No passkey support here — use ephemeral keys below.",
-    );
+      );
+    }
 
     api.ui.file(input, {
       label:
@@ -233,9 +236,10 @@ export default function init(api: Api) {
       });
     }
 
-    if (result) {
-      api.ui.label(mode === "encrypt" ? "Encrypted:" : "Decrypted:");
-      api.ui.file(result, { readOnly: true });
-    }
+    api.ui.label(mode === "encrypt" ? "Encrypted output:" : "Decrypted output:");
+    api.ui.file(result, {
+      readOnly: true,
+      label: mode === "encrypt" ? "Encrypted file appears here" : "Decrypted file appears here",
+    });
   };
 }
