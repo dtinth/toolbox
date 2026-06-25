@@ -24,6 +24,12 @@ export type Node =
     }
   | { kind: "spinner" }
   | { kind: "checkbox"; label: string; checked: boolean; onChange?: (checked: boolean) => void }
+  | {
+      kind: "segmented";
+      value: string;
+      options: { value: string; label: string }[];
+      onChange?: (value: string) => void;
+    }
   | { kind: "copyableText"; text: string }
   | { kind: "custom"; render: () => VNode }
   // A collector-only marker: never rendered itself, it resets the identity
@@ -65,6 +71,13 @@ export interface Ui {
     opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
   ): void;
   checkbox(label: string, opts: { checked: boolean; onChange?: (checked: boolean) => void }): void;
+  segmented(
+    value: string,
+    opts: {
+      options: { value: string; label: string }[];
+      onChange?: (value: string) => void;
+    },
+  ): void;
   copyableText(text: string): void;
   menu(label: string, cb: () => void): void;
   menuItem(label: string, opts?: { onClick?: () => void }): void;
@@ -193,6 +206,14 @@ export const ui: Ui = {
       kind: "checkbox",
       label,
       checked: opts.checked,
+      onChange: opts.onChange,
+    });
+  },
+  segmented(value, opts) {
+    top(need()).children.push({
+      kind: "segmented",
+      value,
+      options: opts.options,
       onChange: opts.onChange,
     });
   },

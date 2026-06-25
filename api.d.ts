@@ -143,6 +143,20 @@ export interface Ui {
     opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
   ): void;
   checkbox(label: string, opts: { checked: boolean; onChange?: (checked: boolean) => void }): void;
+  /**
+   * A single-select value chooser rendered as a horizontal **segmented control**
+   * — the segment whose `value` equals the passed `value` is highlighted.
+   * Selecting another segment fires `onChange(value)`. It picks a _value_, not a
+   * view: the tool re-declares its UI for the new value (e.g. an Encrypt/Decrypt
+   * mode flag). Distinct from a `checkbox` (one boolean) — this is one-of-N.
+   */
+  segmented(
+    value: string,
+    opts: {
+      options: { value: string; label: string }[];
+      onChange?: (value: string) => void;
+    },
+  ): void;
   copyableText(text: string): void;
   menu(label: string, cb: () => void): void;
   menuItem(label: string, opts?: { onClick?: () => void }): void;

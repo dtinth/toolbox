@@ -180,6 +180,42 @@ describe("collector", () => {
     expect(received).toEqual([true]);
   });
 
+  it("collects a segmented node with its value and options", () => {
+    const result = collect((ui) => {
+      ui.segmented("encrypt", {
+        options: [
+          { value: "encrypt", label: "Encrypt" },
+          { value: "decrypt", label: "Decrypt" },
+        ],
+      });
+    });
+    const node = result[0]!.children[0]!;
+    expect(node.kind).toBe("segmented");
+    if (node.kind !== "segmented") throw new Error("expected segmented node");
+    expect(node.value).toBe("encrypt");
+    expect(node.options).toEqual([
+      { value: "encrypt", label: "Encrypt" },
+      { value: "decrypt", label: "Decrypt" },
+    ]);
+  });
+
+  it("collects a segmented node whose onChange forwards the selected value", () => {
+    const received: string[] = [];
+    const result = collect((ui) => {
+      ui.segmented("a", {
+        options: [
+          { value: "a", label: "A" },
+          { value: "b", label: "B" },
+        ],
+        onChange: (v) => received.push(v),
+      });
+    });
+    const node = result[0]!.children[0]!;
+    if (node.kind !== "segmented") throw new Error("expected segmented node");
+    node.onChange?.("b");
+    expect(received).toEqual(["b"]);
+  });
+
   it("collects a copyableText node carrying the text through", () => {
     const result = collect((ui) => {
       ui.copyableText("https://example.com/result");
