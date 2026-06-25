@@ -251,13 +251,14 @@ function openInNewTab(file: File): void {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-// Only text and PNG can be put on the clipboard (browser-supported types).
+// Any text/* type can be copied as text; PNG as an image (browser-supported
+// types). Other binaries have no clipboard representation.
 function canCopyToClipboard(file: File): boolean {
-  return file.type === "text/plain" || file.type === "image/png";
+  return file.type.startsWith("text/") || file.type === "image/png";
 }
 async function copyFileToClipboard(file: File): Promise<void> {
   try {
-    if (file.type === "text/plain") {
+    if (file.type.startsWith("text/")) {
       await navigator.clipboard.writeText(await file.text());
     } else if (file.type === "image/png") {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": file })]);
