@@ -23,6 +23,7 @@ describe("loadTool", () => {
         textInput() {},
         textarea() {},
         checkbox() {},
+        segmented() {},
         copyableText() {},
         menu() {},
         menuItem() {},

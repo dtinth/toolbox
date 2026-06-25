@@ -270,6 +270,18 @@ chrome's`@theme`emits. Dynamic _values_ (an animated transform, a computed
 colour) still go through inline`style`, not `api.tw`. See ADR-0009.
 _Avoid_: css-in-js, styled, classnames, tailwind (in tool-facing language)
 
+**Segmented control**:
+The `ui.segmented(value, { options, onChange })` primitive — a compact,
+single-select value chooser collected into the current **Window**, rendered as a
+horizontal bar of segments with the one matching `value` highlighted. `options`
+is `{ value, label }[]`; selecting a segment fires `onChange(value)`. It selects
+a _value_, not a view — switching content is the tool's job in its **Declarator**
+(e.g. an Encrypt/Decrypt mode flag that changes which `ui.*` calls run). Unlike a
+**Checkbox** (one boolean) it is one-of-N; unlike a **Menu** it shows all choices
+inline with the current one visible. A pure `ui.*` node (the runtime tracks no
+state — the tool owns `value` and re-declares each frame).
+_Avoid_: radio, tabs, toggle group, button group, switch
+
 ## Relationships
 
 - A **Runtime** hosts zero or more **Tools** simultaneously
