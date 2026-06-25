@@ -37,6 +37,11 @@
       "id": "uploader",
       "name": "Uploader",
       "description": "Upload a file to your endpoint and copy the resulting URL."
+    },
+    {
+      "id": "age",
+      "name": "age",
+      "description": "Encrypt and decrypt blobs with age (X25519 keys, passkey-protected)."
     }
   ]
 }
