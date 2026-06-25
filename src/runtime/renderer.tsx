@@ -84,6 +84,35 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
         }),
         h("span", null, node.label),
       ) as VNode;
+    case "segmented":
+      return h(
+        "div",
+        {
+          role: "radiogroup",
+          class:
+            "inline-flex flex-row gap-1 p-1 rounded-md bg-toolbox-deepest border border-toolbox-border",
+        },
+        ...node.options.map((opt) => {
+          const selected = opt.value === node.value;
+          return h(
+            "button",
+            {
+              type: "button",
+              role: "radio",
+              "aria-checked": selected ? "true" : "false",
+              class:
+                "px-3 py-1 text-sm rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused " +
+                (selected
+                  ? "bg-toolbox-accent text-toolbox-deepest font-medium"
+                  : "text-toolbox-text hover:bg-toolbox-content"),
+              onClick: () => {
+                if (!selected) node.onChange?.(opt.value);
+              },
+            },
+            opt.label,
+          );
+        }),
+      ) as VNode;
     case "spinner":
       return h("div", {
         class: "flex items-center justify-center py-6",
