@@ -31,6 +31,7 @@ export default function init(api: Api) {
   let recipientText = ""; // ephemeral recipient(s) for encrypt
   let identityText = ""; // ephemeral identity for decrypt
   let armor = false;
+  let addSelf = false; // also encrypt to your own key (extra recipient)
 
   const draw = () => api.requestUpdate();
   const toast = (m: string) => api.toast.show(m, { duration: 3000 });
@@ -106,7 +107,10 @@ export default function init(api: Api) {
     if (!input) return toast("Choose a file to encrypt");
     const typed = parseRecipients(recipientText);
     const own = storedRecipient();
-    const recipients = typed.length > 0 ? typed : own ? [own] : [];
+    const base = typed.length > 0 ? typed : own ? [own] : [];
+    // When "also add my own key" is checked, include it as an extra recipient
+    // so you can decrypt the file too. Dedupe in case it's already in the list.
+    const recipients = addSelf && own ? [...new Set([...base, own])] : base;
     if (recipients.length === 0) {
       return toast("Add a recipient (age1…) or generate an identity first");
     }
@@ -214,6 +218,15 @@ export default function init(api: Api) {
           recipientText = v;
         },
       });
+      if (own) {
+        api.ui.checkbox("Also add my own key as a recipient", {
+          checked: addSelf,
+          onChange: (v) => {
+            addSelf = v;
+            draw();
+          },
+        });
+      }
       api.ui.checkbox("ASCII armor (text output)", {
         checked: armor,
         onChange: (v) => {
