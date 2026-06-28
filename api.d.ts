@@ -142,7 +142,10 @@ export interface Ui {
     value: string,
     opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
   ): void;
-  checkbox(label: string, opts: { checked: boolean; onChange?: (checked: boolean) => void }): void;
+  checkbox(
+    label: string,
+    opts: { checked: boolean; disabled?: boolean; onChange?: (checked: boolean) => void },
+  ): void;
   /**
    * A single-select value chooser rendered as a horizontal **segmented control**
    * — the segment whose `value` equals the passed `value` is highlighted.

@@ -23,7 +23,13 @@ export type Node =
       resolve: (files: File[]) => void;
     }
   | { kind: "spinner" }
-  | { kind: "checkbox"; label: string; checked: boolean; onChange?: (checked: boolean) => void }
+  | {
+      kind: "checkbox";
+      label: string;
+      checked: boolean;
+      disabled?: boolean;
+      onChange?: (checked: boolean) => void;
+    }
   | {
       kind: "segmented";
       value: string;
@@ -70,7 +76,10 @@ export interface Ui {
     value: string,
     opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
   ): void;
-  checkbox(label: string, opts: { checked: boolean; onChange?: (checked: boolean) => void }): void;
+  checkbox(
+    label: string,
+    opts: { checked: boolean; disabled?: boolean; onChange?: (checked: boolean) => void },
+  ): void;
   segmented(
     value: string,
     opts: {
@@ -206,6 +215,7 @@ export const ui: Ui = {
       kind: "checkbox",
       label,
       checked: opts.checked,
+      disabled: opts.disabled,
       onChange: opts.onChange,
     });
   },
