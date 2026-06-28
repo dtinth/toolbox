@@ -218,15 +218,14 @@ export default function init(api: Api) {
           recipientText = v;
         },
       });
-      if (own) {
-        api.ui.checkbox("Also add my own key as a recipient", {
-          checked: addSelf,
-          onChange: (v) => {
-            addSelf = v;
-            draw();
-          },
-        });
-      }
+      api.ui.checkbox("Also add my own key as a recipient", {
+        checked: addSelf,
+        disabled: !own,
+        onChange: (v) => {
+          addSelf = v;
+          draw();
+        },
+      });
       api.ui.checkbox("ASCII armor (text output)", {
         checked: armor,
         onChange: (v) => {

@@ -70,12 +70,14 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
       return h(
         "label",
         {
-          class:
-            "flex flex-row items-center gap-2 cursor-pointer select-none text-toolbox-text text-sm",
+          class: `flex flex-row items-center gap-2 select-none text-toolbox-text text-sm ${
+            node.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+          }`,
         },
         h("input", {
           type: "checkbox",
           checked: node.checked,
+          disabled: node.disabled,
           class: "accent-toolbox-accent",
           onChange: (e: Event) => {
             const checked = (e.currentTarget as HTMLInputElement).checked;
