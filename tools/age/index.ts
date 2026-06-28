@@ -9,6 +9,7 @@ import {
 import {
   clearIdentity,
   hasIdentity,
+  type PasskeySource,
   saveIdentity,
   storedRecipient,
   unlockSecret,
@@ -44,11 +45,24 @@ export default function init(api: Api) {
     return choice?.label === "Replace identity";
   };
 
-  const persist = async (secret: string, how: string) => {
+  // When no identity is wrapped yet, let the user mint a fresh passkey or reuse
+  // one they already have (avoids piling up duplicate age passkeys). Re-wrapping
+  // an existing identity always reuses its own passkey, so we skip the prompt.
+  const choosePasskeySource = async (): Promise<PasskeySource | null> => {
+    if (hasIdentity() || !webauthnSupported()) return "new";
+    const choice = await api.dialog.pick(
+      [{ label: "Create a new passkey" }, { label: "Use an existing passkey" }],
+      { title: "Wrap your identity to a passkey" },
+    );
+    if (!choice) return null;
+    return choice.label.startsWith("Use") ? "existing" : "new";
+  };
+
+  const persist = async (secret: string, how: string, source: PasskeySource) => {
     try {
       const stored = await api.withProgress({ title: "Saving identity" }, async (p) => {
         p.report({ message: "Wrapping secret to your passkey…" });
-        return saveIdentity(secret);
+        return saveIdentity(secret, source);
       });
       toast(`${how}: ${shorten(stored.recipient)}`);
       draw();
@@ -59,7 +73,9 @@ export default function init(api: Api) {
 
   const generate = async () => {
     if (!(await confirmReplace())) return;
-    await persist(await generateIdentity(), "New identity");
+    const source = await choosePasskeySource();
+    if (!source) return;
+    await persist(await generateIdentity(), "New identity", source);
   };
 
   const importIdentity = async () => {
@@ -74,7 +90,9 @@ export default function init(api: Api) {
       return;
     }
     if (!(await confirmReplace())) return;
-    await persist(secret, "Imported identity");
+    const source = await choosePasskeySource();
+    if (!source) return;
+    await persist(secret, "Imported identity", source);
   };
 
   const copyPublic = async () => {

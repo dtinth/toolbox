@@ -77,6 +77,37 @@ the session.
   encrypts/decrypts in one shot. **Blob**s here are small chunks; typage's
   streaming API is left for a future large-file need.
 
+## Update — DIY PRF wrapping, pinned credential (Chrome fix)
+
+The wrap/unwrap no longer goes through typage's `webauthn` module. It derived the
+key with a **discoverable** `navigator.credentials.get()` (no `allowCredentials`),
+so the browser offered a picker of every age passkey on the origin. Picking one
+that wasn't the PRF-enabled credential — easy once a few accumulate — returned no
+PRF result and threw _"PRF not supported"_ (also seen on Chrome, not just the
+iPad/WebKit registration gate). The fix mirrors the known-working PRF demos:
+
+- **Pin the credential.** `createPasskey` now returns the credential id; we persist
+  it (`credentialId`) and pass it in `allowCredentials` for every wrap/unwrap, so
+  the assertion always targets the exact PRF-enabled passkey — no picker, no
+  wrong-credential failure. Unlock is a direct user-verification on that one key.
+- **Derive + wrap ourselves.** We `get()` with `extensions.prf.eval.first = <fixed
+salt>`, HKDF the 32-byte PRF output to an AES-GCM key, and store `base64(iv‖ct)`.
+  `wrappedSecret` was already authenticator-bound (non-portable) under typage, so
+  doing the symmetric wrap directly loses no portability and drops the dependency
+  on typage's webauthn code path. The portable `AGE-SECRET-KEY-1…` is unchanged;
+  "Copy secret key" remains the backup path.
+- **Distinct passkey names.** New passkeys are named `age <first-10-of-recipient>`
+  instead of a constant string, so the keychain no longer fills with
+  identically-named entries.
+- **Reuse over proliferate.** Re-wrapping an existing identity reuses its stored
+  passkey. On a fresh setup the user can **create a new passkey or pick an existing
+  one** (a discoverable `get()` that captures and then pins that credential),
+  rather than minting a new passkey every time.
+
+Storage moved to `age.identity.v2` (adds `credentialId`, AES-GCM `wrappedSecret`);
+old `v1` entries are ignored. This seam still can't run headless, so it has no unit
+tests — `age-crypto.ts` holds the testable core.
+
 ## Notes
 
 This work also introduces the **Segmented control** (`ui.segmented`) collector
