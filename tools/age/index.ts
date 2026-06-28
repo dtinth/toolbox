@@ -15,7 +15,7 @@ import {
   webauthnSupported,
 } from "./age-store.ts";
 
-type Mode = "encrypt" | "decrypt";
+type Mode = "encrypt" | "decrypt" | "reencrypt";
 
 const shorten = (key: string) => (key.length > 16 ? `${key.slice(0, 12)}…${key.slice(-4)}` : key);
 const parseRecipients = (text: string): string[] =>
@@ -161,6 +161,41 @@ export default function init(api: Api) {
     }
   };
 
+  // Re-encrypt: decrypt a file that's addressed to you, then encrypt the
+  // plaintext to new recipient(s). You're always kept as a recipient, so the
+  // result stays decryptable by you (the "add my own key" box is forced on).
+  const doReencrypt = async () => {
+    if (!input) return toast("Choose an .age file to re-encrypt");
+    const own = storedRecipient();
+    if (!own) return toast("Set up an identity first — re-encryption needs your key");
+    const typed = parseRecipients(recipientText);
+    const recipients = [...new Set([...typed, own])];
+    // Unlock inside the click's user activation — the passkey needs the gesture.
+    let identity: string;
+    try {
+      identity = await unlockSecret();
+    } catch (e) {
+      return toast(`Could not unlock: ${(e as Error).message}`);
+    }
+    const f = input;
+    try {
+      await api.withProgress({ title: "Re-encrypting" }, async (p) => {
+        p.report({ message: "Decrypting…" });
+        const data = new Uint8Array(await f.arrayBuffer());
+        const plain = await decryptBytes([identity], data);
+        p.report({ message: "Encrypting…" });
+        const out = await encryptBytes(recipients, plain, { armor });
+        const name = f.name.endsWith(".age") ? f.name : encryptedName(f.name);
+        result = new File([out as BlobPart], name, {
+          type: armor ? "text/plain" : "application/age",
+        });
+        draw();
+      });
+    } catch (e) {
+      toast(`Re-encryption failed — wrong key or not an age file (${(e as Error).message})`);
+    }
+  };
+
   api.onRender = () => {
     api.ui.window.setTitle("age");
     api.ui.window.setWidth(420);
@@ -179,6 +214,7 @@ export default function init(api: Api) {
       options: [
         { value: "encrypt", label: "Encrypt" },
         { value: "decrypt", label: "Decrypt" },
+        { value: "reencrypt", label: "Re-encrypt" },
       ],
       onChange: (v) => {
         mode = v as Mode;
@@ -199,11 +235,14 @@ export default function init(api: Api) {
       );
     }
 
+    const fileLabel =
+      mode === "encrypt"
+        ? "Choose, drop, or paste a file to encrypt"
+        : mode === "decrypt"
+          ? "Choose, drop, or paste an .age file to decrypt"
+          : "Choose, drop, or paste an .age file to re-encrypt";
     api.ui.file(input, {
-      label:
-        mode === "encrypt"
-          ? "Choose, drop, or paste a file to encrypt"
-          : "Choose, drop, or paste an .age file to decrypt",
+      label: fileLabel,
       onFile: (f) => {
         input = f;
         result = null;
@@ -234,7 +273,7 @@ export default function init(api: Api) {
         },
       });
       api.ui.button("Encrypt", { onClick: () => void doEncrypt() });
-    } else {
+    } else if (mode === "decrypt") {
       if (!hasIdentity()) {
         api.ui.textInput(identityText, {
           placeholder: "Identity AGE-SECRET-KEY-1…",
@@ -246,12 +285,43 @@ export default function init(api: Api) {
       api.ui.button(hasIdentity() ? "Decrypt (unlock with passkey)" : "Decrypt", {
         onClick: () => void doDecrypt(),
       });
+    } else {
+      api.ui.textInput(recipientText, {
+        placeholder: "Add recipient age1…",
+        onChange: (v) => {
+          recipientText = v;
+        },
+      });
+      // Re-encryption always keeps you as a recipient — forced on, can't toggle.
+      api.ui.checkbox("Also add my own key as a recipient", { checked: true, disabled: true });
+      api.ui.checkbox("ASCII armor (text output)", {
+        checked: armor,
+        onChange: (v) => {
+          armor = v;
+          draw();
+        },
+      });
+      api.ui.button(hasIdentity() ? "Re-encrypt (unlock with passkey)" : "Re-encrypt", {
+        onClick: () => void doReencrypt(),
+      });
     }
 
-    api.ui.label(mode === "encrypt" ? "Encrypted output:" : "Decrypted output:");
+    const outputLabel =
+      mode === "encrypt"
+        ? "Encrypted output:"
+        : mode === "decrypt"
+          ? "Decrypted output:"
+          : "Re-encrypted output:";
+    const outputPlaceholder =
+      mode === "encrypt"
+        ? "Encrypted file appears here"
+        : mode === "decrypt"
+          ? "Decrypted file appears here"
+          : "Re-encrypted file appears here";
+    api.ui.label(outputLabel);
     api.ui.file(result, {
       readOnly: true,
-      label: mode === "encrypt" ? "Encrypted file appears here" : "Decrypted file appears here",
+      label: outputPlaceholder,
     });
   };
 }
