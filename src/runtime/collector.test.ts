@@ -145,6 +145,23 @@ describe("collector", () => {
     expect(delivered).toEqual([a]);
   });
 
+  it("exposes a clear capability only when onClear is wired", () => {
+    let cleared = 0;
+    const result = collect((ui) => {
+      ui.file(null, { onFile: () => {}, onClear: () => cleared++ });
+      ui.file(null, { onFile: () => {} });
+    });
+    const withClear = result[0]!.children[0]!;
+    const withoutClear = result[0]!.children[1]!;
+    if (withClear.kind !== "file" || withoutClear.kind !== "file") {
+      throw new Error("expected file nodes");
+    }
+    expect(typeof withClear.clear).toBe("function");
+    withClear.clear?.();
+    expect(cleared).toBe(1);
+    expect(withoutClear.clear).toBeUndefined();
+  });
+
   it("collects a read-only file node whose resolve is a no-op (no onFile)", () => {
     const out = new File(["x"], "out.png", { type: "image/png" });
     const result = collect((ui) => {

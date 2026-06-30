@@ -266,6 +266,11 @@ export default function init(api: Api) {
         result = null;
         draw();
       },
+      onClear: () => {
+        input = null;
+        result = null;
+        draw();
+      },
     });
 
     if (mode === "encrypt") {

@@ -237,6 +237,46 @@ describe("renderNode (pure node renderer)", () => {
     expect(el.props.draggable).toBeFalsy();
   });
 
+  it("publishes a text/* file's contents as text/plain when dragged out", async () => {
+    const file = new File(["secret ciphertext"], "out.txt", { type: "text/plain" });
+    // Rendering kicks off the async pre-read of the contents; let it settle so
+    // dragstart (which can't await) can read them back synchronously.
+    const el = renderNode({ kind: "file", file, resolve: () => {} }, noChild) as any;
+    await file.text();
+    await Promise.resolve();
+    const data: Record<string, string> = {};
+    el.props.onDragStart({
+      dataTransfer: {
+        setData: (type: string, value: string) => {
+          data[type] = value;
+        },
+      },
+    });
+    expect(data["text/plain"]).toBe("secret ciphertext");
+    expect(data.DownloadURL).toContain("out.txt");
+    el.props.onDragEnd();
+  });
+
+  it("delivers the original file (not synthesized text) on an in-app box drop", () => {
+    const file = new File(["abcde"], "note.txt", { type: "text/plain" });
+    const source = renderNode({ kind: "file", file, resolve: () => {} }, noChild) as any;
+    // Start an in-app drag of the source box, then drop onto a target box. The
+    // drag carries text/plain, but the target must still receive the exact File.
+    source.props.onDragStart({ dataTransfer: { setData: () => {} } });
+    const delivered: File[][] = [];
+    const target = renderNode(
+      { kind: "file", file: null, resolve: (files) => delivered.push(files) },
+      noChild,
+    ) as any;
+    target.props.onDrop({
+      preventDefault: () => {},
+      currentTarget: { classList: { toggle: () => {} } },
+      dataTransfer: { files: [], getData: () => "abcde" },
+    });
+    expect(delivered[0]).toEqual([file]);
+    source.props.onDragEnd();
+  });
+
   it("delivers dropped files through resolve and prevents default", () => {
     const delivered: File[][] = [];
     const el = renderNode(
