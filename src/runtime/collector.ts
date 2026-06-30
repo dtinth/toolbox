@@ -21,6 +21,8 @@ export type Node =
       label?: string;
       readOnly?: boolean;
       resolve: (files: File[]) => void;
+      // Clear the current selection (only when the tool wired `onClear`).
+      clear?: () => void;
     }
   | { kind: "spinner" }
   | {
@@ -97,6 +99,7 @@ export interface Ui {
     file: File | null,
     opts: {
       onFile?: (file: File) => void;
+      onClear?: () => void;
       accept?: string;
       label?: string;
       readOnly?: boolean;
@@ -260,6 +263,7 @@ export const ui: Ui = {
   file(file, opts) {
     const state = need();
     const onFile = opts.onFile;
+    const onClear = opts.onClear;
     const pick = state.pick;
     top(state).children.push({
       kind: "file",
@@ -267,6 +271,8 @@ export const ui: Ui = {
       accept: opts.accept,
       label: opts.label,
       readOnly: opts.readOnly,
+      // Only expose a clear action when the tool can act on it.
+      clear: onClear,
       // Deliver one File to the tool. A single candidate is delivered
       // synchronously; more than one is disambiguated via the quick pick.
       // (No-op when readOnly / no onFile — the renderer also disables intake.)

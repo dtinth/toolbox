@@ -284,14 +284,32 @@ async function copyFileToClipboard(file: File): Promise<void> {
 // dragend). We deliberately don't tag the DataTransfer with a custom marker MIME:
 // WebKit (every browser on iPad) strips non-standard types from `dataTransfer`,
 // so a marker would vanish on drop and the in-app drag would look like nothing.
+//
+// A text/* file additionally publishes its contents as `text/plain`, so the box
+// can be dragged straight into any text field (a textarea, another app, an
+// editor) — the same affordance CopyableText offers. `dragstart` can't await
+// `file.text()`, so the contents are pre-read into `textContentCache` while the
+// box renders and read back synchronously here.
 let dragOutUrl: string | null = null;
 let activeDragFile: File | null = null;
+const textContentCache = new WeakMap<File, string>();
+// Pre-read a text/* file's contents so a drag-out can set `text/plain`
+// synchronously. Keyed by File so the per-frame re-render reads each file once.
+function warmTextContent(file: File): void {
+  if (!file.type.startsWith("text/") || textContentCache.has(file)) return;
+  void file
+    .text()
+    .then((t) => textContentCache.set(file, t))
+    .catch(() => {});
+}
 function startFileDragOut(e: DragEvent, file: File): void {
   if (!e.dataTransfer) return;
   dragOutUrl = URL.createObjectURL(file);
   activeDragFile = file;
   const mime = file.type || "application/octet-stream";
   e.dataTransfer.setData("DownloadURL", `${mime}:${file.name}:${dragOutUrl}`);
+  const text = textContentCache.get(file);
+  if (text !== undefined) e.dataTransfer.setData("text/plain", text);
   e.dataTransfer.effectAllowed = "copy";
 }
 function endFileDragOut(): void {
@@ -337,30 +355,51 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
       "text-left px-3 py-1.5 text-sm text-toolbox-text hover:bg-toolbox-content whitespace-nowrap";
     const item = (label: string, onClick: () => void): VNode =>
       h("button", { type: "button", class: itemClass, onClick }, label) as VNode;
-    const menuItems: VNode[] = [];
+    const separator = (): VNode =>
+      h("div", { class: "my-1 border-t border-toolbox-border" }) as VNode;
+
+    // Items fall into groups — bringing a file IN, taking the current file OUT,
+    // and clearing it — kept visually distinct with separators (like the Age
+    // identity menu). Empty groups drop out so no stray separators appear.
+    const intake: VNode[] = [];
     if (!nodeRef.current.readOnly) {
-      menuItems.push(
+      intake.push(
         item(
           "Choose file…",
           run(() => openFileDialog(nodeRef.current)),
         ),
-      );
-      menuItems.push(
         item(
           "Paste from clipboard",
           run(() => void pasteFromClipboard(nodeRef.current)),
         ),
       );
     }
+    const exportItems: VNode[] = [];
     if (nodeRef.current.file) {
-      menuItems.push(item("Open in new tab", run(withFile(openInNewTab))));
+      exportItems.push(item("Open in new tab", run(withFile(openInNewTab))));
       if (canCopyToClipboard(nodeRef.current.file)) {
-        menuItems.push(
+        exportItems.push(
           item("Copy to clipboard", run(withFile((f) => void copyFileToClipboard(f)))),
         );
       }
-      menuItems.push(item("Download", run(withFile(downloadFile))));
+      exportItems.push(item("Download", run(withFile(downloadFile))));
     }
+    const clearItems: VNode[] = [];
+    if (!nodeRef.current.readOnly && nodeRef.current.file && nodeRef.current.clear) {
+      clearItems.push(
+        item(
+          "Clear",
+          run(() => nodeRef.current.clear?.()),
+        ),
+      );
+    }
+
+    const groups = [intake, exportItems, clearItems].filter((g) => g.length > 0);
+    const menuItems: VNode[] = [];
+    groups.forEach((group, i) => {
+      if (i > 0) menuItems.push(separator());
+      menuItems.push(...group);
+    });
     render(
       h(
         "div",
@@ -432,6 +471,8 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
 function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
   const f = node.file;
   const readOnly = node.readOnly === true;
+  // Pre-read text contents so a drag-out can publish them as `text/plain`.
+  if (f) warmTextContent(f);
 
   const body: VNode = f
     ? (h("div", { class: "flex flex-col gap-1" }, [
@@ -483,12 +524,18 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
           setDragActive(e, false);
           const dt = e.dataTransfer;
           if (!dt) return;
-          // OS files / dropped text win when present (a foreign drag). An in-app
-          // box drag carries no such payload — only the live `activeDragFile` —
-          // so when nothing was dropped and a drag of ours is in flight, deliver
-          // those identical bytes.
-          const dropped = filesFromDataTransfer(dt);
-          node.resolve(dropped.length === 0 && activeDragFile ? [activeDragFile] : dropped);
+          // An in-app box drag is in flight exactly when `activeDragFile` is set
+          // (set on dragstart, cleared on dragend; the drop precedes dragend), so
+          // it's the authoritative source — deliver its identical bytes and name.
+          // A text/* box drag also carries `text/plain`, which would otherwise be
+          // turned into a synthesized text file and lose the original name/type.
+          // Only a foreign drag (OS file, text from another app) falls through to
+          // the DataTransfer payload.
+          if (activeDragFile) {
+            node.resolve([activeDragFile]);
+            return;
+          }
+          node.resolve(filesFromDataTransfer(dt));
         },
       };
 

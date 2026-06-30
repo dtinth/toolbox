@@ -184,16 +184,19 @@ export interface Ui {
    * A focusable intake box that yields a File from choose-a-file, drop, or
    * paste. Pass the tool's current file (or null) for the metadata display;
    * `onFile` delivers a newly supplied one. Ambiguity (several files, or a
-   * multi-type clipboard) is resolved via `api.dialog.pick`.
+   * multi-type clipboard) is resolved via `api.dialog.pick`. Wire `onClear` to
+   * add a **Clear** action to the box's `⋯` menu that discards the current
+   * selection (shown only on a non-read-only box that holds a file).
    *
    * With `readOnly: true` the box is output-only: no drop / paste / choose
-   * intake (and `onFile` is unused), just the file's metadata, the drag-out
-   * handle, and the export menu (open / copy / download).
+   * intake (and `onFile` / `onClear` are unused), just the file's metadata, the
+   * drag-out handle, and the export menu (open / copy / download).
    */
   file(
     file: File | null,
     opts: {
       onFile?: (file: File) => void;
+      onClear?: () => void;
       accept?: string;
       label?: string;
       readOnly?: boolean;
