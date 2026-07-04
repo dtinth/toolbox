@@ -2,8 +2,9 @@ import type { Api, Progress } from "../../api.d.ts";
 
 // Bezel assets (fetched at runtime). Both are native @2x; content rects are the
 // transparent screen opening in @2x device pixels. Horizontal numbers are from
-// Apple's Figma export; the vertical bezel is the horizontal rotated 90°, so its
-// content rect is the transpose.
+// Apple's Figma export; the vertical bezel is a separate export (not an exact
+// rotation of the horizontal), so its rect is measured from the PNG's alpha
+// channel: the opaque bezel ends at x 145/2210 and y 139/2892.
 interface Bezel {
   url: string;
   w: number;
@@ -20,7 +21,7 @@ const VERTICAL: Bezel = {
   url: "https://im.dt.in.th/ipfs/bafybeiet7kco3c3nrzi5udkp3og5tfnhnzcmp4u3alks7qaldy7bjavcui/image.png",
   w: 2364,
   h: 3064,
-  content: { x: 164, y: 152, w: 2068, h: 2752 },
+  content: { x: 146, y: 140, w: 2064, h: 2752 },
 };
 
 // Cache fetched bezel bytes so re-framing doesn't refetch the ~1MB asset.
