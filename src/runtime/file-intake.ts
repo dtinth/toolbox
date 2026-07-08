@@ -51,6 +51,11 @@ export function textToFile(text: string, now: number = Date.now()): File {
   return new File([text], synthName("text/plain", now), { type: "text/plain", lastModified: now });
 }
 
+/** Wrap a string as a `text/html` File. */
+export function htmlToFile(html: string, now: number = Date.now()): File {
+  return new File([html], synthName("text/html", now), { type: "text/html", lastModified: now });
+}
+
 export interface DataTransferLike {
   files: ArrayLike<File>;
   getData(type: string): string;
@@ -58,14 +63,26 @@ export interface DataTransferLike {
 
 /**
  * Candidate Files from a drop or a paste event's `clipboardData`. Real files
- * win; otherwise a text payload (uri-list preferred, then plain) becomes a
- * single `text/plain` File.
+ * win. Otherwise, text payloads become File candidates: content copied from a
+ * web page carries both `text/html` and `text/plain`, and the two commonly
+ * differ (markup vs. rendered text), so both are offered and the caller's
+ * quick pick lets the user choose. A link-only payload (`text/uri-list` with
+ * no distinct HTML) becomes a single `text/plain` File.
  */
 export function filesFromDataTransfer(dt: DataTransferLike, now: number = Date.now()): File[] {
   const files = Array.from(dt.files);
   if (files.length > 0) return files;
-  const text = dt.getData("text/uri-list") || dt.getData("text/plain");
-  if (text) return [textToFile(text, now)];
+
+  const html = dt.getData("text/html");
+  const plain = dt.getData("text/plain");
+  if (html && plain && html !== plain) {
+    return [htmlToFile(html, now), textToFile(plain, now)];
+  }
+  if (plain) return [textToFile(plain, now)];
+  if (html) return [htmlToFile(html, now)];
+
+  const uriList = dt.getData("text/uri-list");
+  if (uriList) return [textToFile(uriList, now)];
   return [];
 }
 

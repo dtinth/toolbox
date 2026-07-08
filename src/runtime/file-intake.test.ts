@@ -75,16 +75,44 @@ describe("filesFromDataTransfer", () => {
     expect(files).toEqual([a, b]);
   });
 
-  it("prefers uri-list, then plain text, when no files", () => {
+  it("falls back to uri-list when there's no html or plain text", () => {
     const out = filesFromDataTransfer(
       {
         files: [],
-        getData: (t) => (t === "text/uri-list" ? "https://x" : "plain"),
+        getData: (t) => (t === "text/uri-list" ? "https://x" : ""),
       },
       7,
     );
     expect(out).toHaveLength(1);
     expect(out[0]!.name).toBe("pasted-7.txt");
+  });
+
+  it("offers both html and plain text as candidates when they differ (e.g. pasted from a web page)", () => {
+    const out = filesFromDataTransfer(
+      {
+        files: [],
+        getData: (t) => {
+          if (t === "text/html") return "<b>hello</b>";
+          if (t === "text/plain") return "hello";
+          return "";
+        },
+      },
+      7,
+    );
+    expect(out.map((f) => f.type)).toEqual(["text/html", "text/plain"]);
+    expect(out.map((f) => f.name)).toEqual(["pasted-7.html", "pasted-7.txt"]);
+  });
+
+  it("returns a single plain text candidate when html and plain text are identical", () => {
+    const out = filesFromDataTransfer(
+      {
+        files: [],
+        getData: (t) => (t === "text/html" || t === "text/plain" ? "same" : ""),
+      },
+      7,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]!.type).toBe("text/plain");
   });
 
   it("returns nothing for an empty transfer", () => {
