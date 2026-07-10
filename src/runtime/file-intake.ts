@@ -1,4 +1,4 @@
-import type { Dialog } from "./dialog-center.ts";
+import { type Dialog } from "./dialog-center.ts";
 
 // Normalise everything a user can hand a tool — chosen files, dropped files,
 // dropped/pasted text, pasted blobs — into File objects. "Everything the user
@@ -23,12 +23,14 @@ const MIME_EXT: Record<string, string> = {
 /** Best-effort file extension for a MIME type (no leading dot). */
 export function extensionForMime(mime: string): string {
   const base = (mime.split(";")[0] ?? "").trim().toLowerCase();
-  if (MIME_EXT[base]) return MIME_EXT[base]!;
+  if (MIME_EXT[base]) {
+    return MIME_EXT[base];
+  }
   const slash = base.indexOf("/");
-  if (slash >= 0) {
+  if (slash !== -1) {
     const sub = base.slice(slash + 1);
-    if (sub && !sub.includes("+") && /^[a-z0-9.-]+$/.test(sub)) {
-      return sub.replace(/^x-/, "");
+    if (sub && !sub.includes("+") && /^[a-z0-9.-]+$/u.test(sub)) {
+      return sub.replace(/^x-/u, "");
     }
   }
   return "bin";
@@ -41,7 +43,9 @@ export function synthName(mime: string, now: number = Date.now()): string {
 
 /** Wrap a Blob as a File. A Blob that is already a File is returned unchanged. */
 export function blobToFile(blob: Blob, now: number = Date.now()): File {
-  if (blob instanceof File) return blob;
+  if (blob instanceof File) {
+    return blob;
+  }
   const type = blob.type || "application/octet-stream";
   return new File([blob], synthName(type, now), { type: blob.type, lastModified: now });
 }
@@ -57,8 +61,8 @@ export function htmlToFile(html: string, now: number = Date.now()): File {
 }
 
 export interface DataTransferLike {
-  files: ArrayLike<File>;
-  getData(type: string): string;
+  files: Iterable<File>;
+  getData: (type: string) => string;
 }
 
 /**
@@ -70,25 +74,33 @@ export interface DataTransferLike {
  * no distinct HTML) becomes a single `text/plain` File.
  */
 export function filesFromDataTransfer(dt: DataTransferLike, now: number = Date.now()): File[] {
-  const files = Array.from(dt.files);
-  if (files.length > 0) return files;
+  const files = [...dt.files];
+  if (files.length > 0) {
+    return files;
+  }
 
   const html = dt.getData("text/html");
   const plain = dt.getData("text/plain");
   if (html && plain && html !== plain) {
     return [htmlToFile(html, now), textToFile(plain, now)];
   }
-  if (plain) return [textToFile(plain, now)];
-  if (html) return [htmlToFile(html, now)];
+  if (plain) {
+    return [textToFile(plain, now)];
+  }
+  if (html) {
+    return [htmlToFile(html, now)];
+  }
 
   const uriList = dt.getData("text/uri-list");
-  if (uriList) return [textToFile(uriList, now)];
+  if (uriList) {
+    return [textToFile(uriList, now)];
+  }
   return [];
 }
 
 export interface ClipboardItemLike {
-  types: ReadonlyArray<string>;
-  getType(type: string): Promise<Blob>;
+  types: readonly string[];
+  getType: (type: string) => Promise<Blob>;
 }
 
 /**
@@ -98,16 +110,13 @@ export interface ClipboardItemLike {
  * between.
  */
 export async function filesFromClipboardItems(
-  items: ReadonlyArray<ClipboardItemLike>,
+  items: readonly ClipboardItemLike[],
   now: number = Date.now(),
 ): Promise<File[]> {
-  const out: File[] = [];
-  for (const item of items) {
-    for (const type of item.types) {
-      out.push(blobToFile(await item.getType(type), now));
-    }
-  }
-  return out;
+  const blobs = await Promise.all(
+    items.flatMap((item) => item.types.map((type) => item.getType(type))),
+  );
+  return blobs.map((blob) => blobToFile(blob, now));
 }
 
 /**
@@ -116,8 +125,12 @@ export async function filesFromClipboardItems(
  * quick pick (label = file name). With no pick available, the first wins.
  */
 export async function chooseFile(files: File[], pick?: Dialog["pick"]): Promise<File | undefined> {
-  if (files.length <= 1) return files[0];
-  if (!pick) return files[0];
+  if (files.length <= 1) {
+    return files[0];
+  }
+  if (!pick) {
+    return files[0];
+  }
   const items = files.map((file) => ({
     label: file.name,
     description: `${file.type || "application/octet-stream"} · ${file.size} B`,

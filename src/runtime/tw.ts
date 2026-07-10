@@ -2,8 +2,10 @@
 // build class strings with it instead of relying on the chrome's build-time
 // Tailwind. Every utility is emitted in the `tw-` namespace so tool styles can
 // never clash with the chrome's Tailwind. See ADR-0009.
-import { createGenerator, type UnoGenerator } from "@unocss/core";
+import { createGenerator } from "@unocss/core";
 import presetWind4 from "@unocss/preset-wind4";
+
+type UnoGenerator = Awaited<ReturnType<typeof createGenerator>>;
 
 const PREFIX = "tw-";
 
@@ -23,9 +25,18 @@ export function toToolClasses(strings: readonly string[], exprs: readonly TwExpr
   strings.forEach((s, i) => {
     text += s;
     const expr = exprs[i];
-    if (expr) text += String(expr);
+    if (
+      (typeof expr === "string" && expr !== "") ||
+      (typeof expr === "number" && expr !== 0 && !Number.isNaN(expr))
+    ) {
+      text += String(expr);
+    }
   });
-  return text.split(/\s+/).filter(Boolean).map(applyPrefix).join(" ");
+  return text
+    .split(/\s+/u)
+    .filter(Boolean)
+    .map((token) => applyPrefix(token))
+    .join(" ");
 }
 
 // The toolbox theme is single-sourced: reference the same CSS variables the
@@ -73,11 +84,13 @@ let scheduled = false;
 let styleEl: HTMLStyleElement | null = null;
 
 function sheet(): HTMLStyleElement | null {
-  if (typeof document === "undefined") return null;
+  if (typeof document === "undefined") {
+    return null;
+  }
   styleEl ??= (() => {
     const el = document.createElement("style");
-    el.setAttribute("data-toolbox-tw", "");
-    document.head.appendChild(el);
+    el.dataset.toolboxTw = "";
+    document.head.append(el);
     return el;
   })();
   return styleEl;
@@ -86,15 +99,23 @@ function sheet(): HTMLStyleElement | null {
 async function flush(): Promise<void> {
   const tokens = [...pending].filter((t) => !injected.has(t));
   pending.clear();
-  if (tokens.length === 0) return;
-  for (const t of tokens) injected.add(t);
+  if (tokens.length === 0) {
+    return;
+  }
+  for (const t of tokens) {
+    injected.add(t);
+  }
   const css = await generateToolCss(tokens);
   const el = sheet();
-  if (el && css) el.textContent += css;
+  if (el && css) {
+    el.textContent += css;
+  }
 }
 
 function schedule(): void {
-  if (scheduled) return;
+  if (scheduled) {
+    return;
+  }
   scheduled = true;
   queueMicrotask(() => {
     scheduled = false;
@@ -110,7 +131,9 @@ function schedule(): void {
 export function tw(strings: TemplateStringsArray, ...exprs: TwExpr[]): string {
   const className = toToolClasses(strings, exprs);
   for (const t of className.split(" ")) {
-    if (t && !injected.has(t)) pending.add(t);
+    if (t && !injected.has(t)) {
+      pending.add(t);
+    }
   }
   schedule();
   return className;

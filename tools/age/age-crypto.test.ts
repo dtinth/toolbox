@@ -27,9 +27,9 @@ describe("age-crypto", () => {
 
   it("derives an age1 recipient from an AGE-SECRET-KEY identity", async () => {
     const id = await generateIdentity();
-    expect(id.startsWith("AGE-SECRET-KEY-1")).toBe(true);
+    expect(id.startsWith("AGE-SECRET-KEY-1")).toBeTruthy();
     const recipient = await toRecipient(id);
-    expect(recipient.startsWith("age1")).toBe(true);
+    expect(recipient.startsWith("age1")).toBeTruthy();
   });
 
   it("produces ASCII armor when asked, and round-trips it", async () => {
@@ -38,7 +38,7 @@ describe("age-crypto", () => {
 
     const armored = await encryptBytes([recipient], bytes("armored payload"), { armor: true });
     expect(text(armored)).toContain("-----BEGIN AGE ENCRYPTED FILE-----");
-    expect(isArmored(armored)).toBe(true);
+    expect(isArmored(armored)).toBeTruthy();
 
     // decrypt auto-detects and decodes the armor
     const out = await decryptBytes([id], armored);
@@ -49,13 +49,13 @@ describe("age-crypto", () => {
     const id = await generateIdentity();
     const recipient = await toRecipient(id);
     const ciphertext = await encryptBytes([recipient], bytes("x"));
-    expect(isArmored(ciphertext)).toBe(false);
-    expect(looksLikeAge(ciphertext)).toBe(true);
+    expect(isArmored(ciphertext)).toBeFalsy();
+    expect(looksLikeAge(ciphertext)).toBeTruthy();
   });
 
   it("plain (non-age) bytes are not recognised as age", () => {
-    expect(looksLikeAge(bytes("just a normal file"))).toBe(false);
-    expect(isArmored(bytes("just a normal file"))).toBe(false);
+    expect(looksLikeAge(bytes("just a normal file"))).toBeFalsy();
+    expect(isArmored(bytes("just a normal file"))).toBeFalsy();
   });
 
   it("decrypts with any of several identities (wrong one ignored)", async () => {
@@ -72,12 +72,12 @@ describe("age-crypto", () => {
     const wrong = await generateIdentity();
     const recipient = await toRecipient(right);
     const ciphertext = await encryptBytes([recipient], bytes("secret"));
-    await expect(decryptBytes([wrong], ciphertext)).rejects.toThrow();
+    await expect(decryptBytes([wrong], ciphertext)).rejects.toThrow(/./u);
   });
 
   it("rejects encrypt with no recipients and decrypt with no identities", async () => {
-    await expect(encryptBytes([], bytes("x"))).rejects.toThrow(/recipient/i);
-    await expect(decryptBytes([], bytes("x"))).rejects.toThrow(/identit/i);
+    await expect(encryptBytes([], bytes("x"))).rejects.toThrow(/recipient/iu);
+    await expect(decryptBytes([], bytes("x"))).rejects.toThrow(/identit/iu);
   });
 
   it("names encrypted and decrypted files", () => {

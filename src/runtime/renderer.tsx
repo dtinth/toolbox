@@ -1,8 +1,9 @@
+// oxlint-disable-next-line import/consistent-type-specifier-style -- a lone `import type` from "preact" trips no-duplicate-imports against the value import
 import { Fragment, h, render, type VNode } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
-import type { ChildNode, MenuNode, Node, WindowNode } from "./collector.ts";
-import type { WindowState } from "./runtime.ts";
+import { type ChildNode, type MenuNode, type Node, type WindowNode } from "./collector.ts";
+import { type WindowState } from "./runtime.ts";
 import { filesFromClipboardItems, filesFromDataTransfer } from "./file-intake.ts";
 
 /**
@@ -24,9 +25,10 @@ export interface RenderContext {
  */
 export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode): VNode {
   switch (node.kind) {
-    case "label":
+    case "label": {
       return h("div", null, node.text) as VNode;
-    case "button":
+    }
+    case "button": {
       return h(
         "button",
         {
@@ -36,13 +38,15 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
         },
         node.label,
       ) as VNode;
-    case "row":
+    }
+    case "row": {
       return h(
         "div",
         { class: "flex flex-row items-center gap-2" },
         ...mapChildren(node.children, renderChild),
       ) as VNode;
-    case "textInput":
+    }
+    case "textInput": {
       return h("input", {
         type: "text",
         value: node.value,
@@ -54,7 +58,8 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
         class:
           "bg-toolbox-deepest border border-toolbox-border rounded px-2 py-1 text-sm text-toolbox-text placeholder-toolbox-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
       }) as VNode;
-    case "textarea":
+    }
+    case "textarea": {
       return h("textarea", {
         value: node.value,
         placeholder: node.placeholder,
@@ -66,12 +71,13 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
         class:
           "bg-toolbox-deepest border border-toolbox-border rounded px-2 py-1 text-sm text-toolbox-text placeholder-toolbox-muted font-mono w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
       }) as VNode;
-    case "checkbox":
+    }
+    case "checkbox": {
       return h(
         "label",
         {
           class: `flex flex-row items-center gap-2 select-none text-toolbox-text text-sm ${
-            node.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+            node.disabled === true ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
           }`,
         },
         h("input", {
@@ -86,7 +92,8 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
         }),
         h("span", null, node.label),
       ) as VNode;
-    case "segmented":
+    }
+    case "segmented": {
       return h(
         "div",
         {
@@ -102,20 +109,23 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
               type: "button",
               role: "radio",
               "aria-checked": selected ? "true" : "false",
-              class:
-                "px-3 py-1 text-sm rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused " +
-                (selected
+              class: `px-3 py-1 text-sm rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused ${
+                selected
                   ? "bg-toolbox-accent text-toolbox-deepest font-medium"
-                  : "text-toolbox-text hover:bg-toolbox-content"),
+                  : "text-toolbox-text hover:bg-toolbox-content"
+              }`,
               onClick: () => {
-                if (!selected) node.onChange?.(opt.value);
+                if (!selected) {
+                  node.onChange?.(opt.value);
+                }
               },
             },
             opt.label,
           );
         }),
       ) as VNode;
-    case "spinner":
+    }
+    case "spinner": {
       return h("div", {
         class: "flex items-center justify-center py-6",
         "data-toolbox-spinner": "",
@@ -124,17 +134,24 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
             "inline-block w-5 h-5 border-2 border-toolbox-accent border-t-transparent rounded-full animate-spin",
         }),
       }) as VNode;
-    case "file":
+    }
+    case "file": {
       return fileToPreact(node);
-    case "copyableText":
+    }
+    case "copyableText": {
       return h(CopyableText, { node }) as VNode;
-    case "custom":
+    }
+    case "custom": {
       return h(CustomWidget, { render: node.render }) as VNode;
-    case "identityGroup":
+    }
+    case "identityGroup": {
       // A collector marker, stripped by mapChildren before it ever reaches here;
       // present only for switch exhaustiveness.
       throw new Error("identityGroup is a collector marker, not a renderable node");
+    }
   }
+  // Unreachable: node.kind is exhaustively handled above.
+  throw new Error(`Unhandled node kind: ${(node as { kind: string }).kind}`);
 }
 
 // A Custom widget (ADR-0007): a stable component wrapper so the tool's live
@@ -142,8 +159,8 @@ export function renderNode(node: Node, renderChild: (child: ChildNode) => VNode)
 // survives redraws as long as its (group, position) key is stable. Reading a
 // signal inside render() auto-subscribes this component (@preact/signals), so a
 // signal write repaints just this widget, without re-running onRender.
-function CustomWidget({ render }: { render: () => unknown }): VNode {
-  return render() as VNode;
+function CustomWidget({ render: renderWidget }: { render: () => unknown }): VNode {
+  return renderWidget() as VNode;
 }
 
 /**
@@ -185,13 +202,17 @@ function CopyableText({ node }: { node: Extract<Node, { kind: "copyableText" }> 
       class:
         "border border-toolbox-border rounded px-3 py-2 bg-toolbox-deepest flex items-center gap-2 cursor-pointer select-none",
       onClick: () => {
-        void navigator.clipboard
-          .writeText(textRef.current)
-          .then(() => {
+        void (async () => {
+          try {
+            await navigator.clipboard.writeText(textRef.current);
             setCopied(true);
-            setTimeout(() => setCopied(false), 1200);
-          })
-          .catch(() => {});
+            setTimeout(() => {
+              setCopied(false);
+            }, 1200);
+          } catch {
+            // clipboard write denied / unsupported — no-op
+          }
+        })();
       },
       onDragStart: (e: DragEvent) => {
         if (e.dataTransfer) {
@@ -206,8 +227,12 @@ function CopyableText({ node }: { node: Extract<Node, { kind: "copyableText" }> 
 }
 
 function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024) {
+    return `${n} B`;
+  }
+  if (n < 1024 * 1024) {
+    return `${(n / 1024).toFixed(1)} KB`;
+  }
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
@@ -216,9 +241,13 @@ function formatBytes(n: number): string {
 async function pasteFromClipboard(node: Extract<Node, { kind: "file" }>): Promise<void> {
   try {
     const clip = navigator.clipboard;
-    if (!clip?.read) return;
+    if (typeof clip?.read !== "function") {
+      return;
+    }
     const files = await filesFromClipboardItems(await clip.read());
-    if (files.length > 0) node.resolve(files);
+    if (files.length > 0) {
+      node.resolve(files);
+    }
   } catch {
     // permission denied or unsupported — no-op
   }
@@ -229,9 +258,11 @@ async function pasteFromClipboard(node: Extract<Node, { kind: "file" }>): Promis
 function openFileDialog(node: Extract<Node, { kind: "file" }>): void {
   const input = document.createElement("input");
   input.type = "file";
-  if (node.accept) input.accept = node.accept;
+  if (node.accept !== undefined && node.accept !== "") {
+    input.accept = node.accept;
+  }
   input.addEventListener("change", () => {
-    node.resolve(Array.from(input.files ?? []));
+    node.resolve([...(input.files ?? [])]);
   });
   input.click();
 }
@@ -243,14 +274,18 @@ function downloadFile(file: File): void {
   a.href = url;
   a.download = file.name;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
 
 // Open the file (blob URL) in a new tab — doubles as a preview.
 function openInNewTab(file: File): void {
   const url = URL.createObjectURL(file);
   window.open(url, "_blank", "noopener");
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 60_000);
 }
 
 // Any text/* type can be copied as text; PNG as an image (browser-supported
@@ -296,20 +331,30 @@ const textContentCache = new WeakMap<File, string>();
 // Pre-read a text/* file's contents so a drag-out can set `text/plain`
 // synchronously. Keyed by File so the per-frame re-render reads each file once.
 function warmTextContent(file: File): void {
-  if (!file.type.startsWith("text/") || textContentCache.has(file)) return;
-  void file
-    .text()
-    .then((t) => textContentCache.set(file, t))
-    .catch(() => {});
+  if (!file.type.startsWith("text/") || textContentCache.has(file)) {
+    return;
+  }
+  void (async () => {
+    try {
+      const t = await file.text();
+      textContentCache.set(file, t);
+    } catch {
+      // read failed — leave uncached
+    }
+  })();
 }
 function startFileDragOut(e: DragEvent, file: File): void {
-  if (!e.dataTransfer) return;
+  if (!e.dataTransfer) {
+    return;
+  }
   dragOutUrl = URL.createObjectURL(file);
   activeDragFile = file;
   const mime = file.type || "application/octet-stream";
   e.dataTransfer.setData("DownloadURL", `${mime}:${file.name}:${dragOutUrl}`);
   const text = textContentCache.get(file);
-  if (text !== undefined) e.dataTransfer.setData("text/plain", text);
+  if (text !== undefined) {
+    e.dataTransfer.setData("text/plain", text);
+  }
   e.dataTransfer.effectAllowed = "copy";
 }
 function endFileDragOut(): void {
@@ -317,7 +362,11 @@ function endFileDragOut(): void {
   dragOutUrl = null;
   activeDragFile = null;
   // Revoke late: the OS may still be reading the URL to write the file.
-  if (url) setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  if (url !== null && url !== "") {
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 60_000);
+  }
 }
 
 // The `…` menu. Anchored to the ⋯ button but rendered into a detached host on
@@ -337,11 +386,13 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
 
   useEffect(() => {
     const anchor = anchorRef.current;
-    if (!open || !anchor) return;
+    if (!open || !anchor) {
+      return undefined;
+    }
 
     const host = document.createElement("div");
-    host.setAttribute("data-toolbox-chrome", "");
-    document.body.appendChild(host);
+    host.dataset.toolboxChrome = "";
+    document.body.append(host);
 
     const run = (fn: () => void) => () => {
       setOpen(false);
@@ -349,7 +400,9 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
     };
     const withFile = (fn: (file: File) => void) => () => {
       const file = nodeRef.current.file;
-      if (file) fn(file);
+      if (file) {
+        fn(file);
+      }
     };
     const itemClass =
       "text-left px-3 py-1.5 text-sm text-toolbox-text hover:bg-toolbox-content whitespace-nowrap";
@@ -362,11 +415,13 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
     // and clearing it — kept visually distinct with separators (like the Age
     // identity menu). Empty groups drop out so no stray separators appear.
     const intake: VNode[] = [];
-    if (!nodeRef.current.readOnly) {
+    if (nodeRef.current.readOnly !== true) {
       intake.push(
         item(
           "Choose file…",
-          run(() => openFileDialog(nodeRef.current)),
+          run(() => {
+            openFileDialog(nodeRef.current);
+          }),
         ),
         item(
           "Paste from clipboard",
@@ -385,7 +440,7 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
       exportItems.push(item("Download", run(withFile(downloadFile))));
     }
     const clearItems: VNode[] = [];
-    if (!nodeRef.current.readOnly && nodeRef.current.file && nodeRef.current.clear) {
+    if (nodeRef.current.readOnly !== true && nodeRef.current.file && nodeRef.current.clear) {
       clearItems.push(
         item(
           "Clear",
@@ -397,7 +452,9 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
     const groups = [intake, exportItems, clearItems].filter((g) => g.length > 0);
     const menuItems: VNode[] = [];
     groups.forEach((group, i) => {
-      if (i > 0) menuItems.push(separator());
+      if (i > 0) {
+        menuItems.push(separator());
+      }
       menuItems.push(...group);
     });
     render(
@@ -406,7 +463,9 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
         {
           class:
             "fixed left-0 top-0 z-50 min-w-44 bg-toolbox-surface border border-toolbox-border rounded shadow-xl flex flex-col py-1",
-          onClick: (e: Event) => e.stopPropagation(),
+          onClick: (e: Event) => {
+            e.stopPropagation();
+          },
         },
         menuItems,
       ),
@@ -418,23 +477,28 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
       anchor,
       pop,
       () => {
-        void computePosition(anchor, pop, {
-          placement: "bottom-end",
-          middleware: [offset(4), flip(), shift({ padding: 8 })],
-        }).then(({ x, y }) => {
+        void (async () => {
+          const { x, y } = await computePosition(anchor, pop, {
+            placement: "bottom-end",
+            middleware: [offset(4), flip(), shift({ padding: 8 })],
+          });
           pop.style.left = `${x}px`;
           pop.style.top = `${y}px`;
-        });
+        })();
       },
       { animationFrame: true },
     );
 
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as globalThis.Node;
-      if (!host.contains(target) && !anchor.contains(target)) setOpen(false);
+      if (!host.contains(target) && !anchor.contains(target)) {
+        setOpen(false);
+      }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+      }
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKey);
@@ -449,7 +513,9 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
   }, [open]);
 
   // A read-only box with no file has no actions — render no menu.
-  if (node.readOnly && !node.file) return null as unknown as VNode;
+  if (node.readOnly === true && !node.file) {
+    return null as unknown as VNode;
+  }
 
   return h(
     "button",
@@ -468,11 +534,20 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
   ) as VNode;
 }
 
+// Toggle the drag-hover ring on the file box (module-scoped: captures nothing).
+function setDragActive(e: Event, active: boolean): void {
+  const box = e.currentTarget as HTMLElement;
+  box.classList.toggle("ring-2", active);
+  box.classList.toggle("ring-focused", active);
+}
+
 function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
   const f = node.file;
   const readOnly = node.readOnly === true;
   // Pre-read text contents so a drag-out can publish them as `text/plain`.
-  if (f) warmTextContent(f);
+  if (f) {
+    warmTextContent(f);
+  }
 
   const body: VNode = f
     ? (h("div", { class: "flex flex-col gap-1" }, [
@@ -495,19 +570,15 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
           (readOnly ? "No file yet" : "Click and paste, drop a file, or use the ⋯ menu"),
       ) as VNode);
 
-  const setDragActive = (e: Event, active: boolean) => {
-    const box = e.currentTarget as HTMLElement;
-    box.classList.toggle("ring-2", active);
-    box.classList.toggle("ring-focused", active);
-  };
-
   // Read-only / output box: display + export only, no drop / paste / focus intake.
   const intake = readOnly
     ? {}
     : {
         tabindex: 0,
         onPaste: (e: ClipboardEvent) => {
-          if (!e.clipboardData) return;
+          if (!e.clipboardData) {
+            return;
+          }
           const files = filesFromDataTransfer(e.clipboardData);
           if (files.length > 0) {
             e.preventDefault();
@@ -518,12 +589,16 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
           e.preventDefault();
           setDragActive(e, true);
         },
-        onDragLeave: (e: DragEvent) => setDragActive(e, false),
+        onDragLeave: (e: DragEvent) => {
+          setDragActive(e, false);
+        },
         onDrop: (e: DragEvent) => {
           e.preventDefault();
           setDragActive(e, false);
           const dt = e.dataTransfer;
-          if (!dt) return;
+          if (!dt) {
+            return;
+          }
           // An in-app box drag is in flight exactly when `activeDragFile` is set
           // (set on dragstart, cleared on dragend; the drop precedes dragend), so
           // it's the authoritative source — deliver its identical bytes and name.
@@ -546,7 +621,9 @@ function fileToPreact(node: Extract<Node, { kind: "file" }>): VNode {
     ? {
         draggable: true,
         title: "Drag this file out",
-        onDragStart: (e: DragEvent) => startFileDragOut(e, f),
+        onDragStart: (e: DragEvent) => {
+          startFileDragOut(e, f);
+        },
         onDragEnd: endFileDragOut,
       }
     : {};
@@ -575,11 +652,13 @@ function MenuBarItem({ menu }: { menu: MenuNode }): VNode {
 
   useEffect(() => {
     const anchor = anchorRef.current;
-    if (!open || !anchor) return;
+    if (!open || !anchor) {
+      return undefined;
+    }
 
     const host = document.createElement("div");
-    host.setAttribute("data-toolbox-chrome", "");
-    document.body.appendChild(host);
+    host.dataset.toolboxChrome = "";
+    document.body.append(host);
 
     const renderDropdown = () => {
       const items = menuRef.current.items.map((item) => {
@@ -606,7 +685,9 @@ function MenuBarItem({ menu }: { menu: MenuNode }): VNode {
           {
             class:
               "fixed left-0 top-0 z-50 min-w-44 bg-toolbox-surface border border-toolbox-border rounded shadow-xl flex flex-col py-1",
-            onClick: (e: Event) => e.stopPropagation(),
+            onClick: (e: Event) => {
+              e.stopPropagation();
+            },
           },
           items,
         ),
@@ -621,23 +702,28 @@ function MenuBarItem({ menu }: { menu: MenuNode }): VNode {
       anchor,
       pop,
       () => {
-        void computePosition(anchor, pop, {
-          placement: "bottom-start",
-          middleware: [offset(4), flip(), shift({ padding: 8 })],
-        }).then(({ x, y }) => {
+        void (async () => {
+          const { x, y } = await computePosition(anchor, pop, {
+            placement: "bottom-start",
+            middleware: [offset(4), flip(), shift({ padding: 8 })],
+          });
           pop.style.left = `${x}px`;
           pop.style.top = `${y}px`;
-        });
+        })();
       },
       { animationFrame: true },
     );
 
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as globalThis.Node;
-      if (!host.contains(target) && !anchor.contains(target)) setOpen(false);
+      if (!host.contains(target) && !anchor.contains(target)) {
+        setOpen(false);
+      }
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+      }
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKey);
@@ -657,7 +743,9 @@ function MenuBarItem({ menu }: { menu: MenuNode }): VNode {
       ref: anchorRef,
       type: "button",
       class: "px-2 py-0.5 text-xs text-toolbox-text rounded hover:bg-toolbox-content",
-      onClick: () => setOpen((o) => !o),
+      onClick: () => {
+        setOpen((o) => !o);
+      },
     },
     menu.label,
   ) as VNode;
@@ -710,13 +798,19 @@ function useWindowDrag(w: WindowNode, ctx: RenderContext): WindowDrag {
   const onTitlePointerDown = (e: PointerEvent) => {
     // Primary button / touch / pen only; let title-bar controls (e.g. the ×
     // close button) handle their own clicks instead of starting a drag.
-    if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest("button")) return;
+    if (e.button !== 0) {
+      return;
+    }
+    if ((e.target as HTMLElement).closest("button")) {
+      return;
+    }
 
     e.preventDefault();
     ctx.onFocusWindow(w.id);
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) {
+      return;
+    }
 
     const state = ctx.windowStates.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
     const startX = e.clientX;
@@ -735,9 +829,9 @@ function useWindowDrag(w: WindowNode, ctx: RenderContext): WindowDrag {
       container.style.transform = `translate(${dx}px, ${dy}px)`;
     };
     const cleanup = () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", onPointerUp);
+      globalThis.removeEventListener("pointermove", onPointerMove);
+      globalThis.removeEventListener("pointerup", onPointerUp);
+      globalThis.removeEventListener("pointercancel", onPointerUp);
       document.documentElement.style.userSelect = prevUserSelect;
       cleanupRef.current = null;
     };
@@ -753,9 +847,9 @@ function useWindowDrag(w: WindowNode, ctx: RenderContext): WindowDrag {
       ctx.onMoveWindow(w.id, finalLeft, finalTop);
     };
 
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("pointercancel", onPointerUp);
+    globalThis.addEventListener("pointermove", onPointerMove);
+    globalThis.addEventListener("pointerup", onPointerUp);
+    globalThis.addEventListener("pointercancel", onPointerUp);
     cleanupRef.current = cleanup;
   };
 
@@ -775,10 +869,9 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDr
   const state = windowStates.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
   const isActive = w.id === activeWindowId;
 
-  const titleBarChildren: VNode[] = [];
-  titleBarChildren.push(
+  const titleBarChildren: VNode[] = [
     h("span", { class: "flex-1 text-xs text-toolbox-muted truncate" }, w.title || w.id) as VNode,
-  );
+  ];
   if (w.onClose) {
     titleBarChildren.push(
       h(
@@ -815,7 +908,9 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDr
     class: containerClass,
     style: { left: state.x, top: state.y, zIndex: state.zIndex, width: w.width } as any,
     "data-toolbox-window": w.id,
-    onPointerDown: () => onFocusWindow(w.id),
+    onPointerDown: () => {
+      onFocusWindow(w.id);
+    },
     children: menuBar ? [titleBar, menuBar, body] : [titleBar, body],
   }) as VNode;
 }

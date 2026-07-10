@@ -8,8 +8,8 @@ describe("computePaletteVisibility", () => {
       runningCount: 0,
       userDismissed: false,
     });
-    expect(result.isOpen).toBe(true);
-    expect(result.canClose).toBe(false);
+    expect(result.isOpen).toBeTruthy();
+    expect(result.canClose).toBeFalsy();
   });
 
   it("re-opens the palette after the last tool closes (userDismissed cleared)", () => {
@@ -18,7 +18,7 @@ describe("computePaletteVisibility", () => {
       runningCount: 0,
       userDismissed: false,
     });
-    expect(result.isOpen).toBe(true);
+    expect(result.isOpen).toBeTruthy();
   });
 
   it("stays closed after the user dismissed the palette by launching a tool", () => {
@@ -27,7 +27,7 @@ describe("computePaletteVisibility", () => {
       runningCount: 0,
       userDismissed: true,
     });
-    expect(result.isOpen).toBe(false);
+    expect(result.isOpen).toBeFalsy();
   });
 
   it("opens the palette and allows closing when tools are running and the user has toggled it open", () => {
@@ -36,8 +36,8 @@ describe("computePaletteVisibility", () => {
       runningCount: 2,
       userDismissed: false,
     });
-    expect(result.isOpen).toBe(true);
-    expect(result.canClose).toBe(true);
+    expect(result.isOpen).toBeTruthy();
+    expect(result.canClose).toBeTruthy();
   });
 
   it("keeps the palette closed and allows closing when tools are running and the user has toggled it closed", () => {
@@ -46,7 +46,7 @@ describe("computePaletteVisibility", () => {
       runningCount: 1,
       userDismissed: false,
     });
-    expect(result.isOpen).toBe(false);
-    expect(result.canClose).toBe(true);
+    expect(result.isOpen).toBeFalsy();
+    expect(result.canClose).toBeTruthy();
   });
 });

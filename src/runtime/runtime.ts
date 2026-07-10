@@ -3,7 +3,7 @@ import { preactApi } from "./preact-api.ts";
 import { tw } from "./tw.ts";
 import { toPreact, toPreactInstance } from "./renderer.tsx";
 import type { Preact } from "../../api.d.ts";
-import type { VNode } from "preact";
+import { type VNode } from "preact";
 import {
   createWindowManager,
   instancePrefix,
@@ -31,7 +31,7 @@ export type {
 } from "./dialog-center.ts";
 
 export interface Progress {
-  report(value: { message?: string; increment?: number }): void;
+  report: (value: { message?: string; increment?: number }) => void;
 }
 
 export interface ProgressOptions {
@@ -49,7 +49,7 @@ export interface Api {
   requestUpdate: () => void;
   tick: (cb: () => void) => () => void;
   toast: {
-    show(message: string, opts?: { loading?: boolean; duration?: number }): ToastHandle;
+    show: (message: string, opts?: { loading?: boolean; duration?: number }) => ToastHandle;
   };
   dialog: Dialog;
   withProgress: <T>(
@@ -66,51 +66,55 @@ export interface ToolInstanceInfo {
 }
 
 export interface Runtime {
-  launchTool(opts: {
+  launchTool: (opts: {
     manifestId: string;
     name: string;
     loader?: (api: Api) => void;
-  }): ToolInstanceInfo;
-  initializeTool(instanceId: string, loader: (api: Api) => void): void;
-  isLoading(instanceId: string): boolean;
-  closeTool(instanceId: string): void;
-  toolInstances(): ReadonlyArray<ToolInstanceInfo>;
+  }) => ToolInstanceInfo;
+  initializeTool: (instanceId: string, loader: (api: Api) => void) => void;
+  isLoading: (instanceId: string) => boolean;
+  closeTool: (instanceId: string) => void;
+  toolInstances: () => readonly ToolInstanceInfo[];
   readonly isEmpty: boolean;
-  render(): VNode;
+  render: () => VNode;
   /** Render a single instance into its own root (ADR-0008); null once gone. */
-  renderInstance(instanceId: string): VNode | null;
-  requestUpdate(): void;
-  subscribe(onChange: () => void): () => void;
-  tick(): void;
-  hasTickSubscribers(): boolean;
-  toasts(): Toast[];
-  dismissToast(id: number): void;
-  pendingPicks(): PickRequest[];
-  resolvePick(id: number, index: number | null): void;
-  pendingInputs(): InputRequest[];
-  resolveInput(id: number, value: string | null): void;
+  renderInstance: (instanceId: string) => VNode | null;
+  requestUpdate: () => void;
+  subscribe: (onChange: () => void) => () => void;
+  tick: () => void;
+  hasTickSubscribers: () => boolean;
+  toasts: () => Toast[];
+  dismissToast: (id: number) => void;
+  pendingPicks: () => PickRequest[];
+  resolvePick: (id: number, index: number | null) => void;
+  pendingInputs: () => InputRequest[];
+  resolveInput: (id: number, value: string | null) => void;
   windowStates: ReadonlyMap<string, WindowState>;
-  focusWindow(id: string): void;
-  moveWindow(id: string, x: number, y: number): void;
+  focusWindow: (id: string) => void;
+  moveWindow: (id: string, x: number, y: number) => void;
   activeWindowId: string | null;
-  dispose(): void;
+  dispose: () => void;
   readonly disposed: boolean;
 }
 
 export interface TestRuntime extends Runtime {
-  loadTool(init: (api: Api) => void): void;
-  lastButton(): Extract<Node, { kind: "button" }>;
+  loadTool: (init: (api: Api) => void) => void;
+  lastButton: () => Extract<Node, { kind: "button" }>;
   updateCount: number;
-  windowTree: ReadonlyArray<WindowNode>;
+  windowTree: readonly WindowNode[];
 }
 
 function findLastButton(windows: WindowNode[]): Extract<Node, { kind: "button" }> | null {
   let last: Extract<Node, { kind: "button" }> | null = null;
   function walk(nodes: ChildNode[]) {
     for (const child of nodes) {
-      if (child.kind === "button") last = child;
-      else if (child.kind === "window") walk(child.children);
-      else if (child.kind === "row") walk(child.children);
+      if (child.kind === "button") {
+        last = child;
+      } else if (child.kind === "window") {
+        walk(child.children);
+      } else if (child.kind === "row") {
+        walk(child.children);
+      }
     }
   }
   walk(windows);
@@ -130,6 +134,45 @@ interface ToolInstance {
   cache: WindowNode[] | null;
 }
 
+// Run one instance's declarator and return its scoped windows. Loading
+// instances render a spinner placeholder. `api.ui` is the stable collector
+// `ui`; `collect` installs the collection context for the duration of the
+// declarator, so `ui.*` works here and throws anywhere else. Returning
+// onRender's result lets collect reject a Promise-returning (async) declarator.
+function collectInstance(instance: ToolInstance): WindowNode[] {
+  const instanceId = instance.info.instanceId;
+  if (instance.state === "loading") {
+    return [
+      {
+        kind: "window",
+        id: scopeId(instanceId, "__main__"),
+        title: instance.info.name,
+        children: [{ kind: "spinner" }],
+        menus: [],
+        onClose: () => {
+          instance.api.dispose();
+        },
+      },
+    ];
+  }
+  const windows = collect(
+    () => {
+      instance.onRender();
+    },
+    { pick: instance.api.dialog.pick },
+  );
+  return windows.map((w) => {
+    const originalId = w.id;
+    w.id = scopeId(instanceId, originalId);
+    if (originalId === "__main__" && !w.onClose) {
+      w.onClose = () => {
+        instance.api.dispose();
+      };
+    }
+    return w;
+  });
+}
+
 function build(): TestRuntime {
   const instances = new Map<string, ToolInstance>();
   const instanceOrder: string[] = [];
@@ -143,15 +186,21 @@ function build(): TestRuntime {
   let disposed = false;
 
   const toastCenter = createToastCenter({
-    onChange: () => requestUpdate(),
+    onChange: () => {
+      requestUpdate();
+    },
   });
 
   const dialogCenter = createDialogCenter({
-    onChange: () => requestUpdate(),
+    onChange: () => {
+      requestUpdate();
+    },
   });
 
   function notify() {
-    for (const sub of subscribers) sub();
+    for (const sub of subscribers) {
+      sub();
+    }
   }
 
   function buildApi(instance: ToolInstance): Api {
@@ -167,7 +216,9 @@ function build(): TestRuntime {
       },
       tick(cb: () => void) {
         instance.tickSubscribers.add(cb);
-        return () => instance.tickSubscribers.delete(cb);
+        return () => {
+          instance.tickSubscribers.delete(cb);
+        };
       },
       toast: {
         show: (message, opts) => toastCenter.show(instance.info.instanceId, message, opts),
@@ -191,14 +242,14 @@ function build(): TestRuntime {
           const result = await task(progress);
           handle.dismiss();
           return result;
-        } catch (err) {
+        } catch (error) {
           handle.dismiss();
-          const message = err instanceof Error ? err.message : String(err);
+          const message = error instanceof Error ? error.message : String(error);
           toastCenter.show(instanceId, `${options.title}: ${message}`, {
             intent: "error",
             duration: 6000,
           });
-          throw err;
+          throw error;
         }
       },
       dispose: () => {
@@ -242,15 +293,21 @@ function build(): TestRuntime {
     instances.set(instanceId, instance);
     instanceOrder.push(instanceId);
     disposed = false;
-    if (opts.loader) opts.loader(api);
+    if (opts.loader) {
+      opts.loader(api);
+    }
     scheduleRender();
     return info;
   }
 
   function initializeTool(instanceId: string, loader: (api: Api) => void): void {
     const instance = instances.get(instanceId);
-    if (!instance) return;
-    if (instance.state === "ready") return;
+    if (!instance) {
+      return;
+    }
+    if (instance.state === "ready") {
+      return;
+    }
     instance.state = "ready";
     instance.dirty = true;
     loader(instance.api);
@@ -259,14 +316,18 @@ function build(): TestRuntime {
 
   function closeTool(instanceId: string): void {
     const instance = instances.get(instanceId);
-    if (!instance) return;
+    if (!instance) {
+      return;
+    }
     toastCenter.dismissForInstance(instanceId);
     dialogCenter.cancelForInstance(instanceId);
     instance.tickSubscribers.clear();
     wm.forget(instancePrefix(instanceId));
     instances.delete(instanceId);
     const orderIdx = instanceOrder.indexOf(instanceId);
-    if (orderIdx >= 0) instanceOrder.splice(orderIdx, 1);
+    if (orderIdx !== -1) {
+      instanceOrder.splice(orderIdx, 1);
+    }
     if (instanceOrder.length === 0) {
       disposed = true;
       wm.reset();
@@ -274,40 +335,13 @@ function build(): TestRuntime {
     scheduleRender();
   }
 
-  // Run one instance's declarator and return its scoped windows. Loading
-  // instances render a spinner placeholder. `api.ui` is the stable collector
-  // `ui`; `collect` installs the collection context for the duration of the
-  // declarator, so `ui.*` works here and throws anywhere else. Returning
-  // onRender's result lets collect reject a Promise-returning (async) declarator.
-  function collectInstance(instance: ToolInstance): WindowNode[] {
-    const instanceId = instance.info.instanceId;
-    if (instance.state === "loading") {
-      return [
-        {
-          kind: "window",
-          id: scopeId(instanceId, "__main__"),
-          title: instance.info.name,
-          children: [{ kind: "spinner" }],
-          menus: [],
-          onClose: () => instance.api.dispose(),
-        },
-      ];
-    }
-    const windows = collect(() => instance.onRender(), { pick: instance.api.dialog.pick });
-    return windows.map((w) => {
-      const scoped: WindowNode = { ...w, id: scopeId(instanceId, w.id) };
-      if (w.id === "__main__" && !scoped.onClose) {
-        scoped.onClose = () => instance.api.dispose();
-      }
-      return scoped;
-    });
-  }
-
   // The isolation core: re-collect only when the instance is dirty (or has no
   // cache yet); otherwise reuse the cached windows so this instance's onRender
   // is not re-run for another instance's redraw.
   function instanceWindows(instance: ToolInstance): WindowNode[] {
-    if (!instance.dirty && instance.cache) return instance.cache;
+    if (!instance.dirty && instance.cache) {
+      return instance.cache;
+    }
     const windows = collectInstance(instance);
     instance.cache = windows;
     instance.dirty = false;
@@ -319,14 +353,16 @@ function build(): TestRuntime {
     const allWindows: WindowNode[] = [];
     for (const instanceId of instanceOrder) {
       const instance = instances.get(instanceId);
-      if (!instance) continue;
+      if (!instance) {
+        continue;
+      }
       allWindows.push(...instanceWindows(instance));
     }
     lastTree = allWindows;
     lastButtonRef = findLastButton(allWindows);
     wm.place(allWindows.map((w) => w.id));
     const active = wm.activeId();
-    return toPreact(allWindows, wm.states, active, focusWindow, moveWindow) as VNode;
+    return toPreact(allWindows, wm.states, active, focusWindow, moveWindow);
   }
 
   // Per-instance composition (one Preact root per instance, ADR-0008). Returns
@@ -334,7 +370,9 @@ function build(): TestRuntime {
   // instance's own container; null once the instance is gone.
   function renderInstance(instanceId: string): VNode | null {
     const instance = instances.get(instanceId);
-    if (!instance) return null;
+    if (!instance) {
+      return null;
+    }
     const windows = instanceWindows(instance);
     // Keep lastTree/lastButton coherent for callers that only drive per-instance
     // rendering; placement is idempotent per id.
@@ -349,7 +387,9 @@ function build(): TestRuntime {
   }
 
   function scheduleRender(): void {
-    if (pendingRender) return;
+    if (pendingRender) {
+      return;
+    }
     pendingRender = true;
     queueMicrotask(() => {
       pendingRender = false;
@@ -364,9 +404,11 @@ function build(): TestRuntime {
     let fired = false;
     for (const instanceId of instanceOrder) {
       const instance = instances.get(instanceId);
-      if (!instance) continue;
-      for (const cb of instance.tickSubscribers) {
-        cb();
+      if (!instance) {
+        continue;
+      }
+      for (const subscriber of instance.tickSubscribers) {
+        subscriber();
         fired = true;
         // A tick is an animation frame for this instance — re-collect it.
         instance.dirty = true;
@@ -377,13 +419,17 @@ function build(): TestRuntime {
 
   function hasTickSubscribers(): boolean {
     for (const instanceId of instanceOrder) {
-      if ((instances.get(instanceId)?.tickSubscribers.size ?? 0) > 0) return true;
+      if ((instances.get(instanceId)?.tickSubscribers.size ?? 0) > 0) {
+        return true;
+      }
     }
     return false;
   }
 
   function focusWindow(id: string) {
-    if (wm.focus(id)) requestUpdate();
+    if (wm.focus(id)) {
+      requestUpdate();
+    }
   }
 
   function moveWindow(id: string, x: number, y: number) {
@@ -392,7 +438,7 @@ function build(): TestRuntime {
 
   return {
     loadTool(loader) {
-      for (const id of Array.from(instances.keys())) {
+      for (const id of instances.keys()) {
         closeTool(id);
       }
       toastCenter.reset();
@@ -419,24 +465,36 @@ function build(): TestRuntime {
     requestUpdate,
     subscribe(onChange) {
       subscribers.add(onChange);
-      return () => subscribers.delete(onChange);
+      return () => {
+        subscribers.delete(onChange);
+      };
     },
     lastButton: () => {
-      if (!lastButtonRef) throw new Error("no button was rendered");
+      if (!lastButtonRef) {
+        throw new Error("no button was rendered");
+      }
       return lastButtonRef;
     },
     tick: () => {
       // Only redraw when a tick actually fired — keeps an idle toolbox (no
       // animating tools) from re-rendering every animation frame.
-      if (fireTicks()) requestUpdate();
+      if (fireTicks()) {
+        requestUpdate();
+      }
     },
     hasTickSubscribers,
     toasts: () => toastCenter.list(),
-    dismissToast: (id) => toastCenter.dismiss(id),
+    dismissToast: (id) => {
+      toastCenter.dismiss(id);
+    },
     pendingPicks: () => dialogCenter.list(),
-    resolvePick: (id, index) => dialogCenter.resolve(id, index),
+    resolvePick: (id, index) => {
+      dialogCenter.resolve(id, index);
+    },
     pendingInputs: () => dialogCenter.listInputs(),
-    resolveInput: (id, value) => dialogCenter.resolveInput(id, value),
+    resolveInput: (id, value) => {
+      dialogCenter.resolveInput(id, value);
+    },
     get updateCount() {
       return updates;
     },
@@ -449,10 +507,10 @@ function build(): TestRuntime {
       return wm.activeId();
     },
     get windowTree() {
-      return lastTree as ReadonlyArray<WindowNode>;
+      return lastTree as readonly WindowNode[];
     },
     dispose: () => {
-      for (const id of Array.from(instances.keys())) {
+      for (const id of instances.keys()) {
         closeTool(id);
       }
       requestUpdate();

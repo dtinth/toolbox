@@ -1,51 +1,60 @@
 import { describe, expect, it, vi } from "vite-plus/test";
-import { collect, ui, type Ui } from "./collector.ts";
+import { collect, ui as topUi, type Ui } from "./collector.ts";
+
+const closeHandler = () => {};
+const customRender = () => ({ type: "div", props: {}, key: null });
 
 describe("collector", () => {
   it("throws when a ui.* call happens outside a collection window", () => {
-    expect(() => ui.label("nope")).toThrow(/outside onRender/);
+    expect(() => {
+      topUi.label("nope");
+    }).toThrow(/outside onRender/u);
   });
 
   it("rejects an onRender that returns a Promise", () => {
-    expect(() => collect(() => Promise.resolve())).toThrow(/synchronous/);
+    expect(() => collect(() => Promise.resolve())).toThrow(/synchronous/u);
   });
 
   it("clears the collection context after collect returns", () => {
-    collect((u) => u.label("ok"));
-    expect(() => ui.label("nope")).toThrow(/outside onRender/);
+    collect((u) => {
+      u.label("ok");
+    });
+    expect(() => {
+      topUi.label("nope");
+    }).toThrow(/outside onRender/u);
   });
 
   it("returns main window even when declarator does nothing", () => {
     const result = collect((_ui: Ui) => {});
     expect(result).toHaveLength(1);
-    expect(result[0]!.kind).toBe("window");
-    expect(result[0]!.id).toBe("__main__");
+    expect(result[0].kind).toBe("window");
+    expect(result[0].id).toBe("__main__");
   });
 
   it("collects top-level label into main window's children", () => {
     const result = collect((ui) => {
       ui.label("Hi");
     });
-    expect(result[0]!.children).toEqual([{ kind: "label", text: "Hi" }]);
+    expect(result[0].children).toStrictEqual([{ kind: "label", text: "Hi" }]);
   });
 
   it("sets main window title via ui.window.setTitle", () => {
     const result = collect((ui) => {
       ui.window.setTitle("My App");
     });
-    expect(result[0]!.title).toBe("My App");
+    expect(result[0].title).toBe("My App");
   });
 
   it("sets main window width via ui.window.setWidth", () => {
     const result = collect((ui) => {
       ui.window.setWidth(420);
     });
-    expect(result[0]!.width).toBe(420);
+    expect(result[0].width).toBe(420);
   });
 
   it("leaves window width undefined when setWidth is not called", () => {
     const result = collect(() => {});
-    expect(result[0]!.width).toBeUndefined();
+    expect(result[0].width).toBeUndefined();
   });
 
   it("sets a sub-window's width via setWidth inside its callback", () => {
@@ -54,8 +63,8 @@ describe("collector", () => {
         ui.window.setWidth(300);
       });
     });
-    expect(result[1]!.width).toBe(300);
-    expect(result[0]!.width).toBeUndefined();
+    expect(result[1].width).toBe(300);
+    expect(result[0].width).toBeUndefined();
   });
 
   it("creates a sub-window with id as default title", () => {
@@ -65,10 +74,10 @@ describe("collector", () => {
       });
     });
     expect(result).toHaveLength(2);
-    expect(result[0]!.id).toBe("__main__");
-    expect(result[1]!.id).toBe("sub");
-    expect(result[1]!.title).toBe("sub");
-    expect(result[1]!.children).toEqual([{ kind: "label", text: "inside" }]);
+    expect(result[0].id).toBe("__main__");
+    expect(result[1].id).toBe("sub");
+    expect(result[1].title).toBe("sub");
+    expect(result[1].children).toStrictEqual([{ kind: "label", text: "inside" }]);
   });
 
   it("creates a sub-window with explicit title", () => {
@@ -77,9 +86,9 @@ describe("collector", () => {
         ui.label("inside");
       });
     });
-    expect(result[1]!.id).toBe("sub");
-    expect(result[1]!.title).toBe("Sub Window");
-    expect(result[1]!.children).toEqual([{ kind: "label", text: "inside" }]);
+    expect(result[1].id).toBe("sub");
+    expect(result[1].title).toBe("Sub Window");
+    expect(result[1].children).toStrictEqual([{ kind: "label", text: "inside" }]);
   });
 
   it("sets sub-window title via ui.window.setTitle inside callback", () => {
@@ -88,25 +97,23 @@ describe("collector", () => {
         ui.window.setTitle("Renamed");
       });
     });
-    expect(result[1]!.title).toBe("Renamed");
+    expect(result[1].title).toBe("Renamed");
   });
 
   it("stores onClose handler on main window", () => {
-    const handler = () => {};
     const result = collect((ui) => {
-      ui.window.onClose(handler);
+      ui.window.onClose(closeHandler);
     });
-    expect(result[0]!.onClose).toBe(handler);
+    expect(result[0].onClose).toBe(closeHandler);
   });
 
   it("stores onClose handler on sub-window", () => {
-    const handler = () => {};
     const result = collect((ui) => {
       ui.window("sub", () => {
-        ui.window.onClose(handler);
+        ui.window.onClose(closeHandler);
       });
     });
-    expect(result[1]!.onClose).toBe(handler);
+    expect(result[1].onClose).toBe(closeHandler);
   });
 
   it("collects multiple sub-windows in declaration order after main window", () => {
@@ -115,48 +122,61 @@ describe("collector", () => {
       ui.window("b", () => {});
     });
     expect(result).toHaveLength(3);
-    expect(result[0]!.id).toBe("__main__");
-    expect(result[1]!.id).toBe("a");
-    expect(result[2]!.id).toBe("b");
+    expect(result[0].id).toBe("__main__");
+    expect(result[1].id).toBe("a");
+    expect(result[2].id).toBe("b");
   });
 
   it("main window has empty children when only sub-windows exist", () => {
     const result = collect((ui) => {
       ui.window("sub", () => {});
     });
-    expect(result[0]!.children).toEqual([]);
+    expect(result[0].children).toStrictEqual([]);
   });
 
   it("collects a file node carrying file, accept, label and a resolve that delivers one file", () => {
     const delivered: File[] = [];
     const current = new File(["hi"], "current.txt", { type: "text/plain" });
     const result = collect((ui) => {
-      ui.file(current, { onFile: (f) => delivered.push(f), accept: "image/*", label: "Pick" });
+      ui.file(current, {
+        onFile: (f) => {
+          delivered.push(f);
+        },
+        accept: "image/*",
+        label: "Pick",
+      });
     });
-    const node = result[0]!.children[0]!;
+    const node = result[0].children[0];
     expect(node.kind).toBe("file");
-    if (node.kind !== "file") throw new Error("expected file node");
+    if (node.kind !== "file") {
+      throw new Error("expected file node");
+    }
     expect(node.file).toBe(current);
     expect(node.accept).toBe("image/*");
     expect(node.label).toBe("Pick");
 
     const a = new File(["a"], "a.bin");
     node.resolve([a]);
-    expect(delivered).toEqual([a]);
+    expect(delivered).toStrictEqual([a]);
   });
 
   it("exposes a clear capability only when onClear is wired", () => {
     let cleared = 0;
     const result = collect((ui) => {
-      ui.file(null, { onFile: () => {}, onClear: () => cleared++ });
+      ui.file(null, {
+        onFile: () => {},
+        onClear: () => {
+          cleared++;
+        },
+      });
       ui.file(null, { onFile: () => {} });
     });
-    const withClear = result[0]!.children[0]!;
-    const withoutClear = result[0]!.children[1]!;
+    const withClear = result[0].children[0];
+    const withoutClear = result[0].children[1];
     if (withClear.kind !== "file" || withoutClear.kind !== "file") {
       throw new Error("expected file nodes");
     }
-    expect(typeof withClear.clear).toBe("function");
+    expect(withClear.clear).toBeTypeOf("function");
     withClear.clear?.();
     expect(cleared).toBe(1);
     expect(withoutClear.clear).toBeUndefined();
@@ -167,34 +187,47 @@ describe("collector", () => {
     const result = collect((ui) => {
       ui.file(out, { readOnly: true, label: "Result" });
     });
-    const node = result[0]!.children[0]!;
-    if (node.kind !== "file") throw new Error("expected file node");
-    expect(node.readOnly).toBe(true);
+    const node = result[0].children[0];
+    if (node.kind !== "file") {
+      throw new Error("expected file node");
+    }
+    expect(node.readOnly).toBeTruthy();
     expect(node.file).toBe(out);
     // No onFile provided — resolve must not throw.
-    expect(() => node.resolve([new File(["y"], "y.bin")])).not.toThrow();
+    expect(() => {
+      node.resolve([new File(["y"], "y.bin")]);
+    }).not.toThrow();
   });
 
   it("collects a checkbox node with label and checked state", () => {
     const result = collect((ui) => {
       ui.checkbox("Enable feature", { checked: true });
     });
-    const node = result[0]!.children[0]!;
+    const node = result[0].children[0];
     expect(node.kind).toBe("checkbox");
-    if (node.kind !== "checkbox") throw new Error("expected checkbox node");
+    if (node.kind !== "checkbox") {
+      throw new Error("expected checkbox node");
+    }
     expect(node.label).toBe("Enable feature");
-    expect(node.checked).toBe(true);
+    expect(node.checked).toBeTruthy();
   });
 
   it("collects a checkbox node whose onChange forwards the value", () => {
     const received: boolean[] = [];
     const result = collect((ui) => {
-      ui.checkbox("Toggle me", { checked: false, onChange: (v) => received.push(v) });
+      ui.checkbox("Toggle me", {
+        checked: false,
+        onChange: (v) => {
+          received.push(v);
+        },
+      });
     });
-    const node = result[0]!.children[0]!;
-    if (node.kind !== "checkbox") throw new Error("expected checkbox node");
+    const node = result[0].children[0];
+    if (node.kind !== "checkbox") {
+      throw new Error("expected checkbox node");
+    }
     node.onChange?.(true);
-    expect(received).toEqual([true]);
+    expect(received).toStrictEqual([true]);
   });
 
   it("collects a segmented node with its value and options", () => {
@@ -206,11 +239,13 @@ describe("collector", () => {
         ],
       });
     });
-    const node = result[0]!.children[0]!;
+    const node = result[0].children[0];
     expect(node.kind).toBe("segmented");
-    if (node.kind !== "segmented") throw new Error("expected segmented node");
+    if (node.kind !== "segmented") {
+      throw new Error("expected segmented node");
+    }
     expect(node.value).toBe("encrypt");
-    expect(node.options).toEqual([
+    expect(node.options).toStrictEqual([
       { value: "encrypt", label: "Encrypt" },
       { value: "decrypt", label: "Decrypt" },
     ]);
@@ -224,27 +259,33 @@ describe("collector", () => {
           { value: "a", label: "A" },
           { value: "b", label: "B" },
         ],
-        onChange: (v) => received.push(v),
+        onChange: (v) => {
+          received.push(v);
+        },
       });
     });
-    const node = result[0]!.children[0]!;
-    if (node.kind !== "segmented") throw new Error("expected segmented node");
+    const node = result[0].children[0];
+    if (node.kind !== "segmented") {
+      throw new Error("expected segmented node");
+    }
     node.onChange?.("b");
-    expect(received).toEqual(["b"]);
+    expect(received).toStrictEqual(["b"]);
   });
 
   it("collects a copyableText node carrying the text through", () => {
     const result = collect((ui) => {
       ui.copyableText("https://example.com/result");
     });
-    const node = result[0]!.children[0]!;
+    const node = result[0].children[0];
     expect(node.kind).toBe("copyableText");
-    if (node.kind !== "copyableText") throw new Error("expected copyableText node");
+    if (node.kind !== "copyableText") {
+      throw new Error("expected copyableText node");
+    }
     expect(node.text).toBe("https://example.com/result");
   });
 
   it("collects a menu with items on the main window's menus array", () => {
-    const onClick = vi.fn();
+    const onClick = vi.fn<() => void>();
     const result = collect((ui) => {
       ui.menu("File", () => {
         ui.menuItem("New", { onClick });
@@ -252,25 +293,29 @@ describe("collector", () => {
         ui.menuItem("Quit");
       });
     });
-    const mainWindow = result[0]!;
+    const mainWindow = result[0];
     expect(mainWindow.menus).toHaveLength(1);
-    const menu = mainWindow.menus[0]!;
+    const menu = mainWindow.menus[0];
     expect(menu.kind).toBe("menu");
     expect(menu.label).toBe("File");
     expect(menu.items).toHaveLength(3);
 
-    const item0 = menu.items[0]!;
+    const item0 = menu.items[0];
     expect(item0.kind).toBe("menuItem");
-    if (item0.kind !== "menuItem") throw new Error("expected menuItem");
+    if (item0.kind !== "menuItem") {
+      throw new Error("expected menuItem");
+    }
     expect(item0.label).toBe("New");
     item0.onClick?.();
     expect(onClick).toHaveBeenCalledTimes(1);
 
-    expect(menu.items[1]!.kind).toBe("menuSeparator");
+    expect(menu.items[1].kind).toBe("menuSeparator");
 
-    const item2 = menu.items[2]!;
+    const item2 = menu.items[2];
     expect(item2.kind).toBe("menuItem");
-    if (item2.kind !== "menuItem") throw new Error("expected menuItem");
+    if (item2.kind !== "menuItem") {
+      throw new Error("expected menuItem");
+    }
     expect(item2.label).toBe("Quit");
   });
 
@@ -284,23 +329,24 @@ describe("collector", () => {
         ui.menuItem("Paste");
       });
     });
-    const mainWindow = result[0]!;
+    const mainWindow = result[0];
     expect(mainWindow.menus).toHaveLength(2);
-    expect(mainWindow.menus[0]!.label).toBe("File");
-    expect(mainWindow.menus[0]!.items).toHaveLength(1);
-    expect(mainWindow.menus[1]!.label).toBe("Edit");
-    expect(mainWindow.menus[1]!.items).toHaveLength(2);
+    expect(mainWindow.menus[0].label).toBe("File");
+    expect(mainWindow.menus[0].items).toHaveLength(1);
+    expect(mainWindow.menus[1].label).toBe("Edit");
+    expect(mainWindow.menus[1].items).toHaveLength(2);
   });
 
   it("collects a custom widget node carrying its render closure", () => {
-    const render = () => ({ type: "div", props: {}, key: null });
     const result = collect((u) => {
-      u.custom(render);
+      u.custom(customRender);
     });
-    const node = result[0]!.children[0]!;
+    const node = result[0].children[0];
     expect(node.kind).toBe("custom");
-    if (node.kind !== "custom") throw new Error("expected custom node");
-    expect(node.render).toBe(render);
+    if (node.kind !== "custom") {
+      throw new Error("expected custom node");
+    }
+    expect(node.render).toBe(customRender);
   });
 
   it("emits identity-group markers, explicit and anonymous", () => {
@@ -311,8 +357,8 @@ describe("collector", () => {
       u.identityGroup();
       u.label("c");
     });
-    const children = result[0]!.children;
-    expect(children.map((c) => c.kind)).toEqual([
+    const children = result[0].children;
+    expect(children.map((c) => c.kind)).toStrictEqual([
       "label",
       "identityGroup",
       "label",
@@ -321,7 +367,9 @@ describe("collector", () => {
     ]);
     const markers = children.filter((c) => c.kind === "identityGroup");
     expect(markers[0]).toMatchObject({ group: "editors" });
-    if (markers[1]!.kind !== "identityGroup") throw new Error("expected marker");
-    expect(markers[1]!.group).toBeUndefined();
+    if (markers[1].kind !== "identityGroup") {
+      throw new Error("expected marker");
+    }
+    expect(markers[1].group).toBeUndefined();
   });
 });

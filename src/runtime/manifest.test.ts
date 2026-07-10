@@ -11,7 +11,7 @@ describe("manifest", () => {
     });
     const manifest = await loadManifest(() => Promise.resolve(json));
     expect(manifest.tools).toHaveLength(2);
-    expect(manifest.tools[0]).toEqual({ id: "hello", name: "Hello" });
-    expect(manifest.tools[1]!.icon).toBe("/tools/counter/icon.svg");
+    expect(manifest.tools[0]).toStrictEqual({ id: "hello", name: "Hello" });
+    expect(manifest.tools[1].icon).toBe("/tools/counter/icon.svg");
   });
 });

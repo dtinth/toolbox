@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 import { estimateBpm } from "./bpm.ts";
 
+// Oscillating +/-15ms jitter around a 500ms beat (not absorbed by the slope,
+// so residual scatter is real).
+const jitter = (i: number) => (i % 2 === 0 ? 15 : -15);
+const tapsAt = (count: number) => Array.from({ length: count }, (_, i) => i * 500 + jitter(i));
+
 describe("estimateBpm", () => {
   it("recovers the tempo of perfectly periodic taps via the regression slope", () => {
     // 120 BPM = one tap every 500ms.
@@ -27,11 +32,7 @@ describe("estimateBpm", () => {
   });
 
   it("grows more confident as more consistent taps accrue", () => {
-    // Oscillating +/-15ms jitter around a 500ms beat (not absorbed by the
-    // slope, so residual scatter is real), more samples.
-    const jitter = (i: number) => (i % 2 === 0 ? 15 : -15);
-    const tapsAt = (count: number) => Array.from({ length: count }, (_, i) => i * 500 + jitter(i));
-
+    // More samples -> more residual scatter observed -> higher confidence.
     const few = estimateBpm(tapsAt(4)).confidence!;
     const many = estimateBpm(tapsAt(16)).confidence!;
 

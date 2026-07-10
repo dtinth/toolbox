@@ -15,10 +15,14 @@ export default function init(api: Api) {
   // Register on pointer DOWN — a beat lands on the press, not the release, so
   // tapping on down is what musicians expect and is the most accurate timing.
   const tap = (e: PointerEvent) => {
-    if (e.button !== 0) return; // ignore secondary mouse buttons
+    if (e.button !== 0) {
+      return;
+    } // ignore secondary mouse buttons
     e.preventDefault(); // suppress the focus/selection ghost + synthesized click
     const t = Date.now();
-    if (taps.length && t - taps[taps.length - 1]! > RESET_GAP) taps = [];
+    if (taps.length > 0 && t - taps.at(-1)! > RESET_GAP) {
+      taps = [];
+    }
     taps.push(t);
     lit.value = true;
     setTimeout(() => {
@@ -58,9 +62,9 @@ export default function init(api: Api) {
       ),
     );
 
-    api.ui.label(bpm == null ? "— BPM" : `${bpm.toFixed(1)} BPM`);
+    api.ui.label(bpm === null ? "— BPM" : `${bpm.toFixed(1)} BPM`);
     api.ui.label(
-      confidence == null
+      confidence === null
         ? "keep tapping to a steady beat…"
         : `${Math.round(confidence * 100)}% sure it's within ±0.5 BPM`,
     );

@@ -1,5 +1,5 @@
 import { chooseFile } from "./file-intake.ts";
-import type { Dialog } from "./dialog-center.ts";
+import { type Dialog } from "./dialog-center.ts";
 import type { VNode } from "../../api.d.ts";
 
 export type Node =
@@ -50,9 +50,13 @@ export type MenuItemNode =
   | { kind: "menuItem"; label: string; onClick?: () => void }
   | { kind: "menuSeparator" };
 
-export type MenuNode = { kind: "menu"; label: string; items: MenuItemNode[] };
+export interface MenuNode {
+  kind: "menu";
+  label: string;
+  items: MenuItemNode[];
+}
 
-export type WindowNode = {
+export interface WindowNode {
   kind: "window";
   id: string;
   title: string;
@@ -60,42 +64,45 @@ export type WindowNode = {
   menus: MenuNode[];
   width?: number;
   onClose?: () => void;
-};
+}
 
 export interface Ui {
   window: {
     (id: string, cb: () => void): void;
     (id: string, title: string, cb: () => void): void;
-    setTitle(newTitle: string): void;
-    setWidth(width: number): void;
-    onClose(handler: () => void): void;
+    setTitle: (newTitle: string) => void;
+    setWidth: (width: number) => void;
+    onClose: (handler: () => void) => void;
   };
-  label(text: string): void;
-  button(label: string, opts?: { onClick?: () => void }): void;
-  row(cb: () => void): void;
-  textInput(value: string, opts?: { placeholder?: string; onChange?: (v: string) => void }): void;
-  textarea(
+  label: (text: string) => void;
+  button: (label: string, opts?: { onClick?: () => void }) => void;
+  row: (cb: () => void) => void;
+  textInput: (
+    value: string,
+    opts?: { placeholder?: string; onChange?: (v: string) => void },
+  ) => void;
+  textarea: (
     value: string,
     opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
-  ): void;
-  checkbox(
+  ) => void;
+  checkbox: (
     label: string,
     opts: { checked: boolean; disabled?: boolean; onChange?: (checked: boolean) => void },
-  ): void;
-  segmented(
+  ) => void;
+  segmented: (
     value: string,
     opts: {
       options: { value: string; label: string }[];
       onChange?: (value: string) => void;
     },
-  ): void;
-  copyableText(text: string): void;
-  menu(label: string, cb: () => void): void;
-  menuItem(label: string, opts?: { onClick?: () => void }): void;
-  menuSeparator(): void;
-  custom(render: () => VNode): void;
-  identityGroup(key?: string): void;
-  file(
+  ) => void;
+  copyableText: (text: string) => void;
+  menu: (label: string, cb: () => void) => void;
+  menuItem: (label: string, opts?: { onClick?: () => void }) => void;
+  menuSeparator: () => void;
+  custom: (render: () => VNode) => void;
+  identityGroup: (key?: string) => void;
+  file: (
     file: File | null,
     opts: {
       onFile?: (file: File) => void;
@@ -104,7 +111,7 @@ export interface Ui {
       label?: string;
       readOnly?: boolean;
     },
-  ): void;
+  ) => void;
 }
 
 export interface CollectDeps {
@@ -112,7 +119,9 @@ export interface CollectDeps {
   pick?: Dialog["pick"];
 }
 
-type Frame = { children: ChildNode[] };
+interface Frame {
+  children: ChildNode[];
+}
 
 interface CollectState {
   mainWindow: WindowNode;
@@ -130,18 +139,22 @@ interface CollectState {
 let active: CollectState | null = null;
 
 function need(): CollectState {
-  if (!active) throw new Error("ui.* called outside onRender");
+  if (!active) {
+    throw new Error("ui.* called outside onRender");
+  }
   return active;
 }
 
 function top(state: CollectState): Frame {
-  return state.stack[state.stack.length - 1]!;
+  return state.stack.at(-1)!;
 }
 
 function currentWindow(state: CollectState): WindowNode {
   for (let i = state.stack.length - 1; i >= 0; i--) {
-    const frame = state.stack[i]!;
-    if ("kind" in frame) return frame as WindowNode;
+    const frame = state.stack[i];
+    if ("kind" in frame) {
+      return frame as WindowNode;
+    }
   }
   return state.mainWindow;
 }
@@ -156,17 +169,17 @@ export const ui: Ui = {
     (id: string, titleOrCb: string | (() => void), cb?: () => void) => {
       const state = need();
       let title: string;
-      let callback: () => void;
+      let body: () => void;
       if (typeof titleOrCb === "function") {
         title = id;
-        callback = titleOrCb;
+        body = titleOrCb;
       } else {
         title = titleOrCb;
-        callback = cb!;
+        body = cb!;
       }
       const node: WindowNode = { kind: "window", id, title, children: [], menus: [] };
       state.stack.push(node);
-      callback();
+      body();
       state.stack.pop();
       state.subWindows.push(node);
     },
@@ -188,11 +201,11 @@ export const ui: Ui = {
   button(label, opts) {
     top(need()).children.push({ kind: "button", label, onClick: opts?.onClick });
   },
-  row(cb) {
+  row(body) {
     const state = need();
     const node: Node = { kind: "row", children: [] };
     state.stack.push(node as Frame);
-    cb();
+    body();
     state.stack.pop();
     top(state).children.push(node);
   },
@@ -233,13 +246,13 @@ export const ui: Ui = {
   copyableText(text) {
     top(need()).children.push({ kind: "copyableText", text });
   },
-  menu(label, cb) {
+  menu(label, body) {
     const state = need();
     const menuNode: MenuNode = { kind: "menu", label, items: [] };
     currentWindow(state).menus.push(menuNode);
     const prevMenu = state.currentMenu;
     state.currentMenu = menuNode.items;
-    cb();
+    body();
     state.currentMenu = prevMenu;
   },
   menuItem(label, opts) {
@@ -277,21 +290,29 @@ export const ui: Ui = {
       // synchronously; more than one is disambiguated via the quick pick.
       // (No-op when readOnly / no onFile — the renderer also disables intake.)
       resolve: (files: File[]) => {
-        if (!onFile || files.length === 0) return;
-        if (files.length === 1) {
-          onFile(files[0]!);
+        if (!onFile || files.length === 0) {
           return;
         }
-        void chooseFile(files, pick).then((chosen) => {
-          if (chosen) onFile(chosen);
-        });
+        const deliver = onFile;
+        if (files.length === 1) {
+          deliver(files[0]);
+          return;
+        }
+        void (async () => {
+          const chosen = await chooseFile(files, pick);
+          if (chosen) {
+            deliver(chosen);
+          }
+        })();
       },
     });
   },
 };
 
 export function collect(declarator: (ui: Ui) => unknown, deps: CollectDeps = {}): WindowNode[] {
-  if (active) throw new Error("collect is not re-entrant");
+  if (active) {
+    throw new Error("collect is not re-entrant");
+  }
   const mainWindow: WindowNode = {
     kind: "window",
     id: "__main__",
@@ -309,7 +330,11 @@ export function collect(declarator: (ui: Ui) => unknown, deps: CollectDeps = {})
   active = state;
   try {
     const result = declarator(ui);
-    if (result != null && typeof (result as { then?: unknown }).then === "function") {
+    if (
+      result !== null &&
+      result !== undefined &&
+      typeof (result as { then?: unknown }).then === "function"
+    ) {
       throw new Error("onRender must be synchronous");
     }
   } finally {

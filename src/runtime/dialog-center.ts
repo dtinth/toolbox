@@ -56,19 +56,19 @@ interface InternalInputRequest extends InputRequest {
 
 export interface DialogCenter {
   /** Build the per-instance `dialog` API object for a tool. */
-  forInstance(instanceId: string): Dialog;
+  forInstance: (instanceId: string) => Dialog;
   /** Pending picks, in creation order, for the host to render. */
-  list(): PickRequest[];
+  list: () => PickRequest[];
   /** Resolve a pick: `index` into the request's items, or `null` to dismiss. */
-  resolve(id: number, index: number | null): void;
+  resolve: (id: number, index: number | null) => void;
   /** Pending input requests, in creation order, for the host to render. */
-  listInputs(): InputRequest[];
+  listInputs: () => InputRequest[];
   /** Resolve an input: the entered string, or `null` to dismiss (→ undefined). */
-  resolveInput(id: number, value: string | null): void;
+  resolveInput: (id: number, value: string | null) => void;
   /** Dismiss (resolve `undefined`) every pick/input opened by an instance. */
-  cancelForInstance(instanceId: string): void;
+  cancelForInstance: (instanceId: string) => void;
   /** Dismiss all pending picks/inputs and reset the id counter. */
-  reset(): void;
+  reset: () => void;
 }
 
 export function createDialogCenter({ onChange }: { onChange: () => void }): DialogCenter {
@@ -81,14 +81,14 @@ export function createDialogCenter({ onChange }: { onChange: () => void }): Dial
     items: T[],
     opts?: QuickPickOptions,
   ): Promise<T | undefined> {
-    return new Promise<T | undefined>((resolvePromise) => {
+    return new Promise<T | undefined>((_resolve) => {
       const id = nextId++;
       requests.push({
         id,
         instanceId,
         items,
         options: opts ?? {},
-        resolve: resolvePromise as (value: QuickPickItem | undefined) => void,
+        resolve: _resolve as (value: QuickPickItem | undefined) => void,
       });
       onChange();
     });
@@ -98,14 +98,14 @@ export function createDialogCenter({ onChange }: { onChange: () => void }): Dial
     instanceId: string,
     opts?: { title?: string; value?: string; placeholder?: string },
   ): Promise<string | undefined> {
-    return new Promise<string | undefined>((resolvePromise) => {
+    return new Promise<string | undefined>((_resolve) => {
       const id = nextId++;
       inputRequests.push({
         id,
         instanceId,
         value: opts?.value ?? "",
         options: { title: opts?.title, placeholder: opts?.placeholder },
-        resolve: resolvePromise,
+        resolve: _resolve,
       });
       onChange();
     });
@@ -113,34 +113,44 @@ export function createDialogCenter({ onChange }: { onChange: () => void }): Dial
 
   function takePick(id: number): InternalPickRequest | undefined {
     const i = requests.findIndex((r) => r.id === id);
-    if (i < 0) return undefined;
+    if (i === -1) {
+      return undefined;
+    }
     return requests.splice(i, 1)[0];
   }
 
   function takeInput(id: number): InternalInputRequest | undefined {
     const i = inputRequests.findIndex((r) => r.id === id);
-    if (i < 0) return undefined;
+    if (i === -1) {
+      return undefined;
+    }
     return inputRequests.splice(i, 1)[0];
   }
 
   function resolve(id: number, index: number | null): void {
     const req = takePick(id);
-    if (!req) return;
+    if (!req) {
+      return;
+    }
     req.resolve(index === null ? undefined : req.items[index]);
     onChange();
   }
 
   function resolveInput(id: number, value: string | null): void {
     const req = takeInput(id);
-    if (!req) return;
-    req.resolve(value === null ? undefined : value);
+    if (!req) {
+      return;
+    }
+    req.resolve(value ?? undefined);
     onChange();
   }
 
   function cancelForInstance(instanceId: string): void {
     const minePicks = requests.filter((r) => r.instanceId === instanceId);
     const mineInputs = inputRequests.filter((r) => r.instanceId === instanceId);
-    if (minePicks.length === 0 && mineInputs.length === 0) return;
+    if (minePicks.length === 0 && mineInputs.length === 0) {
+      return;
+    }
     for (const req of minePicks) {
       takePick(req.id);
       req.resolve(undefined);
@@ -153,12 +163,18 @@ export function createDialogCenter({ onChange }: { onChange: () => void }): Dial
   }
 
   function reset(): void {
-    const allPicks = requests.splice(0, requests.length);
-    const allInputs = inputRequests.splice(0, inputRequests.length);
-    for (const req of allPicks) req.resolve(undefined);
-    for (const req of allInputs) req.resolve(undefined);
+    const allPicks = requests.splice(0);
+    const allInputs = inputRequests.splice(0);
+    for (const req of allPicks) {
+      req.resolve(undefined);
+    }
+    for (const req of allInputs) {
+      req.resolve(undefined);
+    }
     nextId = 1;
-    if (allPicks.length > 0 || allInputs.length > 0) onChange();
+    if (allPicks.length > 0 || allInputs.length > 0) {
+      onChange();
+    }
   }
 
   return {

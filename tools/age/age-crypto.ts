@@ -25,11 +25,17 @@ export async function encryptBytes(
   data: Uint8Array,
   opts: { armor?: boolean } = {},
 ): Promise<Uint8Array> {
-  if (recipients.length === 0) throw new Error("No recipients to encrypt to");
+  if (recipients.length === 0) {
+    throw new Error("No recipients to encrypt to");
+  }
   const e = new age.Encrypter();
-  for (const r of recipients) e.addRecipient(r);
+  for (const r of recipients) {
+    e.addRecipient(r);
+  }
   const ciphertext = await e.encrypt(data);
-  if (opts.armor) return new TextEncoder().encode(age.armor.encode(ciphertext));
+  if (opts.armor === true) {
+    return new TextEncoder().encode(age.armor.encode(ciphertext));
+  }
   return ciphertext;
 }
 
@@ -38,11 +44,16 @@ export async function encryptBytes(
  * binary ciphertext are both accepted — armor is detected and decoded first.
  */
 export async function decryptBytes(identities: string[], data: Uint8Array): Promise<Uint8Array> {
-  if (identities.length === 0) throw new Error("No identities to decrypt with");
+  if (identities.length === 0) {
+    throw new Error("No identities to decrypt with");
+  }
   const binary = isArmored(data) ? age.armor.decode(new TextDecoder().decode(data)) : data;
   const d = new age.Decrypter();
-  for (const i of identities) d.addIdentity(i);
-  return d.decrypt(binary);
+  for (const i of identities) {
+    d.addIdentity(i);
+  }
+  const plaintext = await d.decrypt(binary);
+  return plaintext;
 }
 
 /** Whether `data` is ASCII-armored age ciphertext (begins with the PEM header). */
@@ -52,7 +63,9 @@ export function isArmored(data: Uint8Array): boolean {
 
 /** Whether `data` looks like age ciphertext at all (armored or binary). */
 export function looksLikeAge(data: Uint8Array): boolean {
-  if (isArmored(data)) return true;
+  if (isArmored(data)) {
+    return true;
+  }
   return decodeStart(data, BINARY_MAGIC.length).startsWith(BINARY_MAGIC);
 }
 
@@ -67,6 +80,8 @@ export function encryptedName(name: string): string {
 
 /** Output name for a decrypted file: strip a trailing `.age`, else append `.dec`. */
 export function decryptedName(name: string): string {
-  if (name.endsWith(".age") && name.length > 4) return name.slice(0, -4);
+  if (name.endsWith(".age") && name.length > 4) {
+    return name.slice(0, -4);
+  }
   return `${name || "blob"}.dec`;
 }

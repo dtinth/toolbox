@@ -13,10 +13,11 @@ export interface BpmEstimate {
 function erf(x: number): number {
   const sign = x < 0 ? -1 : 1;
   const ax = Math.abs(x);
-  const t = 1 / (1 + 0.3275911 * ax);
+  const t = 1 / (1 + 0.327_591_1 * ax);
   const y =
     1 -
-    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) *
+    ((((1.061_405_429 * t - 1.453_152_027) * t + 1.421_413_741) * t - 0.284_496_736) * t +
+      0.254_829_592) *
       t *
       Math.exp(-ax * ax);
   return sign * y;
@@ -30,13 +31,15 @@ function erf(x: number): number {
  */
 export function estimateBpm(taps: number[], toleranceBpm = 0.5): BpmEstimate {
   const n = taps.length;
-  if (n < 2) return { bpm: null, confidence: null };
+  if (n < 2) {
+    return { bpm: null, confidence: null };
+  }
 
   let sx = 0;
   let sy = 0;
   for (let i = 0; i < n; i++) {
     sx += i;
-    sy += taps[i]!;
+    sy += taps[i];
   }
   const mx = sx / n;
   const my = sy / n;
@@ -46,27 +49,33 @@ export function estimateBpm(taps: number[], toleranceBpm = 0.5): BpmEstimate {
   for (let i = 0; i < n; i++) {
     const dx = i - mx;
     sxx += dx * dx;
-    sxy += dx * (taps[i]! - my);
+    sxy += dx * (taps[i] - my);
   }
 
   const slope = sxy / sxx; // ms per beat
-  if (slope <= 0) return { bpm: null, confidence: null };
-  const bpm = 60000 / slope;
+  if (slope <= 0) {
+    return { bpm: null, confidence: null };
+  }
+  const bpm = 60_000 / slope;
 
   // Need >= 3 taps for a residual variance (df = n - 2).
-  if (n < 3) return { bpm, confidence: null };
+  if (n < 3) {
+    return { bpm, confidence: null };
+  }
 
   const intercept = my - slope * mx;
   let sse = 0;
   for (let i = 0; i < n; i++) {
-    const residual = taps[i]! - (intercept + slope * i);
+    const residual = taps[i] - (intercept + slope * i);
     sse += residual * residual;
   }
   const slopeStdErr = Math.sqrt(sse / (n - 2) / sxx); // ms/beat
-  if (slopeStdErr === 0) return { bpm, confidence: 1 };
+  if (slopeStdErr === 0) {
+    return { bpm, confidence: 1 };
+  }
 
   // Delta method: BPM = 60000/slope, so d(BPM) = (60000/slope^2) d(slope).
-  const bpmStdErr = (60000 / (slope * slope)) * slopeStdErr;
+  const bpmStdErr = (60_000 / (slope * slope)) * slopeStdErr;
   const z = toleranceBpm / bpmStdErr;
   const confidence = erf(z / Math.SQRT2);
   return { bpm, confidence };

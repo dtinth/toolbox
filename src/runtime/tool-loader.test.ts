@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 import { loadTool } from "./tool-loader.ts";
 import { preactApi } from "./preact-api.ts";
-import type { Api } from "./runtime.ts";
+import { type Api } from "./runtime.ts";
 
 describe("loadTool", () => {
   it("dynamically imports the tool module and calls its default export with the api", async () => {
@@ -11,7 +11,9 @@ describe("loadTool", () => {
         receivedApi = api;
       },
     };
-    const importer = vi.fn().mockResolvedValue(fakeMod);
+    const importer = vi
+      .fn<(specifier: string) => Promise<{ default: (api: Api) => void }>>()
+      .mockResolvedValue(fakeMod);
     const tool = await loadTool("hello", importer);
     const api: Api = {
       onRender: () => {},

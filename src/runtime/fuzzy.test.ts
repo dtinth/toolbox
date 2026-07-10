@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 import { fuzzyFilter, searchTools } from "./fuzzy.ts";
-import type { ManifestEntry } from "./manifest.ts";
+import { type ManifestEntry } from "./manifest.ts";
 
 describe("fuzzyFilter", () => {
   it("returns all items in the given order for an empty query", () => {
     const items = [{ t: "banana" }, { t: "apple" }];
-    expect(fuzzyFilter("", items, (x) => x.t)).toEqual(items);
+    expect(fuzzyFilter("", items, (x) => x.t)).toStrictEqual(items);
   });
 
   it("keeps only subsequence matches", () => {
@@ -30,7 +30,7 @@ const entries: ManifestEntry[] = [
 
 describe("searchTools", () => {
   it("returns entries sorted alphabetically by name when the query is empty", () => {
-    expect(searchTools("", entries)).toEqual([
+    expect(searchTools("", entries)).toStrictEqual([
       { id: "alpha", name: "Alpha" },
       { id: "bravo", name: "Bravo" },
       { id: "counter", name: "Counter" },
@@ -38,7 +38,7 @@ describe("searchTools", () => {
   });
 
   it("returns entries sorted alphabetically by name when the query is whitespace", () => {
-    expect(searchTools("   ", entries)).toEqual([
+    expect(searchTools("   ", entries)).toStrictEqual([
       { id: "alpha", name: "Alpha" },
       { id: "bravo", name: "Bravo" },
       { id: "counter", name: "Counter" },
@@ -47,7 +47,7 @@ describe("searchTools", () => {
 
   it("returns matching entries for a non-empty query", () => {
     const result = searchTools("ctr", entries);
-    expect(result).toEqual([{ id: "counter", name: "Counter" }]);
+    expect(result).toStrictEqual([{ id: "counter", name: "Counter" }]);
   });
 
   it("matches against the id as well as the name", () => {
@@ -55,7 +55,7 @@ describe("searchTools", () => {
       { id: "hello-world", name: "Hello World" },
       { id: "other", name: "Other" },
     ]);
-    expect(result).toEqual([{ id: "hello-world", name: "Hello World" }]);
+    expect(result).toStrictEqual([{ id: "hello-world", name: "Hello World" }]);
   });
 
   it("matches case-insensitively", () => {
@@ -63,11 +63,11 @@ describe("searchTools", () => {
       { id: "counter", name: "Counter" },
       { id: "other", name: "Other" },
     ]);
-    expect(result).toEqual([{ id: "counter", name: "Counter" }]);
+    expect(result).toStrictEqual([{ id: "counter", name: "Counter" }]);
   });
 
   it("returns an empty array when no entry matches", () => {
-    expect(searchTools("xyz", entries)).toEqual([]);
+    expect(searchTools("xyz", entries)).toStrictEqual([]);
   });
 
   it("orders multiple matches with the best score first", () => {
@@ -76,12 +76,12 @@ describe("searchTools", () => {
       { id: "collection", name: "Collection" },
       { id: "color-picker", name: "Color Picker" },
     ]);
-    expect(result[result.length - 1]!.id).toBe("recol");
+    expect(result.at(-1)!.id).toBe("recol");
     expect(
       result
         .slice(0, 2)
         .map((e) => e.id)
-        .sort(),
-    ).toEqual(["collection", "color-picker"]);
+        .toSorted(),
+    ).toStrictEqual(["collection", "color-picker"]);
   });
 });

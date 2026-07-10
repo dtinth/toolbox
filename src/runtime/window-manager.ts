@@ -26,25 +26,25 @@ export interface WindowManager {
    * The ordering is by position in the array (i.e. the order windows appear in
    * the render output).
    */
-  place(orderedIds: string[]): void;
+  place: (orderedIds: string[]) => void;
 
   /**
    * Raise window to top z-order. Returns true if the z-order changed, false if
    * the window was already highest or the id is unknown.
    */
-  focus(id: string): boolean;
+  focus: (id: string) => boolean;
 
   /** Update the position of a window. */
-  move(id: string, x: number, y: number): void;
+  move: (id: string, x: number, y: number) => void;
 
   /** Return the id of the window with the highest zIndex, or null if empty. */
-  activeId(): string | null;
+  activeId: () => string | null;
 
   /** Drop all windows whose id starts with the given prefix. */
-  forget(prefix: string): void;
+  forget: (prefix: string) => void;
 
   /** Clear all state and reset the z counter. */
-  reset(): void;
+  reset: () => void;
 
   /** Read-only view of all known window states. */
   readonly states: ReadonlyMap<string, WindowState>;
@@ -56,7 +56,7 @@ export function createWindowManager(): WindowManager {
 
   function place(orderedIds: string[]): void {
     for (let i = 0; i < orderedIds.length; i++) {
-      const id = orderedIds[i]!;
+      const id = orderedIds[i];
       if (!states.has(id)) {
         const cx = (globalThis.window?.innerWidth ?? 800) / 2 - 150;
         const cy = (globalThis.window?.innerHeight ?? 600) / 2 - 100;
@@ -72,7 +72,9 @@ export function createWindowManager(): WindowManager {
 
   function focus(id: string): boolean {
     const state = states.get(id);
-    if (!state) return false;
+    if (!state) {
+      return false;
+    }
     const maxZ = Math.max(...Array.from(states.values(), (s: WindowState) => s.zIndex), 0);
     if (state.zIndex < maxZ) {
       state.zIndex = ++zCounter;
@@ -102,8 +104,10 @@ export function createWindowManager(): WindowManager {
   }
 
   function forget(prefix: string): void {
-    for (const key of Array.from(states.keys())) {
-      if (key.startsWith(prefix)) states.delete(key);
+    for (const key of states.keys()) {
+      if (key.startsWith(prefix)) {
+        states.delete(key);
+      }
     }
   }
 

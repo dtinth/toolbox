@@ -11,7 +11,7 @@ describe("shouldInterceptClick", () => {
         shiftKey: false,
         altKey: false,
       }),
-    ).toBe(true);
+    ).toBeTruthy();
   });
 
   it("does not intercept a left-click with the meta key held", () => {
@@ -23,7 +23,7 @@ describe("shouldInterceptClick", () => {
         shiftKey: false,
         altKey: false,
       }),
-    ).toBe(false);
+    ).toBeFalsy();
   });
 
   it("does not intercept a left-click with the ctrl key held", () => {
@@ -35,7 +35,7 @@ describe("shouldInterceptClick", () => {
         shiftKey: false,
         altKey: false,
       }),
-    ).toBe(false);
+    ).toBeFalsy();
   });
 
   it("does not intercept a left-click with the shift key held", () => {
@@ -47,7 +47,7 @@ describe("shouldInterceptClick", () => {
         shiftKey: true,
         altKey: false,
       }),
-    ).toBe(false);
+    ).toBeFalsy();
   });
 
   it("does not intercept a middle-click (button 1)", () => {
@@ -59,7 +59,7 @@ describe("shouldInterceptClick", () => {
         shiftKey: false,
         altKey: false,
       }),
-    ).toBe(false);
+    ).toBeFalsy();
   });
 
   it("does not intercept a right-click (button 2)", () => {
@@ -71,6 +71,6 @@ describe("shouldInterceptClick", () => {
         shiftKey: false,
         altKey: false,
       }),
-    ).toBe(false);
+    ).toBeFalsy();
   });
 });

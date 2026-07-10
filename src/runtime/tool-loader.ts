@@ -1,4 +1,4 @@
-import type { Api } from "./runtime.ts";
+import { type Api } from "./runtime.ts";
 
 export interface ToolModule {
   default: (api: Api) => void;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import type { VNode } from "preact";
+import { type VNode } from "preact";
 
 export interface FilterableListProps<T> {
   /** Return the items to show for the current query (caller owns filtering/sorting). */
@@ -45,17 +45,23 @@ export function FilterableList<T>({
 
   useEffect(() => {
     inputRef.current?.focus();
-    if (selectOnFocus) inputRef.current?.select();
+    if (selectOnFocus) {
+      inputRef.current?.select();
+    }
   }, [selectOnFocus]);
 
   const items = filter(query);
 
   const dismiss = () => {
-    if (canDismiss) onDismiss();
+    if (canDismiss) {
+      onDismiss();
+    }
   };
   const choose = (index: number) => {
     const item = items[index];
-    if (item) onChoose(item);
+    if (item !== undefined) {
+      onChoose(item);
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -78,6 +84,7 @@ export function FilterableList<T>({
 
   return (
     <div
+      role="presentation"
       class={`fixed inset-0 ${overlayZClass} flex items-start justify-center pt-32 bg-black/60`}
       data-toolbox-chrome
       onClick={dismiss}
@@ -89,17 +96,22 @@ export function FilterableList<T>({
       }}
     >
       <div
+        role="presentation"
         class="bg-toolbox-surface border border-toolbox-border rounded-lg shadow-2xl w-full max-w-xl mx-4"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
       >
-        {title ? <div class="px-4 pt-3 text-xs text-toolbox-muted">{title}</div> : null}
+        {title !== undefined && title !== "" ? (
+          <div class="px-4 pt-3 text-xs text-toolbox-muted">{title}</div>
+        ) : null}
         <input
           ref={inputRef}
           type="text"
           placeholder={placeholder}
           value={query}
           onInput={(e) => {
-            setQuery((e.currentTarget as HTMLInputElement).value);
+            setQuery(e.currentTarget.value);
             setHighlight(0);
           }}
           onKeyDown={handleKeyDown}
@@ -108,8 +120,21 @@ export function FilterableList<T>({
         <ul class="max-h-80 overflow-y-auto">
           {items.length === 0 ? <li class="p-4 text-toolbox-muted">No matches.</li> : null}
           {items.map((item, i) => (
-            <li key={itemKey(item)} onMouseEnter={() => setHighlight(i)}>
-              {renderItem(item, { active: i === highlight, choose: () => choose(i) })}
+            // The hover handler only mirrors the keyboard highlight (arrow keys,
+            // handled above) for mouse users; the <li> stays non-interactive.
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+            <li
+              key={itemKey(item)}
+              onMouseEnter={() => {
+                setHighlight(i);
+              }}
+            >
+              {renderItem(item, {
+                active: i === highlight,
+                choose: () => {
+                  choose(i);
+                },
+              })}
             </li>
           ))}
         </ul>

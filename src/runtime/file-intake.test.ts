@@ -8,7 +8,7 @@ import {
   synthName,
   textToFile,
 } from "./file-intake.ts";
-import type { Dialog } from "./dialog-center.ts";
+import { type Dialog } from "./dialog-center.ts";
 
 describe("extensionForMime", () => {
   it("maps known types", () => {
@@ -72,7 +72,7 @@ describe("filesFromDataTransfer", () => {
     const a = new File(["a"], "a.bin");
     const b = new File(["b"], "b.bin");
     const files = filesFromDataTransfer({ files: [a, b], getData: () => "" });
-    expect(files).toEqual([a, b]);
+    expect(files).toStrictEqual([a, b]);
   });
 
   it("falls back to uri-list when there's no html or plain text", () => {
@@ -84,7 +84,7 @@ describe("filesFromDataTransfer", () => {
       7,
     );
     expect(out).toHaveLength(1);
-    expect(out[0]!.name).toBe("pasted-7.txt");
+    expect(out[0].name).toBe("pasted-7.txt");
   });
 
   it("offers both html and plain text as candidates when they differ (e.g. pasted from a web page)", () => {
@@ -92,15 +92,19 @@ describe("filesFromDataTransfer", () => {
       {
         files: [],
         getData: (t) => {
-          if (t === "text/html") return "<b>hello</b>";
-          if (t === "text/plain") return "hello";
+          if (t === "text/html") {
+            return "<b>hello</b>";
+          }
+          if (t === "text/plain") {
+            return "hello";
+          }
           return "";
         },
       },
       7,
     );
-    expect(out.map((f) => f.type)).toEqual(["text/html", "text/plain"]);
-    expect(out.map((f) => f.name)).toEqual(["pasted-7.html", "pasted-7.txt"]);
+    expect(out.map((f) => f.type)).toStrictEqual(["text/html", "text/plain"]);
+    expect(out.map((f) => f.name)).toStrictEqual(["pasted-7.html", "pasted-7.txt"]);
   });
 
   it("returns a single plain text candidate when html and plain text are identical", () => {
@@ -112,11 +116,11 @@ describe("filesFromDataTransfer", () => {
       7,
     );
     expect(out).toHaveLength(1);
-    expect(out[0]!.type).toBe("text/plain");
+    expect(out[0].type).toBe("text/plain");
   });
 
   it("returns nothing for an empty transfer", () => {
-    expect(filesFromDataTransfer({ files: [], getData: () => "" })).toEqual([]);
+    expect(filesFromDataTransfer({ files: [], getData: () => "" })).toStrictEqual([]);
   });
 });
 
@@ -128,32 +132,32 @@ describe("chooseFile", () => {
       called = true;
       return Promise.resolve(items[0]);
     }) as Dialog["pick"];
-    expect(await chooseFile([f], pick)).toBe(f);
-    expect(called).toBe(false);
+    await expect(chooseFile([f], pick)).resolves.toBe(f);
+    expect(called).toBeFalsy();
   });
 
   it("returns undefined when there are no candidates", async () => {
-    expect(await chooseFile([])).toBeUndefined();
+    await expect(chooseFile([])).resolves.toBeUndefined();
   });
 
   it("routes multiple candidates through pick and returns the chosen file", async () => {
     const a = new File(["a"], "a.txt");
     const b = new File(["b"], "b.txt");
-    let seen: Array<{ label: string }> = [];
+    let seen: { label: string }[] = [];
     const pick = (<T>(items: T[]) => {
-      seen = items as Array<{ label: string }>;
+      seen = items as { label: string }[];
       return Promise.resolve(items[1]);
     }) as Dialog["pick"];
     const chosen = await chooseFile([a, b], pick);
     expect(seen).toHaveLength(2);
-    expect(seen[0]!.label).toBe("a.txt");
+    expect(seen[0].label).toBe("a.txt");
     expect(chosen).toBe(b);
   });
 
   it("falls back to the first candidate when multiple but no pick is available", async () => {
     const a = new File(["a"], "a.txt");
     const b = new File(["b"], "b.txt");
-    expect(await chooseFile([a, b])).toBe(a);
+    await expect(chooseFile([a, b])).resolves.toBe(a);
   });
 });
 
@@ -165,8 +169,8 @@ describe("filesFromClipboardItems", () => {
         Promise.resolve(new Blob([t === "text/html" ? "<b>x</b>" : "x"], { type: t })),
     };
     const out = await filesFromClipboardItems([item], 5);
-    expect(out.map((f) => f.type)).toEqual(["text/html", "text/plain"]);
-    expect(out[0]!.name).toBe("pasted-5.html");
-    expect(out[1]!.name).toBe("pasted-5.txt");
+    expect(out.map((f) => f.type)).toStrictEqual(["text/html", "text/plain"]);
+    expect(out[0].name).toBe("pasted-5.html");
+    expect(out[1].name).toBe("pasted-5.txt");
   });
 });

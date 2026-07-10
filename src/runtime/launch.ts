@@ -1,6 +1,6 @@
-import type { ManifestEntry } from "./manifest.ts";
-import type { Runtime, ToolInstanceInfo } from "./runtime.ts";
-import type { ToolModule } from "./tool-loader.ts";
+import { type ManifestEntry } from "./manifest.ts";
+import { type Runtime, type ToolInstanceInfo } from "./runtime.ts";
+import { type ToolModule } from "./tool-loader.ts";
 
 export function launchToolFromModule(
   runtime: Runtime,

@@ -29,10 +29,14 @@ const bezelCache = new Map<string, Blob>();
 
 async function fetchBezel(bezel: Bezel, progress: Progress): Promise<Blob> {
   const cached = bezelCache.get(bezel.url);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
 
   const res = await fetch(bezel.url);
-  if (!res.ok) throw new Error(`Couldn't load the device frame (HTTP ${res.status})`);
+  if (!res.ok) {
+    throw new Error(`Couldn't load the device frame (HTTP ${res.status})`);
+  }
   const total = Number(res.headers.get("content-length") ?? 0);
 
   let blob: Blob;
@@ -43,8 +47,13 @@ async function fetchBezel(bezel: Bezel, progress: Progress): Promise<Blob> {
     let lastPct = 0;
     progress.report({ message: "Loading device frame…", increment: 0 });
     for (;;) {
+      // Draining a stream reader is inherently sequential: each read() depends
+      // on the previous one resolving, so this await cannot be parallelized.
+      // eslint-disable-next-line no-await-in-loop
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
       chunks.push(value);
       loaded += value.length;
       const pct = Math.floor((loaded / total) * 100);
