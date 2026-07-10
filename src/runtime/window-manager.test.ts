@@ -80,7 +80,7 @@ describe("window-manager", () => {
       // win-a should be unchanged
       expect(wm.states.get("win-a")!.zIndex).toBe(0);
       // win-b should now exist
-      expect(wm.states.has("win-b")).toBe(true);
+      expect(wm.states.has("win-b")).toBeTruthy();
     });
   });
 
@@ -91,7 +91,7 @@ describe("window-manager", () => {
       const zb = wm.states.get("win-b")!.zIndex;
       // win-a starts lower; focus it
       const changed = wm.focus("win-a");
-      expect(changed).toBe(true);
+      expect(changed).toBeTruthy();
       expect(wm.states.get("win-a")!.zIndex).toBeGreaterThan(zb);
     });
 
@@ -100,7 +100,7 @@ describe("window-manager", () => {
       wm.place(["win-a", "win-b"]);
       const zb = wm.states.get("win-b")!.zIndex;
       const changed = wm.focus("win-b");
-      expect(changed).toBe(false);
+      expect(changed).toBeFalsy();
       expect(wm.states.get("win-b")!.zIndex).toBe(zb);
     });
 
@@ -111,7 +111,7 @@ describe("window-manager", () => {
       expect(() => {
         changed = wm.focus("unknown");
       }).not.toThrow();
-      expect(changed).toBe(false);
+      expect(changed).toBeFalsy();
       expect(wm.states.size).toBe(1);
     });
   });
@@ -154,7 +154,9 @@ describe("window-manager", () => {
 
     it("move on an unknown id is a no-op", () => {
       const wm = createWindowManager();
-      expect(() => wm.move("unknown", 1, 2)).not.toThrow();
+      expect(() => {
+        wm.move("unknown", 1, 2);
+      }).not.toThrow();
     });
 
     it("does not change zIndex when moving", () => {
@@ -171,9 +173,9 @@ describe("window-manager", () => {
       const wm = createWindowManager();
       wm.place(["inst-1::main", "inst-1::sub", "inst-2::main"]);
       wm.forget("inst-1::");
-      expect(wm.states.has("inst-1::main")).toBe(false);
-      expect(wm.states.has("inst-1::sub")).toBe(false);
-      expect(wm.states.has("inst-2::main")).toBe(true);
+      expect(wm.states.has("inst-1::main")).toBeFalsy();
+      expect(wm.states.has("inst-1::sub")).toBeFalsy();
+      expect(wm.states.has("inst-2::main")).toBeTruthy();
     });
 
     it("forget with a prefix that matches nothing is a no-op", () => {

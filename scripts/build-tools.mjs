@@ -4,9 +4,8 @@ import { build } from "vite-plus";
 
 const root = resolve(import.meta.dirname, "..");
 const toolsDir = resolve(root, "tools");
-const entries = (await readdir(toolsDir, { withFileTypes: true }))
-  .filter((d) => d.isDirectory())
-  .map((d) => d.name);
+const dirents = await readdir(toolsDir, { withFileTypes: true });
+const entries = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
 
 if (entries.length === 0) {
   console.log("No tools to build.");

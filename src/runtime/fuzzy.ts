@@ -1,11 +1,11 @@
-import type { ManifestEntry } from "./manifest.ts";
+import { type ManifestEntry } from "./manifest.ts";
 
 export function searchTools(query: string, entries: ManifestEntry[]): ManifestEntry[] {
   if (query.trim() === "") {
-    return [...entries].sort((a, b) => a.name.localeCompare(b.name));
+    return [...entries].toSorted((a, b) => a.name.localeCompare(b.name));
   }
   const q = query.toLowerCase();
-  const scored: Array<{ entry: ManifestEntry; score: number }> = [];
+  const scored: { entry: ManifestEntry; score: number }[] = [];
   for (const entry of entries) {
     const score = scoreEntry(q, entry);
     if (score !== null) {
@@ -19,7 +19,9 @@ export function searchTools(query: string, entries: ManifestEntry[]): ManifestEn
 function scoreEntry(query: string, entry: ManifestEntry): number | null {
   const nameScore = matchScore(query, entry.name);
   const idScore = matchScore(query, entry.id);
-  if (nameScore === null && idScore === null) return null;
+  if (nameScore === null && idScore === null) {
+    return null;
+  }
   return Math.min(nameScore ?? Infinity, idScore ?? Infinity);
 }
 
@@ -29,12 +31,16 @@ function scoreEntry(query: string, entry: ManifestEntry): number | null {
  * supply items in a meaningful order, e.g. priority or drop order).
  */
 export function fuzzyFilter<T>(query: string, items: T[], getText: (item: T) => string): T[] {
-  if (query.trim() === "") return [...items];
+  if (query.trim() === "") {
+    return [...items];
+  }
   const q = query.toLowerCase();
-  const scored: Array<{ item: T; score: number; i: number }> = [];
+  const scored: { item: T; score: number; i: number }[] = [];
   items.forEach((item, i) => {
     const score = matchScore(q, getText(item).toLowerCase());
-    if (score !== null) scored.push({ item, score, i });
+    if (score !== null) {
+      scored.push({ item, score, i });
+    }
   });
   scored.sort((a, b) => a.score - b.score || a.i - b.i);
   return scored.map((s) => s.item);

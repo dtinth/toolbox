@@ -8,9 +8,9 @@
 // (this file goes red), then implement it in the runtime until green.
 // See docs/adr/0004-api-contract-as-dts.md.
 
-import type { Api as RuntimeApi } from "./runtime.ts";
-import type { Ui as RuntimeUi } from "./collector.ts";
-import type { ToastHandle as RuntimeToastHandle } from "./toast-center.ts";
+import { type Api as RuntimeApi } from "./runtime.ts";
+import { type Ui as RuntimeUi } from "./collector.ts";
+import { type ToastHandle as RuntimeToastHandle } from "./toast-center.ts";
 import type {
   Api as ContractApi,
   ToastHandle as ContractToastHandle,

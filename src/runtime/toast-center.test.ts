@@ -13,8 +13,8 @@ describe("createToastCenter", () => {
   it("show returns a handle with update and dismiss", () => {
     const tc = createToastCenter({ onChange: () => {} });
     const handle = tc.show("inst-1", "hello");
-    expect(typeof handle.update).toBe("function");
-    expect(typeof handle.dismiss).toBe("function");
+    expect(handle.update).toBeTypeOf("function");
+    expect(handle.dismiss).toBeTypeOf("function");
   });
 
   it("show adds a toast to list()", () => {
@@ -22,8 +22,8 @@ describe("createToastCenter", () => {
     tc.show("inst-1", "hello");
     const toasts = tc.list();
     expect(toasts).toHaveLength(1);
-    expect(toasts[0]!.message).toBe("hello");
-    expect(toasts[0]!.loading).toBe(false);
+    expect(toasts[0].message).toBe("hello");
+    expect(toasts[0].loading).toBeFalsy();
   });
 
   it("list() returns a copy — mutations do not affect internal state", () => {
@@ -35,7 +35,7 @@ describe("createToastCenter", () => {
   });
 
   it("show invokes onChange", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<() => void>();
     const tc = createToastCenter({ onChange });
     tc.show("inst-1", "hello");
     expect(onChange).toHaveBeenCalledTimes(1);
@@ -56,12 +56,12 @@ describe("createToastCenter", () => {
   it("defaults intent to info and leaves progress undefined", () => {
     const tc = createToastCenter({ onChange: () => {} });
     tc.show("inst-1", "hi");
-    expect(tc.list()[0]!.intent).toBe("info");
-    expect(tc.list()[0]!.progress).toBeUndefined();
+    expect(tc.list()[0].intent).toBe("info");
+    expect(tc.list()[0].progress).toBeUndefined();
   });
 
   it("non-loading toast auto-dismisses after duration (default 2000ms)", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<() => void>();
     const tc = createToastCenter({ onChange });
     tc.show("inst-1", "hello");
     expect(tc.list()).toHaveLength(1);
@@ -85,7 +85,7 @@ describe("createToastCenter", () => {
   it("loading toast does not auto-dismiss", () => {
     const tc = createToastCenter({ onChange: () => {} });
     tc.show("inst-1", "hello", { loading: true });
-    vi.advanceTimersByTime(10000);
+    vi.advanceTimersByTime(10_000);
     expect(tc.list()).toHaveLength(1);
   });
 
@@ -97,7 +97,7 @@ describe("createToastCenter", () => {
     vi.advanceTimersByTime(2000);
     // Should NOT have been dismissed
     expect(tc.list()).toHaveLength(1);
-    expect(tc.list()[0]!.loading).toBe(true);
+    expect(tc.list()[0].loading).toBeTruthy();
   });
 
   it("update to loading:false restarts the auto-dismiss timer", () => {
@@ -113,7 +113,7 @@ describe("createToastCenter", () => {
   });
 
   it("update invokes onChange", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<() => void>();
     const tc = createToastCenter({ onChange });
     const handle = tc.show("inst-1", "hello", { loading: true });
     onChange.mockClear();
@@ -122,7 +122,7 @@ describe("createToastCenter", () => {
   });
 
   it("update on a dismissed toast is a no-op", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<() => void>();
     const tc = createToastCenter({ onChange });
     const handle = tc.show("inst-1", "hello");
     handle.dismiss();
@@ -133,7 +133,7 @@ describe("createToastCenter", () => {
   });
 
   it("dismiss removes the toast from list()", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<() => void>();
     const tc = createToastCenter({ onChange });
     const handle = tc.show("inst-1", "hello");
     onChange.mockClear();
@@ -145,13 +145,13 @@ describe("createToastCenter", () => {
   it("tc.dismiss(id) removes the toast with that id", () => {
     const tc = createToastCenter({ onChange: () => {} });
     tc.show("inst-1", "hello");
-    const id = tc.list()[0]!.id;
+    const id = tc.list()[0].id;
     tc.dismiss(id);
     expect(tc.list()).toHaveLength(0);
   });
 
   it("dismiss cancels the pending auto-dismiss timer", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<() => void>();
     const tc = createToastCenter({ onChange });
     const handle = tc.show("inst-1", "hello");
     handle.dismiss();
@@ -169,11 +169,11 @@ describe("createToastCenter", () => {
     expect(tc.list()).toHaveLength(3);
     tc.dismissForInstance("inst-1");
     expect(tc.list()).toHaveLength(1);
-    expect(tc.list()[0]!.message).toBe("from B");
+    expect(tc.list()[0].message).toBe("from B");
   });
 
   it("dismissForInstance invokes onChange for each dismissed toast", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<() => void>();
     const tc = createToastCenter({ onChange });
     tc.show("inst-1", "one", { loading: true });
     tc.show("inst-1", "two", { loading: true });
@@ -184,7 +184,7 @@ describe("createToastCenter", () => {
   });
 
   it("dismissForInstance on unknown instanceId is a no-op", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<() => void>();
     const tc = createToastCenter({ onChange });
     onChange.mockClear();
     tc.dismissForInstance("ghost-instance");
@@ -192,7 +192,7 @@ describe("createToastCenter", () => {
   });
 
   it("reset() clears all toasts, timers, and resets id counter", () => {
-    const onChange = vi.fn();
+    const onChange = vi.fn<() => void>();
     const tc = createToastCenter({ onChange });
     tc.show("inst-1", "one", { loading: true });
     tc.show("inst-2", "two");
@@ -209,7 +209,7 @@ describe("createToastCenter", () => {
     tc.show("inst-1", "one");
     tc.reset();
     tc.show("inst-1", "new");
-    expect(tc.list()[0]!.id).toBe(1);
+    expect(tc.list()[0].id).toBe(1);
   });
 
   it("multiple toasts from same instance tracked separately; each auto-dismisses on its own timer", () => {
@@ -219,7 +219,7 @@ describe("createToastCenter", () => {
     expect(tc.list()).toHaveLength(2);
     vi.advanceTimersByTime(1000);
     expect(tc.list()).toHaveLength(1);
-    expect(tc.list()[0]!.message).toBe("b");
+    expect(tc.list()[0].message).toBe("b");
     vi.advanceTimersByTime(2000);
     expect(tc.list()).toHaveLength(0);
   });

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
-import { createTestRuntime } from "./runtime.ts";
-import type { Ui } from "./collector.ts";
+import { createTestRuntime, type Api } from "./runtime.ts";
+import { type Ui } from "./collector.ts";
 import { launchToolFromModule } from "./launch.ts";
-import type { ToolModule } from "./tool-loader.ts";
-import type { Api } from "./runtime.ts";
+import { type ToolModule } from "./tool-loader.ts";
+
+const noop = () => {};
 
 describe("runtime", () => {
   it("passes an api object with onRender, ui, and requestUpdate", () => {
@@ -21,8 +22,8 @@ describe("runtime", () => {
     };
     expect(api.ui).toBeTypeOf("object");
     expect(api.requestUpdate).toBeTypeOf("function");
-    expect(typeof api.ui.window.setTitle).toBe("function");
-    expect(typeof api.dispose).toBe("function");
+    expect(api.ui.window.setTitle).toBeTypeOf("function");
+    expect(api.dispose).toBeTypeOf("function");
   });
 
   it("isolates redraws: requestUpdate on one instance does not re-run another's onRender", () => {
@@ -90,7 +91,7 @@ describe("runtime", () => {
     expect(count.value).toBe(5);
     const doubled = preact.computed(() => count.value * 2);
     expect(doubled.value).toBe(10);
-    expect(typeof preact.h).toBe("function");
+    expect(preact.h).toBeTypeOf("function");
   });
 
   it("captures a button click handler and runs requestUpdate on click", () => {
@@ -129,7 +130,9 @@ describe("runtime", () => {
 
   it("does not throw when requestUpdate is called before any tool is loaded", () => {
     const runtime = createTestRuntime();
-    expect(() => runtime.requestUpdate()).not.toThrow();
+    expect(() => {
+      runtime.requestUpdate();
+    }).not.toThrow();
   });
 
   it("api.tick(cb) registers a callback that fires when manually ticked", () => {
@@ -172,7 +175,9 @@ describe("runtime", () => {
     runtime.render();
     expect(redraws).toBe(1);
     runtime.tick();
-    await new Promise<void>((r) => queueMicrotask(r));
+    await new Promise<void>((resolve) => {
+      queueMicrotask(resolve);
+    });
     expect(redraws).toBe(2);
   });
 
@@ -182,7 +187,7 @@ describe("runtime", () => {
       api.onRender = () => {};
     });
     runtime.render();
-    expect(runtime.hasTickSubscribers()).toBe(false);
+    expect(runtime.hasTickSubscribers()).toBeFalsy();
     const before = runtime.updateCount;
     runtime.tick();
     expect(runtime.updateCount).toBe(before);
@@ -190,19 +195,19 @@ describe("runtime", () => {
 
   it("hasTickSubscribers tracks subscriptions; tick() redraws only while subscribed", () => {
     const runtime = createTestRuntime();
-    let unsub = () => {};
+    let unsub = noop;
     runtime.loadTool((api) => {
       api.onRender = () => {};
       unsub = api.tick(() => {});
     });
-    expect(runtime.hasTickSubscribers()).toBe(true);
+    expect(runtime.hasTickSubscribers()).toBeTruthy();
 
     const before = runtime.updateCount;
     runtime.tick();
     expect(runtime.updateCount).toBeGreaterThan(before);
 
     unsub();
-    expect(runtime.hasTickSubscribers()).toBe(false);
+    expect(runtime.hasTickSubscribers()).toBeFalsy();
     const after = runtime.updateCount;
     runtime.tick();
     expect(runtime.updateCount).toBe(after);
@@ -215,8 +220,8 @@ describe("runtime", () => {
       handle = api.toast.show("Hello", { loading: true });
     });
     const h = handle as { update: (o: object) => void; dismiss: () => void };
-    expect(typeof h.update).toBe("function");
-    expect(typeof h.dismiss).toBe("function");
+    expect(h.update).toBeTypeOf("function");
+    expect(h.dismiss).toBeTypeOf("function");
     h.dismiss();
   });
 
@@ -228,10 +233,10 @@ describe("runtime", () => {
     });
     const toasts = runtime.toasts();
     expect(toasts).toHaveLength(2);
-    expect(toasts[0]!.message).toBe("one");
-    expect(toasts[0]!.loading).toBe(true);
-    expect(toasts[1]!.message).toBe("two");
-    expect(toasts[1]!.loading).toBe(false);
+    expect(toasts[0].message).toBe("one");
+    expect(toasts[0].loading).toBeTruthy();
+    expect(toasts[1].message).toBe("two");
+    expect(toasts[1].loading).toBeFalsy();
   });
 
   describe("window states", () => {
@@ -249,7 +254,7 @@ describe("runtime", () => {
       });
       runtime.render();
       const wm = runtime.windowStates;
-      const ids = Array.from(wm.keys()).filter((k) => k.endsWith("::sub1") || k.endsWith("::sub2"));
+      const ids = [...wm.keys()].filter((k) => k.endsWith("::sub1") || k.endsWith("::sub2"));
       const id1 = ids.find((k) => k.endsWith("::sub1"))!;
       const id2 = ids.find((k) => k.endsWith("::sub2"))!;
       const s1 = wm.get(id1)!;
@@ -271,7 +276,7 @@ describe("runtime", () => {
         };
       });
       runtime.render();
-      const id = Array.from(runtime.windowStates.keys()).find((k) => k.endsWith("::sub1"))!;
+      const id = [...runtime.windowStates.keys()].find((k) => k.endsWith("::sub1"))!;
       const state = runtime.windowStates.get(id)!;
       const zBefore = state.zIndex;
       runtime.focusWindow(id);
@@ -290,9 +295,9 @@ describe("runtime", () => {
         };
       });
       runtime.render();
-      const ids = Array.from(runtime.windowStates.keys());
-      expect(ids.some((k) => k.endsWith("::__main__"))).toBe(true);
-      expect(ids.some((k) => k.endsWith("::sub1"))).toBe(true);
+      const ids = [...runtime.windowStates.keys()];
+      expect(ids.some((k) => k.endsWith("::__main__"))).toBeTruthy();
+      expect(ids.some((k) => k.endsWith("::sub1"))).toBeTruthy();
       expect(runtime.windowStates.size).toBe(2);
       const mainId = ids.find((k) => k.endsWith("::__main__"))!;
       const main = runtime.windowStates.get(mainId)!;
@@ -314,7 +319,7 @@ describe("runtime", () => {
         };
       });
       runtime.render();
-      const ids = Array.from(runtime.windowStates.keys());
+      const ids = [...runtime.windowStates.keys()];
       const mainId = ids.find((k) => k.endsWith("::__main__"))!;
       const sub1Id = ids.find((k) => k.endsWith("::sub1"))!;
       const sub2Id = ids.find((k) => k.endsWith("::sub2"))!;
@@ -361,12 +366,12 @@ describe("runtime", () => {
       expect(info.name).toBe("Counter");
       expect(info.instanceId).toBeTypeOf("string");
       expect(runtime.toolInstances()).toHaveLength(1);
-      expect(runtime.toolInstances()[0]).toEqual(info);
+      expect(runtime.toolInstances()[0]).toStrictEqual(info);
     });
 
     it("isEmpty is true initially and false after launch", () => {
       const runtime = createTestRuntime();
-      expect(runtime.isEmpty).toBe(true);
+      expect(runtime.isEmpty).toBeTruthy();
       runtime.launchTool({
         manifestId: "counter",
         name: "Counter",
@@ -374,7 +379,7 @@ describe("runtime", () => {
           api.onRender = () => {};
         },
       });
-      expect(runtime.isEmpty).toBe(false);
+      expect(runtime.isEmpty).toBeFalsy();
     });
 
     it("two concurrent instances coexist in render() and windowStates", () => {
@@ -400,11 +405,11 @@ describe("runtime", () => {
       runtime.render();
       expect(runtime.toolInstances()).toHaveLength(2);
       expect(runtime.windowStates.size).toBe(2);
-      const ids = Array.from(runtime.windowStates.keys());
+      const ids = [...runtime.windowStates.keys()];
       const hasA = ids.some((k) => k.startsWith("inst-1::"));
       const hasB = ids.some((k) => k.startsWith("inst-2::"));
-      expect(hasA).toBe(true);
-      expect(hasB).toBe(true);
+      expect(hasA).toBeTruthy();
+      expect(hasB).toBeTruthy();
     });
 
     it("closeTool removes the instance and its windows; isEmpty flips back to true", () => {
@@ -428,17 +433,15 @@ describe("runtime", () => {
         },
       });
       runtime.render();
-      expect(runtime.isEmpty).toBe(false);
+      expect(runtime.isEmpty).toBeFalsy();
       runtime.closeTool(a.instanceId);
       expect(runtime.toolInstances()).toHaveLength(1);
-      expect(runtime.toolInstances()[0]!.instanceId).toBe(b.instanceId);
-      expect(Array.from(runtime.windowStates.keys()).some((k) => k.startsWith("inst-1::"))).toBe(
-        false,
-      );
+      expect(runtime.toolInstances()[0].instanceId).toBe(b.instanceId);
+      expect([...runtime.windowStates.keys()].some((k) => k.startsWith("inst-1::"))).toBeFalsy();
       runtime.closeTool(b.instanceId);
       expect(runtime.toolInstances()).toHaveLength(0);
       expect(runtime.windowStates.size).toBe(0);
-      expect(runtime.isEmpty).toBe(true);
+      expect(runtime.isEmpty).toBeTruthy();
     });
 
     it("windowStates keys are scoped per instance (inst-N::originalId)", () => {
@@ -462,7 +465,7 @@ describe("runtime", () => {
         },
       });
       runtime.render();
-      const keys = Array.from(runtime.windowStates.keys());
+      const keys = [...runtime.windowStates.keys()];
       expect(keys).toContain("inst-1::__main__");
       expect(keys).toContain("inst-2::__main__");
     });
@@ -490,7 +493,7 @@ describe("runtime", () => {
       runtime.render();
       const active = runtime.activeWindowId;
       expect(active).toBeTruthy();
-      expect(active).toMatch(/^inst-\d+::__main__$/);
+      expect(active).toMatch(/^inst-\d+::__main__$/u);
     });
 
     it("toasts from two instances aggregate and can be dismissed", () => {
@@ -515,13 +518,13 @@ describe("runtime", () => {
       });
       const toasts = runtime.toasts();
       expect(toasts).toHaveLength(2);
-      const messages = toasts.map((t) => t.message).sort();
-      expect(messages).toEqual(["from A", "from B"]);
+      const messages = toasts.map((t) => t.message).toSorted();
+      expect(messages).toStrictEqual(["from A", "from B"]);
       const ids = toasts.map((t) => t.id);
       expect(new Set(ids).size).toBe(2);
-      runtime.dismissToast(ids[0]!);
+      runtime.dismissToast(ids[0]);
       expect(runtime.toasts()).toHaveLength(1);
-      runtime.dismissToast(ids[1]!);
+      runtime.dismissToast(ids[1]);
       expect(runtime.toasts()).toHaveLength(0);
       void handleA;
       void handleB;
@@ -584,11 +587,11 @@ describe("runtime", () => {
       expect(runtime.toolInstances()).toHaveLength(2);
       firstApi!.dispose();
       expect(runtime.toolInstances()).toHaveLength(1);
-      expect(runtime.disposed).toBe(false);
+      expect(runtime.disposed).toBeFalsy();
       secondApi!.dispose();
       expect(runtime.toolInstances()).toHaveLength(0);
-      expect(runtime.isEmpty).toBe(true);
-      expect(runtime.disposed).toBe(true);
+      expect(runtime.isEmpty).toBeTruthy();
+      expect(runtime.disposed).toBeTruthy();
     });
   });
 
@@ -602,7 +605,7 @@ describe("runtime", () => {
       expect(info.name).toBe("Counter");
       expect(info.instanceId).toBeTypeOf("string");
       expect(runtime.toolInstances()).toHaveLength(1);
-      expect(runtime.toolInstances()[0]).toEqual(info);
+      expect(runtime.toolInstances()[0]).toStrictEqual(info);
     });
 
     it("calls the module's default(api) with a real runtime Api", () => {
@@ -616,10 +619,10 @@ describe("runtime", () => {
       launchToolFromModule(runtime, { id: "x", name: "X" }, mod);
       expect(receivedApi).not.toBeNull();
       expect(receivedApi!.ui).toBeTypeOf("object");
-      expect(typeof receivedApi!.ui.button).toBe("function");
-      expect(typeof receivedApi!.ui.label).toBe("function");
-      expect(typeof receivedApi!.requestUpdate).toBe("function");
-      expect(typeof receivedApi!.dispose).toBe("function");
+      expect(receivedApi!.ui.button).toBeTypeOf("function");
+      expect(receivedApi!.ui.label).toBeTypeOf("function");
+      expect(receivedApi!.requestUpdate).toBeTypeOf("function");
+      expect(receivedApi!.dispose).toBeTypeOf("function");
     });
 
     it("closing the returned instanceId disposes it from toolInstances()", () => {
@@ -629,7 +632,7 @@ describe("runtime", () => {
       expect(runtime.toolInstances()).toHaveLength(1);
       runtime.closeTool(info.instanceId);
       expect(runtime.toolInstances()).toHaveLength(0);
-      expect(runtime.isEmpty).toBe(true);
+      expect(runtime.isEmpty).toBeTruthy();
     });
 
     it("launching the same manifestId twice creates two separate instances", () => {
@@ -662,7 +665,7 @@ describe("runtime", () => {
       expect(runtime.toolInstances()).toHaveLength(1);
       main!.onClose!();
       expect(runtime.toolInstances()).toHaveLength(0);
-      expect(runtime.disposed).toBe(true);
+      expect(runtime.disposed).toBeTruthy();
     });
 
     it("does not override an explicit onClose set via ui.window.onClose", () => {
@@ -708,12 +711,12 @@ describe("runtime", () => {
   describe("dispose", () => {
     it("api.dispose() marks the runtime as disposed", () => {
       const runtime = createTestRuntime();
-      expect(runtime.disposed).toBe(false);
+      expect(runtime.disposed).toBeFalsy();
       runtime.loadTool((api) => {
         api.onRender = () => {};
         api.dispose();
       });
-      expect(runtime.disposed).toBe(true);
+      expect(runtime.disposed).toBeTruthy();
     });
 
     it("dispose() triggers a redraw (updateCount increments)", () => {
@@ -732,12 +735,12 @@ describe("runtime", () => {
       const runtime = createTestRuntime();
       const info = runtime.launchTool({ manifestId: "counter", name: "Counter" });
       expect(runtime.toolInstances()).toHaveLength(1);
-      expect(runtime.toolInstances()[0]).toEqual(info);
+      expect(runtime.toolInstances()[0]).toStrictEqual(info);
       runtime.render();
       const main = runtime.windowTree.find((w) => w.id.endsWith("::__main__"));
       expect(main).toBeTruthy();
       expect(main!.title).toBe("Counter");
-      expect(main!.children.some((c) => c.kind === "spinner")).toBe(true);
+      expect(main!.children.some((c) => c.kind === "spinner")).toBeTruthy();
     });
 
     it("initializeTool transitions a loading instance to ready and calls the loader", () => {
@@ -751,12 +754,12 @@ describe("runtime", () => {
           api.ui.label("ready");
         };
       });
-      expect(called).toBe(true);
+      expect(called).toBeTruthy();
       runtime.render();
       const main = runtime.windowTree.find((w) => w.id.endsWith("::__main__"));
       expect(main).toBeTruthy();
-      expect(main!.children.some((c) => c.kind === "spinner")).toBe(false);
-      expect(main!.children.some((c) => c.kind === "label" && c.text === "ready")).toBe(true);
+      expect(main!.children.some((c) => c.kind === "spinner")).toBeFalsy();
+      expect(main!.children.some((c) => c.kind === "label" && c.text === "ready")).toBeTruthy();
     });
 
     it("a loading instance can be closed via the default main-window close button", () => {
@@ -773,11 +776,11 @@ describe("runtime", () => {
     it("isLoading reports the instance's state", () => {
       const runtime = createTestRuntime();
       const info = runtime.launchTool({ manifestId: "counter", name: "Counter" });
-      expect(runtime.isLoading(info.instanceId)).toBe(true);
+      expect(runtime.isLoading(info.instanceId)).toBeTruthy();
       runtime.initializeTool(info.instanceId, (api) => {
         api.onRender = () => {};
       });
-      expect(runtime.isLoading(info.instanceId)).toBe(false);
+      expect(runtime.isLoading(info.instanceId)).toBeFalsy();
     });
 
     it("initializeTool on a missing instance is a no-op", () => {
@@ -786,7 +789,7 @@ describe("runtime", () => {
       runtime.initializeTool("does-not-exist", () => {
         called = true;
       });
-      expect(called).toBe(false);
+      expect(called).toBeFalsy();
     });
   });
 
@@ -799,14 +802,14 @@ describe("runtime", () => {
         a.onRender = () => {};
       });
 
-      const result = await api.withProgress({ title: "Loading" }, async (progress) => {
+      const result = await api.withProgress({ title: "Loading" }, (progress) => {
         expect(runtime.toasts()).toHaveLength(1);
-        expect(runtime.toasts()[0]!.message).toBe("Loading");
+        expect(runtime.toasts()[0].message).toBe("Loading");
         progress.report({ increment: 50, message: "half" });
-        expect(runtime.toasts()[0]!.progress).toBe(50);
+        expect(runtime.toasts()[0].progress).toBe(50);
         progress.report({ increment: 80 }); // clamps at 100
-        expect(runtime.toasts()[0]!.progress).toBe(100);
-        return "done";
+        expect(runtime.toasts()[0].progress).toBe(100);
+        return Promise.resolve("done");
       });
 
       expect(result).toBe("done");
@@ -827,8 +830,8 @@ describe("runtime", () => {
 
       const toasts = runtime.toasts();
       expect(toasts).toHaveLength(1);
-      expect(toasts[0]!.intent).toBe("error");
-      expect(toasts[0]!.message).toContain("nope");
+      expect(toasts[0].intent).toBe("error");
+      expect(toasts[0].message).toContain("nope");
     });
   });
 
@@ -843,10 +846,10 @@ describe("runtime", () => {
 
       const pending = runtime.pendingPicks();
       expect(pending).toHaveLength(1);
-      expect(pending[0]!.options.title).toBe("Pick one");
+      expect(pending[0].options.title).toBe("Pick one");
 
-      runtime.resolvePick(pending[0]!.id, 1);
-      await expect(pick).resolves.toEqual({ label: "Y" });
+      runtime.resolvePick(pending[0].id, 1);
+      await expect(pick).resolves.toStrictEqual({ label: "Y" });
       expect(runtime.pendingPicks()).toHaveLength(0);
     });
 
@@ -857,7 +860,7 @@ describe("runtime", () => {
         api.onRender = () => {};
         pick = api.dialog.pick([{ label: "X" }]);
       });
-      runtime.resolvePick(runtime.pendingPicks()[0]!.id, null);
+      runtime.resolvePick(runtime.pendingPicks()[0].id, null);
       await expect(pick).resolves.toBeUndefined();
     });
 
@@ -866,13 +869,19 @@ describe("runtime", () => {
       const delivered: File[] = [];
       runtime.loadTool((api) => {
         api.onRender = () => {
-          api.ui.file(null, { onFile: (f) => delivered.push(f) });
+          api.ui.file(null, {
+            onFile: (f) => {
+              delivered.push(f);
+            },
+          });
         };
       });
       runtime.render();
 
-      const fileNode = runtime.windowTree[0]!.children.find((c) => c.kind === "file");
-      if (!fileNode || fileNode.kind !== "file") throw new Error("expected a file node");
+      const fileNode = runtime.windowTree[0].children.find((c) => c.kind === "file");
+      if (!fileNode || fileNode.kind !== "file") {
+        throw new Error("expected a file node");
+      }
 
       const a = new File(["a"], "a.txt");
       const b = new File(["b"], "b.txt");
@@ -880,11 +889,13 @@ describe("runtime", () => {
 
       const picks = runtime.pendingPicks();
       expect(picks).toHaveLength(1);
-      expect(picks[0]!.items).toHaveLength(2);
+      expect(picks[0].items).toHaveLength(2);
 
-      runtime.resolvePick(picks[0]!.id, 1);
-      await new Promise((r) => setTimeout(r, 0));
-      expect(delivered).toEqual([b]);
+      runtime.resolvePick(picks[0].id, 1);
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      expect(delivered).toStrictEqual([b]);
     });
 
     it("delivers a single candidate from ui.file directly, without a pick", () => {
@@ -892,16 +903,22 @@ describe("runtime", () => {
       const delivered: File[] = [];
       runtime.loadTool((api) => {
         api.onRender = () => {
-          api.ui.file(null, { onFile: (f) => delivered.push(f) });
+          api.ui.file(null, {
+            onFile: (f) => {
+              delivered.push(f);
+            },
+          });
         };
       });
       runtime.render();
-      const fileNode = runtime.windowTree[0]!.children.find((c) => c.kind === "file");
-      if (!fileNode || fileNode.kind !== "file") throw new Error("expected a file node");
+      const fileNode = runtime.windowTree[0].children.find((c) => c.kind === "file");
+      if (!fileNode || fileNode.kind !== "file") {
+        throw new Error("expected a file node");
+      }
       const only = new File(["x"], "x.txt");
       fileNode.resolve([only]);
       expect(runtime.pendingPicks()).toHaveLength(0);
-      expect(delivered).toEqual([only]);
+      expect(delivered).toStrictEqual([only]);
     });
 
     it("cancels a tool's pending picks (undefined) when it closes", async () => {

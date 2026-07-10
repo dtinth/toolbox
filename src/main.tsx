@@ -3,6 +3,7 @@ import { useState } from "preact/hooks";
 import "./app.css";
 import { EmbedHost, Host } from "./app.tsx";
 import { findManifestEntry } from "./app/host.ts";
+// oxlint-disable-next-line import/consistent-type-specifier-style -- a lone `import type` from "./runtime/index.ts" trips no-duplicate-imports against the value import
 import { createRuntime, loadManifest, type Runtime, type ToolModule } from "./runtime/index.ts";
 
 async function loadToolModule(id: string): Promise<ToolModule> {
@@ -10,7 +11,7 @@ async function loadToolModule(id: string): Promise<ToolModule> {
 }
 
 function getEmbedToolFromUrl(): string | null {
-  return new URLSearchParams(window.location.search).get("tool");
+  return new URLSearchParams(globalThis.location.search).get("tool");
 }
 
 async function bootstrap() {
@@ -22,7 +23,7 @@ async function bootstrap() {
   const runtime: Runtime = createRuntime();
   const embedToolId = getEmbedToolFromUrl();
 
-  if (embedToolId) {
+  if (embedToolId !== null && embedToolId !== "") {
     const entry = findManifestEntry(manifest.tools, embedToolId);
     if (!entry) {
       console.error(`Unknown tool: ${embedToolId}`);
@@ -34,11 +35,11 @@ async function bootstrap() {
           name: entry.name,
           loader: mod.default,
         });
-      } catch (err) {
-        console.error(`Failed to load tool ${embedToolId}:`, err);
+      } catch (error) {
+        console.error(`Failed to load tool ${embedToolId}:`, error);
       }
     }
-    render(<EmbedHost runtime={runtime} />, document.getElementById("app")!);
+    render(<EmbedHost runtime={runtime} />, document.querySelector("#app")!);
     return;
   }
 
@@ -52,14 +53,15 @@ async function bootstrap() {
       manifestId: entry.id,
       name: entry.name,
     });
-    loadToolModule(id)
-      .then((mod) => {
+    void (async () => {
+      try {
+        const mod = await loadToolModule(id);
         runtime.initializeTool(instance.instanceId, mod.default);
-      })
-      .catch((err) => {
-        console.error(`Failed to load tool ${id}:`, err);
+      } catch (error) {
+        console.error(`Failed to load tool ${id}:`, error);
         runtime.closeTool(instance.instanceId);
-      });
+      }
+    })();
   }
 
   function DesktopRoot() {
@@ -75,7 +77,7 @@ async function bootstrap() {
     );
   }
 
-  render(<DesktopRoot />, document.getElementById("app")!);
+  render(<DesktopRoot />, document.querySelector("#app")!);
 }
 
-void bootstrap();
+await bootstrap();

@@ -8,8 +8,8 @@
 
 /** Handle returned by `api.toast.show`, for updating or dismissing a toast. */
 export interface ToastHandle {
-  update(opts: { message?: string; loading?: boolean }): void;
-  dismiss(): void;
+  update: (opts: { message?: string; loading?: boolean }) => void;
+  dismiss: () => void;
 }
 
 /** Reporter passed to a `withProgress` task. */
@@ -19,7 +19,7 @@ export interface Progress {
    * delta; `message` updates the detail line. The bar is indeterminate until
    * the first `increment`.
    */
-  report(value: { message?: string; increment?: number }): void;
+  report: (value: { message?: string; increment?: number }) => void;
 }
 
 /** Options for `withProgress`. */
@@ -77,13 +77,13 @@ export interface VNode {
 export interface Signal<T> {
   value: T;
   /** Read without subscribing the current reactive context. */
-  peek(): T;
+  peek: () => T;
 }
 
 /** A derived, read-only reactive value. */
 export interface ReadonlySignal<T> {
   readonly value: T;
-  peek(): T;
+  peek: () => T;
 }
 
 /**
@@ -123,29 +123,32 @@ export interface Ui {
     /** Declare a sub-window this frame with an explicit title. */
     (id: string, title: string, cb: () => void): void;
     /** Override the current window's display title for this frame. */
-    setTitle(newTitle: string): void;
+    setTitle: (newTitle: string) => void;
     /**
      * Fix the current window's content width to `width` CSS pixels for this
      * frame. Without it a window sizes to its content (long, unbreakable text
      * can push it past the viewport); with it the window keeps that width and
      * its contents clip / truncate instead.
      */
-    setWidth(width: number): void;
+    setWidth: (width: number) => void;
     /** Set the current window's close handler. */
-    onClose(handler: () => void): void;
+    onClose: (handler: () => void) => void;
   };
-  label(text: string): void;
-  button(label: string, opts?: { onClick?: () => void }): void;
-  row(cb: () => void): void;
-  textInput(value: string, opts?: { placeholder?: string; onChange?: (v: string) => void }): void;
-  textarea(
+  label: (text: string) => void;
+  button: (label: string, opts?: { onClick?: () => void }) => void;
+  row: (cb: () => void) => void;
+  textInput: (
+    value: string,
+    opts?: { placeholder?: string; onChange?: (v: string) => void },
+  ) => void;
+  textarea: (
     value: string,
     opts?: { placeholder?: string; onChange?: (v: string) => void; rows?: number },
-  ): void;
-  checkbox(
+  ) => void;
+  checkbox: (
     label: string,
     opts: { checked: boolean; disabled?: boolean; onChange?: (checked: boolean) => void },
-  ): void;
+  ) => void;
   /**
    * A single-select value chooser rendered as a horizontal **segmented control**
    * — the segment whose `value` equals the passed `value` is highlighted.
@@ -153,17 +156,17 @@ export interface Ui {
    * view: the tool re-declares its UI for the new value (e.g. an Encrypt/Decrypt
    * mode flag). Distinct from a `checkbox` (one boolean) — this is one-of-N.
    */
-  segmented(
+  segmented: (
     value: string,
     opts: {
       options: { value: string; label: string }[];
       onChange?: (value: string) => void;
     },
-  ): void;
-  copyableText(text: string): void;
-  menu(label: string, cb: () => void): void;
-  menuItem(label: string, opts?: { onClick?: () => void }): void;
-  menuSeparator(): void;
+  ) => void;
+  copyableText: (text: string) => void;
+  menu: (label: string, cb: () => void) => void;
+  menuItem: (label: string, opts?: { onClick?: () => void }) => void;
+  menuSeparator: () => void;
   /**
    * A **Custom widget**: a leaf whose subtree is live Preact. `render` returns a
    * vnode (built with `api.preact.h`) and runs in Preact's own lifecycle, not in
@@ -171,7 +174,7 @@ export interface Ui {
    * (`api.preact`); mutating one repaints the widget without re-running
    * `onRender`. See ADR-0007.
    */
-  custom(render: () => VNode): void;
+  custom: (render: () => VNode) => void;
   /**
    * Open a new identity group for the nodes that follow in this container. A
    * node's reconciliation identity is `(group, positionWithinGroup)`. With no
@@ -179,7 +182,7 @@ export interface Ui {
    * Use it to keep a stable region's identity (and any **Custom widget** state)
    * from being disturbed by a variable region before it.
    */
-  identityGroup(key?: string): void;
+  identityGroup: (key?: string) => void;
   /**
    * A focusable intake box that yields a File from choose-a-file, drop, or
    * paste. Pass the tool's current file (or null) for the metadata display;
@@ -192,7 +195,7 @@ export interface Ui {
    * intake (and `onFile` / `onClear` are unused), just the file's metadata, the
    * drag-out handle, and the export menu (open / copy / download).
    */
-  file(
+  file: (
     file: File | null,
     opts: {
       onFile?: (file: File) => void;
@@ -201,7 +204,7 @@ export interface Ui {
       label?: string;
       readOnly?: boolean;
     },
-  ): void;
+  ) => void;
 }
 
 /** The per-instance object the runtime passes to a tool's `init(api)`. */
@@ -233,7 +236,7 @@ export interface Api {
   /** Register a per-frame tick callback; returns an unsubscribe function. */
   tick: (cb: () => void) => () => void;
   toast: {
-    show(message: string, opts?: { loading?: boolean; duration?: number }): ToastHandle;
+    show: (message: string, opts?: { loading?: boolean; duration?: number }) => ToastHandle;
   };
   dialog: Dialog;
   /**

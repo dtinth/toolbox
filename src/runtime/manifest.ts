@@ -13,7 +13,7 @@ export async function loadManifest(fetchJson: () => Promise<string>): Promise<Ma
   const raw = await fetchJson();
   const parsed = JSON.parse(raw) as unknown;
   if (
-    !parsed ||
+    parsed === null ||
     typeof parsed !== "object" ||
     !("tools" in parsed) ||
     !Array.isArray((parsed as { tools: unknown }).tools)
@@ -21,12 +21,12 @@ export async function loadManifest(fetchJson: () => Promise<string>): Promise<Ma
     throw new Error("invalid manifest: expected { tools: [...] }");
   }
   const entries = (parsed as { tools: unknown[] }).tools.map((entry, i) => {
-    if (!entry || typeof entry !== "object") {
+    if (entry === null || typeof entry !== "object") {
       throw new Error(`invalid manifest: tools[${i}] is not an object`);
     }
     const e = entry as Record<string, unknown>;
     if (typeof e.id !== "string" || typeof e.name !== "string") {
-      throw new Error(`invalid manifest: tools[${i}] must have string id and name`);
+      throw new TypeError(`invalid manifest: tools[${i}] must have string id and name`);
     }
     return {
       id: e.id,

@@ -10,11 +10,9 @@ export interface PaletteVisibilityResult {
 }
 
 export function computePaletteVisibility(input: PaletteVisibilityInput): PaletteVisibilityResult {
-  let isOpen: boolean;
-  if (input.runningCount === 0) {
-    isOpen = !input.userDismissed || input.userToggledOpen;
-  } else {
-    isOpen = input.userToggledOpen;
-  }
+  const isOpen =
+    input.runningCount === 0
+      ? !input.userDismissed || input.userToggledOpen
+      : input.userToggledOpen;
   return { isOpen, canClose: input.runningCount > 0 };
 }

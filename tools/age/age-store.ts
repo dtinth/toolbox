@@ -43,7 +43,9 @@ export function webauthnSupported(): boolean {
 
 export function loadStored(): StoredIdentity | null {
   const raw = localStorage.getItem(KEY);
-  if (!raw) return null;
+  if (raw === null || raw === "") {
+    return null;
+  }
   try {
     const v = JSON.parse(raw) as Partial<StoredIdentity>;
     if (
@@ -77,14 +79,18 @@ export function storedRecipient(): string | null {
 const toB64 = (buf: ArrayBuffer | Uint8Array): string => {
   const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
   let s = "";
-  for (const b of bytes) s += String.fromCharCode(b);
+  for (const b of bytes) {
+    s += String.fromCodePoint(b);
+  }
   return btoa(s);
 };
 
 const fromB64 = (s: string): Uint8Array<ArrayBuffer> => {
   const bin = atob(s);
   const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  for (let i = 0; i < bin.length; i++) {
+    out[i] = bin.codePointAt(i)!;
+  }
   return out;
 };
 
@@ -121,7 +127,9 @@ async function createPasskey(rpId: string, recipient: string): Promise<string> {
       challenge: crypto.getRandomValues(new Uint8Array(16)), // unused, no attestation
     },
   });
-  if (!cred) throw new Error("Passkey creation was cancelled");
+  if (!cred) {
+    throw new Error("Passkey creation was cancelled");
+  }
   return toB64((cred as PublicKeyCredential).rawId);
 }
 
@@ -141,11 +149,13 @@ async function deriveWrapKey(
     userVerification: "required",
     extensions: { prf: { eval: { first: PRF_SALT } } },
   };
-  if (credentialId) {
+  if (credentialId !== undefined && credentialId !== "") {
     publicKey.allowCredentials = [{ id: fromB64(credentialId), type: "public-key" }];
   }
   const cred = await navigator.credentials.get({ publicKey });
-  if (!cred) throw new Error("Passkey assertion was cancelled");
+  if (!cred) {
+    throw new Error("Passkey assertion was cancelled");
+  }
   const assertion = cred as PublicKeyCredential;
   const first = (assertion.getClientExtensionResults() as PrfOutputs).prf?.results?.first;
   if (!first) {
@@ -185,7 +195,7 @@ export async function saveIdentity(
   const recipient = await toRecipient(identity);
 
   let wrap: { key: CryptoKey; credentialId: string };
-  if (existing?.credentialId) {
+  if (existing?.credentialId !== undefined && existing?.credentialId !== "") {
     wrap = await deriveWrapKey(rpId, existing.credentialId);
   } else if (source === "existing") {
     wrap = await deriveWrapKey(rpId); // discoverable pick
@@ -223,9 +233,13 @@ export async function saveIdentity(
  * return the cached value.
  */
 export async function unlockSecret(): Promise<string> {
-  if (cachedSecret) return cachedSecret;
+  if (cachedSecret !== null && cachedSecret !== "") {
+    return cachedSecret;
+  }
   const stored = loadStored();
-  if (!stored) throw new Error("No stored identity");
+  if (!stored) {
+    throw new Error("No stored identity");
+  }
   const { key } = await deriveWrapKey(stored.rpId, stored.credentialId);
   const packed = fromB64(stored.wrappedSecret);
   const plain = await crypto.subtle.decrypt(

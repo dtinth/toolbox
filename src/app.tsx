@@ -1,13 +1,13 @@
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import type {
-  InputRequest,
-  ManifestEntry,
-  PickRequest,
-  QuickPickItem,
-  Runtime,
-  Toast,
-  ToolInstanceInfo,
+import {
+  type InputRequest,
+  type ManifestEntry,
+  type PickRequest,
+  type QuickPickItem,
+  type Runtime,
+  type Toast,
+  type ToolInstanceInfo,
 } from "./runtime/index.ts";
 import { fuzzyFilter, searchTools } from "./runtime/fuzzy.ts";
 import { shouldInterceptClick } from "./app/click.ts";
@@ -32,11 +32,15 @@ export function Palette({
   onLaunch,
   onClose,
 }: PaletteProps) {
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   const launch = (id: string) => {
     onLaunch(id);
-    if (canClose) onClose();
+    if (canClose) {
+      onClose();
+    }
   };
 
   return (
@@ -46,7 +50,9 @@ export function Palette({
       canDismiss={canClose}
       selectOnFocus
       placeholder="Type to search tools…"
-      onChoose={(t) => launch(t.id)}
+      onChoose={(t) => {
+        launch(t.id);
+      }}
       onDismiss={onClose}
       renderItem={(t, { active, choose }) => (
         // An <a> so cmd/ctrl/middle-click open the tool in a new tab natively;
@@ -70,7 +76,9 @@ export function Palette({
 }
 
 function ToastLayer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
-  if (toasts.length === 0) return null;
+  if (toasts.length === 0) {
+    return null;
+  }
   return (
     <div class="fixed bottom-4 right-4 flex flex-col gap-2 z-50" data-toolbox-chrome>
       {toasts.map((t) => {
@@ -84,16 +92,17 @@ function ToastLayer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: nu
             }`}
           >
             <div class="flex items-center gap-2">
-              {isError ? (
-                <span class="text-red-400">⚠</span>
-              ) : t.loading && !determinate ? (
+              {isError ? <span class="text-red-400">⚠</span> : null}
+              {!isError && t.loading && !determinate ? (
                 <span class="inline-block w-3 h-3 border-2 border-toolbox-accent border-t-transparent rounded-full animate-spin" />
               ) : null}
               <span class={`flex-1 ${isError ? "text-red-300" : ""}`}>{t.message}</span>
               <button
                 type="button"
                 class="text-toolbox-muted hover:text-toolbox-accent-yellow"
-                onClick={() => onDismiss(t.id)}
+                onClick={() => {
+                  onDismiss(t.id);
+                }}
               >
                 ×
               </button>
@@ -136,8 +145,12 @@ function PickModal({
         fuzzyFilter(query, indexed, (x) => `${x.item.label} ${x.item.description ?? ""}`)
       }
       itemKey={(x) => x.i}
-      onChoose={(x) => onResolve(request.id, x.i)}
-      onDismiss={() => onResolve(request.id, null)}
+      onChoose={(x) => {
+        onResolve(request.id, x.i);
+      }}
+      onDismiss={() => {
+        onResolve(request.id, null);
+      }}
       renderItem={(x, { active, choose }) => (
         <button
           type="button"
@@ -146,11 +159,13 @@ function PickModal({
         >
           <span class="flex items-center gap-2">
             <span class="flex-1">{x.item.label}</span>
-            {x.item.description ? (
+            {x.item.description !== undefined && x.item.description !== "" ? (
               <span class="text-xs text-toolbox-muted">{x.item.description}</span>
             ) : null}
           </span>
-          {x.item.detail ? <span class="text-xs text-toolbox-muted">{x.item.detail}</span> : null}
+          {x.item.detail !== undefined && x.item.detail !== "" ? (
+            <span class="text-xs text-toolbox-muted">{x.item.detail}</span>
+          ) : null}
         </button>
       )}
     />
@@ -164,8 +179,10 @@ function PickLayer({
   picks: PickRequest[];
   onResolve: (id: number, index: number | null) => void;
 }) {
+  if (picks.length === 0) {
+    return null;
+  }
   const active = picks[0];
-  if (!active) return null;
   return <PickModal key={active.id} request={active} onResolve={onResolve} />;
 }
 
@@ -187,8 +204,12 @@ function InputModal({
     }
   }, []);
 
-  const submit = () => onResolve(request.id, text);
-  const dismiss = () => onResolve(request.id, null);
+  const submit = () => {
+    onResolve(request.id, text);
+  };
+  const dismiss = () => {
+    onResolve(request.id, null);
+  };
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -204,13 +225,17 @@ function InputModal({
     <div
       class="fixed inset-0 z-50 flex items-center justify-center"
       data-toolbox-chrome
-      onClick={dismiss}
+      role="presentation"
+      onClick={(e) => {
+        // Dismiss only on backdrop clicks; clicks inside the panel bubble up
+        // with a different target and are ignored.
+        if (e.target === e.currentTarget) {
+          dismiss();
+        }
+      }}
     >
-      <div
-        class="bg-toolbox-surface border border-toolbox-border rounded-lg shadow-xl p-4 w-80 flex flex-col gap-3"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {request.options.title ? (
+      <div class="bg-toolbox-surface border border-toolbox-border rounded-lg shadow-xl p-4 w-80 flex flex-col gap-3">
+        {request.options.title !== undefined && request.options.title !== "" ? (
           <div class="text-toolbox-text font-medium">{request.options.title}</div>
         ) : null}
         <input
@@ -219,7 +244,9 @@ function InputModal({
           value={text}
           placeholder={request.options.placeholder ?? ""}
           class="w-full bg-toolbox-deepest border border-toolbox-border rounded px-2 py-1.5 text-toolbox-text text-sm focus:outline-none focus:ring-1 focus:ring-toolbox-accent"
-          onInput={(e) => setText((e.target as HTMLInputElement).value)}
+          onInput={(e) => {
+            setText((e.target as HTMLInputElement).value);
+          }}
           onKeyDown={onKeyDown}
         />
         <div class="flex justify-end gap-2">
@@ -250,8 +277,10 @@ function InputLayer({
   inputs: InputRequest[];
   onResolve: (id: number, value: string | null) => void;
 }) {
+  if (inputs.length === 0) {
+    return null;
+  }
   const active = inputs[0];
-  if (!active) return null;
   return <InputModal key={active.id} request={active} onResolve={onResolve} />;
 }
 
@@ -279,10 +308,16 @@ function DesktopRoots({ runtime }: { runtime: Runtime }) {
   const containers = useRef<Map<string, HTMLDivElement>>(new Map());
 
   useEffect(() => {
+    // Capture the (stable) container Map once so the cleanup below reads the
+    // same instance the effect used, not whatever `containers.current` holds
+    // at teardown time.
+    const containerMap = containers.current;
     const sync = () => {
       const desk = deskRef.current;
-      if (!desk) return;
-      const map = containers.current;
+      if (!desk) {
+        return;
+      }
+      const map = containerMap;
       const live = new Set(runtime.toolInstances().map((i) => i.instanceId));
       for (const [id, el] of map) {
         if (!live.has(id)) {
@@ -295,7 +330,7 @@ function DesktopRoots({ runtime }: { runtime: Runtime }) {
         let el = map.get(info.instanceId);
         if (!el) {
           el = document.createElement("div");
-          desk.appendChild(el);
+          desk.append(el);
           map.set(info.instanceId, el);
         }
         render(runtime.renderInstance(info.instanceId), el);
@@ -305,8 +340,10 @@ function DesktopRoots({ runtime }: { runtime: Runtime }) {
     const unsubscribe = runtime.subscribe(sync);
     return () => {
       unsubscribe();
-      for (const el of containers.current.values()) render(null, el);
-      containers.current.clear();
+      for (const el of containerMap.values()) {
+        render(null, el);
+      }
+      containerMap.clear();
     };
   }, [runtime]);
 
@@ -327,7 +364,9 @@ export function EmbedHost({ runtime }: EmbedHostProps) {
       rafId = runtime.hasTickSubscribers() ? requestAnimationFrame(loop) : null;
     };
     const ensureTicking = () => {
-      if (rafId === null && runtime.hasTickSubscribers()) rafId = requestAnimationFrame(loop);
+      if (rafId === null && runtime.hasTickSubscribers()) {
+        rafId = requestAnimationFrame(loop);
+      }
     };
     const unsubscribe = runtime.subscribe(() => {
       setToasts(runtime.toasts());
@@ -338,16 +377,33 @@ export function EmbedHost({ runtime }: EmbedHostProps) {
     ensureTicking();
     return () => {
       unsubscribe();
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
     };
   }, [runtime]);
 
   return (
     <div class="toolbox-host fixed inset-0">
       <DesktopRoots runtime={runtime} />
-      <ToastLayer toasts={toasts} onDismiss={(id) => runtime.dismissToast(id)} />
-      <PickLayer picks={picks} onResolve={(id, index) => runtime.resolvePick(id, index)} />
-      <InputLayer inputs={inputs} onResolve={(id, v) => runtime.resolveInput(id, v)} />
+      <ToastLayer
+        toasts={toasts}
+        onDismiss={(id) => {
+          runtime.dismissToast(id);
+        }}
+      />
+      <PickLayer
+        picks={picks}
+        onResolve={(id, index) => {
+          runtime.resolvePick(id, index);
+        }}
+      />
+      <InputLayer
+        inputs={inputs}
+        onResolve={(id, v) => {
+          runtime.resolveInput(id, v);
+        }}
+      />
     </div>
   );
 }
@@ -356,7 +412,7 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [picks, setPicks] = useState<PickRequest[]>(() => runtime.pendingPicks());
   const [inputs, setInputs] = useState<InputRequest[]>(() => runtime.pendingInputs());
-  const [instances, setInstances] = useState<ReadonlyArray<ToolInstanceInfo>>(() =>
+  const [instances, setInstances] = useState<readonly ToolInstanceInfo[]>(() =>
     runtime.toolInstances(),
   );
   const userDismissedRef = useRef(false);
@@ -373,7 +429,9 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
       rafId = runtime.hasTickSubscribers() ? requestAnimationFrame(loop) : null;
     };
     const ensureTicking = () => {
-      if (rafId === null && runtime.hasTickSubscribers()) rafId = requestAnimationFrame(loop);
+      if (rafId === null && runtime.hasTickSubscribers()) {
+        rafId = requestAnimationFrame(loop);
+      }
     };
     const unsubscribe = runtime.subscribe(() => {
       setToasts(runtime.toasts());
@@ -386,16 +444,20 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        if (runtime.isEmpty) return;
+        if (runtime.isEmpty) {
+          return;
+        }
         userDismissedRef.current = true;
         onPaletteOpenChange(!paletteOpenRef.current);
       }
     };
-    window.addEventListener("keydown", onKey);
+    globalThis.addEventListener("keydown", onKey);
     return () => {
       unsubscribe();
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      window.removeEventListener("keydown", onKey);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      globalThis.removeEventListener("keydown", onKey);
     };
   }, [onPaletteOpenChange, runtime]);
 
@@ -423,9 +485,24 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
   return (
     <div class="toolbox-host fixed inset-0">
       <DesktopRoots runtime={runtime} />
-      <ToastLayer toasts={toasts} onDismiss={(id) => runtime.dismissToast(id)} />
-      <PickLayer picks={picks} onResolve={(id, index) => runtime.resolvePick(id, index)} />
-      <InputLayer inputs={inputs} onResolve={(id, v) => runtime.resolveInput(id, v)} />
+      <ToastLayer
+        toasts={toasts}
+        onDismiss={(id) => {
+          runtime.dismissToast(id);
+        }}
+      />
+      <PickLayer
+        picks={picks}
+        onResolve={(id, index) => {
+          runtime.resolvePick(id, index);
+        }}
+      />
+      <InputLayer
+        inputs={inputs}
+        onResolve={(id, v) => {
+          runtime.resolveInput(id, v);
+        }}
+      />
       {!visibility.isOpen ? (
         <button
           type="button"

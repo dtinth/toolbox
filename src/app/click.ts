@@ -7,7 +7,11 @@ export interface ClickModifiers {
 }
 
 export function shouldInterceptClick(e: ClickModifiers): boolean {
-  if (e.button !== 0) return false;
-  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return false;
+  if (e.button !== 0) {
+    return false;
+  }
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+    return false;
+  }
   return true;
 }

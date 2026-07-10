@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
-import { type RenderContext, toPreact, renderNode, windowToPreact } from "./renderer.tsx";
-import type { WindowNode, ChildNode } from "./collector.ts";
-import type { WindowState } from "./runtime.ts";
-import { h } from "preact";
-import type { VNode } from "preact";
+import { toPreact, renderNode, windowToPreact, type RenderContext } from "./renderer.tsx";
+import { type WindowNode, type ChildNode } from "./collector.ts";
+import { type WindowState } from "./runtime.ts";
+import { h, type VNode } from "preact";
 
 const noop = () => {};
+const buttonOnClick = () => {};
 
 // Build a RenderContext + an inert drag (containerRef/handler) for testing the
 // pure window markup directly, without mounting the Window component.
@@ -27,7 +27,7 @@ describe("toPreact", () => {
     expect(children).toHaveLength(2);
     // Each window is a component vnode keyed by its id (so per-window state
     // survives reconciliation as windows open/close/reorder).
-    expect(typeof children[0].type).toBe("function");
+    expect(children[0].type).toBeTypeOf("function");
     expect(children[0].key).toBe("a");
     expect(children[1].key).toBe("b");
   });
@@ -50,7 +50,7 @@ describe("windowToPreact (pure window markup)", () => {
     const el = windowToPreact(w, makeCtx(new Map()), drag) as any;
     const titleBar = el.props.children[0];
     titleBar.props.onPointerDown(new Event("pointerdown") as PointerEvent);
-    expect(down).toBe(true);
+    expect(down).toBeTruthy();
   });
 
   it("renders a close button when the window has an onClose handler", () => {
@@ -71,7 +71,7 @@ describe("windowToPreact (pure window markup)", () => {
     const w: WindowNode = { kind: "window", id: "w", title: "W", children: [], menus: [] };
     const el = windowToPreact(w, makeCtx(new Map()), inertDrag) as any;
     const titleBar = el.props.children[0];
-    expect(titleBar.props.children.length).toBe(1);
+    expect(titleBar.props.children).toHaveLength(1);
   });
 
   it("applies the focus ring class to the active window", () => {
@@ -101,23 +101,35 @@ const noChild = (): VNode => h("span", null) as VNode;
 
 // Recursively collect all text from a vnode tree.
 const collectText = (n: any): string => {
-  if (n == null || typeof n === "boolean") return "";
-  if (typeof n === "string" || typeof n === "number") return String(n);
-  if (Array.isArray(n)) return n.map(collectText).join("");
+  if (n === null || n === undefined || typeof n === "boolean") {
+    return "";
+  }
+  if (typeof n === "string" || typeof n === "number") {
+    return String(n);
+  }
+  if (Array.isArray(n)) {
+    return n.map((c) => collectText(c)).join("");
+  }
   return collectText(n.props?.children);
 };
 
 // Find the first vnode matching pred (depth-first).
 const findVNode = (n: any, pred: (x: any) => boolean): any => {
-  if (n == null || typeof n !== "object") return null;
+  if (n === null || n === undefined || typeof n !== "object") {
+    return null;
+  }
   if (Array.isArray(n)) {
     for (const c of n) {
       const r = findVNode(c, pred);
-      if (r) return r;
+      if (r !== null) {
+        return r;
+      }
     }
     return null;
   }
-  if (pred(n)) return n;
+  if (pred(n)) {
+    return n;
+  }
   return findVNode(n.props?.children, pred);
 };
 
@@ -129,11 +141,13 @@ describe("renderNode (pure node renderer)", () => {
   });
 
   it("renders a button with the label text and wires onClick", () => {
-    const onClick = () => {};
-    const el = renderNode({ kind: "button", label: "Click me", onClick }, noChild) as any;
+    const el = renderNode(
+      { kind: "button", label: "Click me", onClick: buttonOnClick },
+      noChild,
+    ) as any;
     expect(el.type).toBe("button");
     expect(el.props.children).toBe("Click me");
-    expect(el.props.onClick).toBe(onClick);
+    expect(el.props.onClick).toBe(buttonOnClick);
   });
 
   it("renders a button without onClick when handler is omitted", () => {
@@ -144,7 +158,9 @@ describe("renderNode (pure node renderer)", () => {
 
   it("renders a textInput as an <input type=text> and wires onInput→onChange", () => {
     const values: string[] = [];
-    const onChange = (v: string) => values.push(v);
+    const onChange = (v: string) => {
+      values.push(v);
+    };
     const el = renderNode(
       { kind: "textInput", value: "init", placeholder: "ph", onChange },
       noChild,
@@ -156,12 +172,14 @@ describe("renderNode (pure node renderer)", () => {
     // Simulate the onInput handler firing
     const fakeInput = { value: "typed" } as HTMLInputElement;
     el.props.onInput({ currentTarget: fakeInput });
-    expect(values).toEqual(["typed"]);
+    expect(values).toStrictEqual(["typed"]);
   });
 
   it("renders a textarea with default rows=6 and wires onInput→onChange", () => {
     const values: string[] = [];
-    const onChange = (v: string) => values.push(v);
+    const onChange = (v: string) => {
+      values.push(v);
+    };
     const el = renderNode(
       { kind: "textarea", value: "draft", placeholder: "ph", onChange },
       noChild,
@@ -171,7 +189,7 @@ describe("renderNode (pure node renderer)", () => {
     expect(el.props.rows).toBe(6);
     const fakeArea = { value: "updated" } as HTMLTextAreaElement;
     el.props.onInput({ currentTarget: fakeArea });
-    expect(values).toEqual(["updated"]);
+    expect(values).toStrictEqual(["updated"]);
   });
 
   it("respects an explicit rows value on textarea", () => {
@@ -199,7 +217,7 @@ describe("renderNode (pure node renderer)", () => {
     expect(el.type).toBe("div");
     expect(el.props.class).toContain("flex");
     // Both children were delegated to the stub
-    expect(rendered).toEqual([labelA, labelB]);
+    expect(rendered).toStrictEqual([labelA, labelB]);
   });
 
   it("renders a focusable empty file box with the placeholder label", () => {
@@ -226,9 +244,9 @@ describe("renderNode (pure node renderer)", () => {
     const el = renderNode({ kind: "file", file, resolve: () => {} }, noChild) as any;
     // The box itself is draggable and carries the drag-out handlers (not just a
     // tiny icon) — easier to grab, and select-none stops touch text-selection.
-    expect(el.props.draggable).toBe(true);
-    expect(typeof el.props.onDragStart).toBe("function");
-    expect(typeof el.props.onDragEnd).toBe("function");
+    expect(el.props.draggable).toBeTruthy();
+    expect(el.props.onDragStart).toBeTypeOf("function");
+    expect(el.props.onDragEnd).toBeTypeOf("function");
     expect(el.props.class).toContain("select-none");
   });
 
@@ -265,7 +283,13 @@ describe("renderNode (pure node renderer)", () => {
     source.props.onDragStart({ dataTransfer: { setData: () => {} } });
     const delivered: File[][] = [];
     const target = renderNode(
-      { kind: "file", file: null, resolve: (files) => delivered.push(files) },
+      {
+        kind: "file",
+        file: null,
+        resolve: (files) => {
+          delivered.push(files);
+        },
+      },
       noChild,
     ) as any;
     target.props.onDrop({
@@ -273,14 +297,20 @@ describe("renderNode (pure node renderer)", () => {
       currentTarget: { classList: { toggle: () => {} } },
       dataTransfer: { files: [], getData: () => "abcde" },
     });
-    expect(delivered[0]).toEqual([file]);
+    expect(delivered[0]).toStrictEqual([file]);
     source.props.onDragEnd();
   });
 
   it("delivers dropped files through resolve and prevents default", () => {
     const delivered: File[][] = [];
     const el = renderNode(
-      { kind: "file", file: null, resolve: (files) => delivered.push(files) },
+      {
+        kind: "file",
+        file: null,
+        resolve: (files) => {
+          delivered.push(files);
+        },
+      },
       noChild,
     ) as any;
     const file = new File(["y"], "y.png", { type: "image/png" });
@@ -292,8 +322,8 @@ describe("renderNode (pure node renderer)", () => {
       currentTarget: { classList: { toggle: () => {} } },
       dataTransfer: { files: [file], getData: () => "" },
     });
-    expect(prevented).toBe(true);
-    expect(delivered[0]).toEqual([file]);
+    expect(prevented).toBeTruthy();
+    expect(delivered[0]).toStrictEqual([file]);
   });
 
   it("allows drop by preventing default on dragover", () => {
@@ -305,13 +335,19 @@ describe("renderNode (pure node renderer)", () => {
       },
       currentTarget: { classList: { toggle: () => {} } },
     });
-    expect(prevented).toBe(true);
+    expect(prevented).toBeTruthy();
   });
 
   it("delivers pasted clipboard data through resolve (focus-scoped paste)", () => {
     const delivered: File[][] = [];
     const el = renderNode(
-      { kind: "file", file: null, resolve: (files) => delivered.push(files) },
+      {
+        kind: "file",
+        file: null,
+        resolve: (files) => {
+          delivered.push(files);
+        },
+      },
       noChild,
     ) as any;
     const file = new File(["z"], "z.png", { type: "image/png" });
@@ -322,8 +358,8 @@ describe("renderNode (pure node renderer)", () => {
       },
       clipboardData: { files: [file], getData: () => "" },
     });
-    expect(prevented).toBe(true);
-    expect(delivered[0]).toEqual([file]);
+    expect(prevented).toBeTruthy();
+    expect(delivered[0]).toStrictEqual([file]);
   });
 
   it("mounts a … menu component (portaled popover; rendered/positioned in the browser)", () => {
@@ -349,7 +385,7 @@ describe("custom widgets and identity groups", () => {
     const body = el.props.children[1];
     const custom = body.props.children[0];
     // A stable component wrapper (so the live Preact mount survives redraws).
-    expect(typeof custom.type).toBe("function");
+    expect(custom.type).toBeTypeOf("function");
     expect(custom.key).toBe("1:0");
     // Invoking the wrapper runs the tool's render closure.
     expect(custom.type(custom.props)).toBe(marker);
@@ -372,6 +408,6 @@ describe("custom widgets and identity groups", () => {
     const el = windowToPreact(w, makeCtx(new Map()), inertDrag) as any;
     const kids = el.props.children[1].props.children;
     expect(kids).toHaveLength(3);
-    expect(kids.map((k: any) => k.key)).toEqual(["1:0", "editors:0", "2:0"]);
+    expect(kids.map((k: any) => k.key)).toStrictEqual(["1:0", "editors:0", "2:0"]);
   });
 });

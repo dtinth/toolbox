@@ -1,6 +1,6 @@
-import type { ManifestEntry, ToolInstanceInfo } from "../runtime/index.ts";
+import { type ManifestEntry, type ToolInstanceInfo } from "../runtime/index.ts";
 
-export function runningManifestIds(instances: ReadonlyArray<ToolInstanceInfo>): Set<string> {
+export function runningManifestIds(instances: readonly ToolInstanceInfo[]): Set<string> {
   const ids = new Set<string>();
   for (const inst of instances) {
     ids.add(inst.manifestId);
@@ -10,7 +10,9 @@ export function runningManifestIds(instances: ReadonlyArray<ToolInstanceInfo>): 
 
 export function findManifestEntry(manifest: ManifestEntry[], id: string): ManifestEntry | null {
   for (const entry of manifest) {
-    if (entry.id === id) return entry;
+    if (entry.id === id) {
+      return entry;
+    }
   }
   return null;
 }

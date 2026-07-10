@@ -1,13 +1,13 @@
 export type ToastIntent = "info" | "error";
 
 export interface ToastHandle {
-  update(opts: {
+  update: (opts: {
     message?: string;
     loading?: boolean;
     progress?: number;
     intent?: ToastIntent;
-  }): void;
-  dismiss(): void;
+  }) => void;
+  dismiss: () => void;
 }
 
 export interface Toast {
@@ -21,15 +21,15 @@ export interface Toast {
 }
 
 export interface ToastCenter {
-  show(
+  show: (
     instanceId: string,
     message: string,
     opts?: { loading?: boolean; duration?: number; progress?: number; intent?: ToastIntent },
-  ): ToastHandle;
-  dismiss(id: number): void;
-  dismissForInstance(instanceId: string): void;
-  list(): Toast[];
-  reset(): void;
+  ) => ToastHandle;
+  dismiss: (id: number) => void;
+  dismissForInstance: (instanceId: string) => void;
+  list: () => Toast[];
+  reset: () => void;
 }
 
 export function createToastCenter({ onChange }: { onChange: () => void }): ToastCenter {
@@ -47,7 +47,7 @@ export function createToastCenter({ onChange }: { onChange: () => void }): Toast
 
   function cancelAutoDismiss(id: number) {
     const timer = autoDismissTimers.get(id);
-    if (timer) {
+    if (timer !== undefined) {
       clearTimeout(timer);
       autoDismissTimers.delete(id);
     }
@@ -55,7 +55,9 @@ export function createToastCenter({ onChange }: { onChange: () => void }): Toast
 
   function dismissInternal(id: number): void {
     const i = toasts.findIndex((t) => t.id === id);
-    if (i < 0) return;
+    if (i === -1) {
+      return;
+    }
     toasts.splice(i, 1);
     cancelAutoDismiss(id);
     for (const set of instanceToasts.values()) {
@@ -85,15 +87,25 @@ export function createToastCenter({ onChange }: { onChange: () => void }): Toast
       instanceToasts.set(instanceId, new Set());
     }
     instanceToasts.get(instanceId)!.add(id);
-    if (!loading) scheduleAutoDismiss(id, duration);
+    if (!loading) {
+      scheduleAutoDismiss(id, duration);
+    }
     onChange();
     return {
       update(updateOpts) {
         const t = toasts.find((x) => x.id === id);
-        if (!t) return;
-        if (updateOpts.message !== undefined) t.message = updateOpts.message;
-        if (updateOpts.progress !== undefined) t.progress = updateOpts.progress;
-        if (updateOpts.intent !== undefined) t.intent = updateOpts.intent;
+        if (!t) {
+          return;
+        }
+        if (updateOpts.message !== undefined) {
+          t.message = updateOpts.message;
+        }
+        if (updateOpts.progress !== undefined) {
+          t.progress = updateOpts.progress;
+        }
+        if (updateOpts.intent !== undefined) {
+          t.intent = updateOpts.intent;
+        }
         if (updateOpts.loading !== undefined) {
           t.loading = updateOpts.loading;
           if (updateOpts.loading) {
@@ -116,19 +128,23 @@ export function createToastCenter({ onChange }: { onChange: () => void }): Toast
 
   function dismissForInstance(instanceId: string): void {
     const ids = instanceToasts.get(instanceId);
-    if (!ids) return;
-    for (const id of Array.from(ids)) {
+    if (!ids) {
+      return;
+    }
+    for (const id of new Set(ids)) {
       dismissInternal(id);
     }
     instanceToasts.delete(instanceId);
   }
 
   function list(): Toast[] {
-    return toasts.slice();
+    return [...toasts];
   }
 
   function reset(): void {
-    for (const timer of autoDismissTimers.values()) clearTimeout(timer);
+    for (const timer of autoDismissTimers.values()) {
+      clearTimeout(timer);
+    }
     autoDismissTimers.clear();
     toasts.length = 0;
     instanceToasts.clear();
