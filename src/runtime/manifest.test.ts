@@ -11,7 +11,14 @@ describe("manifest", () => {
     });
     const manifest = await loadManifest(() => Promise.resolve(json));
     expect(manifest.tools).toHaveLength(2);
-    expect(manifest.tools[0]).toStrictEqual({ id: "hello", name: "Hello" });
+    // loadManifest normalizes the optional fields, so the entry always carries
+    // `icon`/`description` keys (undefined when absent) — toStrictEqual checks them.
+    expect(manifest.tools[0]).toStrictEqual({
+      id: "hello",
+      name: "Hello",
+      icon: undefined,
+      description: undefined,
+    });
     expect(manifest.tools[1].icon).toBe("/tools/counter/icon.svg");
   });
 });
