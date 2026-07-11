@@ -41,19 +41,11 @@ async function fetchBezel(bezel: Bezel, progress: Progress): Promise<Blob> {
 
   let blob: Blob;
   if (res.body && total > 0) {
-    const reader = res.body.getReader();
     const chunks: Uint8Array[] = [];
     let loaded = 0;
     let lastPct = 0;
     progress.report({ message: "Loading device frame…", increment: 0 });
-    for (;;) {
-      // Draining a stream reader is inherently sequential: each read() depends
-      // on the previous one resolving, so this await cannot be parallelized.
-      // eslint-disable-next-line no-await-in-loop
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
+    for await (const value of res.body) {
       chunks.push(value);
       loaded += value.length;
       const pct = Math.floor((loaded / total) * 100);

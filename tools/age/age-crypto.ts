@@ -52,6 +52,8 @@ export async function decryptBytes(identities: string[], data: Uint8Array): Prom
   for (const i of identities) {
     d.addIdentity(i);
   }
+  // Bind the await to a temp (rather than `return await`): keeps `require-await`
+  // satisfied without tripping `return-await` outside a try.
   const plaintext = await d.decrypt(binary);
   return plaintext;
 }

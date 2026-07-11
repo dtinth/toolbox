@@ -155,12 +155,10 @@ function collectInstance(instance: ToolInstance): WindowNode[] {
       },
     ];
   }
-  const windows = collect(
-    () => {
-      instance.onRender();
-    },
-    { pick: instance.api.dialog.pick },
-  );
+  // Forward onRender's runtime value (declared `void`, widened to `unknown`)
+  // so collect can still reject an accidentally-async declarator.
+  const render = instance.onRender as () => unknown;
+  const windows = collect(() => render(), { pick: instance.api.dialog.pick });
   return windows.map((w) => {
     const originalId = w.id;
     w.id = scopeId(instanceId, originalId);

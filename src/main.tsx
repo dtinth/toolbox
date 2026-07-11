@@ -3,7 +3,6 @@ import { useState } from "preact/hooks";
 import "./app.css";
 import { EmbedHost, Host } from "./app.tsx";
 import { findManifestEntry } from "./app/host.ts";
-// oxlint-disable-next-line import/consistent-type-specifier-style -- a lone `import type` from "./runtime/index.ts" trips no-duplicate-imports against the value import
 import { createRuntime, loadManifest, type Runtime, type ToolModule } from "./runtime/index.ts";
 
 async function loadToolModule(id: string): Promise<ToolModule> {

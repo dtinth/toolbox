@@ -9,16 +9,12 @@ import {
 import {
   clearIdentity,
   hasIdentity,
+  type PasskeySource,
   saveIdentity,
   storedRecipient,
   unlockSecret,
   webauthnSupported,
 } from "./age-store.ts";
-
-// Derived from saveIdentity's signature so it stays in sync with age-store
-// without a separate type-only import (which the import lint rules disallow
-// alongside the value imports from the same module).
-type PasskeySource = NonNullable<Parameters<typeof saveIdentity>[1]>;
 
 type Mode = "encrypt" | "decrypt" | "reencrypt";
 
@@ -74,6 +70,8 @@ export default function init(api: Api) {
     try {
       const stored = await api.withProgress({ title: "Saving identity" }, async (p) => {
         p.report({ message: "Wrapping secret to your passkey…" });
+        // Await into a temp so the callback keeps an `await` (require-await)
+        // without tripping `return-await`.
         const saved = await saveIdentity(secret, source);
         return saved;
       });

@@ -2,10 +2,8 @@
 // build class strings with it instead of relying on the chrome's build-time
 // Tailwind. Every utility is emitted in the `tw-` namespace so tool styles can
 // never clash with the chrome's Tailwind. See ADR-0009.
-import { createGenerator } from "@unocss/core";
+import { createGenerator, type UnoGenerator } from "@unocss/core";
 import presetWind4 from "@unocss/preset-wind4";
-
-type UnoGenerator = Awaited<ReturnType<typeof createGenerator>>;
 
 const PREFIX = "tw-";
 

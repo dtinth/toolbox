@@ -131,6 +131,8 @@ export function createToastCenter({ onChange }: { onChange: () => void }): Toast
     if (!ids) {
       return;
     }
+    // Snapshot into a new Set so dismissInternal can mutate `ids` mid-iteration.
+    // (`[...ids]`/`Array.from` would trip no-useless-spread/prefer-spread.)
     for (const id of new Set(ids)) {
       dismissInternal(id);
     }
