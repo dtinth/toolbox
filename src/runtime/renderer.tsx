@@ -1,4 +1,3 @@
-// oxlint-disable-next-line import/consistent-type-specifier-style -- a lone `import type` from "preact" trips no-duplicate-imports against the value import
 import { Fragment, h, render, type VNode } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";

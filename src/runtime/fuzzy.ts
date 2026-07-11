@@ -2,7 +2,7 @@ import { type ManifestEntry } from "./manifest.ts";
 
 export function searchTools(query: string, entries: ManifestEntry[]): ManifestEntry[] {
   if (query.trim() === "") {
-    return [...entries].toSorted((a, b) => a.name.localeCompare(b.name));
+    return entries.toSorted((a, b) => a.name.localeCompare(b.name));
   }
   const q = query.toLowerCase();
   const scored: { entry: ManifestEntry; score: number }[] = [];
