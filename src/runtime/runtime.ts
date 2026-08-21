@@ -67,6 +67,12 @@ export interface ToolInstanceInfo {
 
 export interface Runtime {
   launchTool: (opts: {
+    /**
+     * Adopt this id instead of minting one. Restoring a workspace passes the
+     * saved id so its `${instanceId}::${originalId}` slot keys still resolve.
+     * Throws if the id is already in use.
+     */
+    instanceId?: string;
     manifestId: string;
     name: string;
     loader?: (api: Api) => void;
@@ -178,7 +184,6 @@ function build(): TestRuntime {
   let lastTree: WindowNode[] = [];
   let updates = 0;
   let pendingRender = false;
-  let instanceCounter = 0;
   const subscribers = new Set<() => void>();
   const wm: WindowManager = createWindowManager();
   let disposed = false;
@@ -266,12 +271,18 @@ function build(): TestRuntime {
   }
 
   function launchTool(opts: {
+    instanceId?: string;
     manifestId: string;
     name: string;
     loader?: (api: Api) => void;
   }): ToolInstanceInfo {
-    instanceCounter++;
-    const instanceId = `inst-${instanceCounter}`;
+    // Opaque and random, never sequential: a saved workspace stores these ids in
+    // its slot keys, so a fresh session must not be able to mint one that
+    // collides with a saved one and seat a window in the wrong tool's slot.
+    const instanceId = opts.instanceId ?? crypto.randomUUID();
+    if (instances.has(instanceId)) {
+      throw new Error(`instanceId already in use: ${instanceId}`);
+    }
     const info: ToolInstanceInfo = {
       instanceId,
       manifestId: opts.manifestId,
@@ -442,7 +453,6 @@ function build(): TestRuntime {
       toastCenter.reset();
       dialogCenter.reset();
       wm.reset();
-      instanceCounter = 0;
       lastTree = [];
       launchTool({
         manifestId: "__loaded__",

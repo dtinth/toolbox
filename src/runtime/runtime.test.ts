@@ -384,7 +384,7 @@ describe("runtime", () => {
 
     it("two concurrent instances coexist in render() and windowStates", () => {
       const runtime = createTestRuntime();
-      runtime.launchTool({
+      const a = runtime.launchTool({
         manifestId: "a",
         name: "A",
         loader: (api) => {
@@ -393,7 +393,7 @@ describe("runtime", () => {
           };
         },
       });
-      runtime.launchTool({
+      const b = runtime.launchTool({
         manifestId: "b",
         name: "B",
         loader: (api) => {
@@ -406,10 +406,48 @@ describe("runtime", () => {
       expect(runtime.toolInstances()).toHaveLength(2);
       expect(runtime.windowStates.size).toBe(2);
       const ids = [...runtime.windowStates.keys()];
-      const hasA = ids.some((k) => k.startsWith("inst-1::"));
-      const hasB = ids.some((k) => k.startsWith("inst-2::"));
-      expect(hasA).toBeTruthy();
-      expect(hasB).toBeTruthy();
+      expect(ids.some((k) => k.startsWith(`${a.instanceId}::`))).toBeTruthy();
+      expect(ids.some((k) => k.startsWith(`${b.instanceId}::`))).toBeTruthy();
+    });
+
+    it("mints an opaque, unique instanceId per launch", () => {
+      const runtime = createTestRuntime();
+      const a = runtime.launchTool({ manifestId: "a", name: "A", loader: () => {} });
+      const b = runtime.launchTool({ manifestId: "a", name: "A", loader: () => {} });
+      expect(a.instanceId).not.toBe(b.instanceId);
+      // Sequential ids would collide with a saved workspace's ids on restore.
+      expect(a.instanceId).not.toMatch(/^inst-\d+$/u);
+    });
+
+    it("adopts an explicit instanceId so a saved layout's scoped keys still resolve", () => {
+      const runtime = createTestRuntime();
+      const saved = "11111111-2222-4333-8444-555555555555";
+      const info = runtime.launchTool({
+        instanceId: saved,
+        manifestId: "a",
+        name: "A",
+        loader: (api) => {
+          api.onRender = () => {
+            api.ui.label("A");
+          };
+        },
+      });
+      expect(info.instanceId).toBe(saved);
+      runtime.render();
+      expect([...runtime.windowStates.keys()]).toContain(`${saved}::__main__`);
+    });
+
+    it("rejects an instanceId that is already in use", () => {
+      const runtime = createTestRuntime();
+      const a = runtime.launchTool({ manifestId: "a", name: "A", loader: () => {} });
+      expect(() =>
+        runtime.launchTool({
+          instanceId: a.instanceId,
+          manifestId: "b",
+          name: "B",
+          loader: () => {},
+        }),
+      ).toThrow("instanceId already in use");
     });
 
     it("closeTool removes the instance and its windows; isEmpty flips back to true", () => {
@@ -437,16 +475,18 @@ describe("runtime", () => {
       runtime.closeTool(a.instanceId);
       expect(runtime.toolInstances()).toHaveLength(1);
       expect(runtime.toolInstances()[0].instanceId).toBe(b.instanceId);
-      expect([...runtime.windowStates.keys()].some((k) => k.startsWith("inst-1::"))).toBeFalsy();
+      expect(
+        [...runtime.windowStates.keys()].some((k) => k.startsWith(`${a.instanceId}::`)),
+      ).toBeFalsy();
       runtime.closeTool(b.instanceId);
       expect(runtime.toolInstances()).toHaveLength(0);
       expect(runtime.windowStates.size).toBe(0);
       expect(runtime.isEmpty).toBeTruthy();
     });
 
-    it("windowStates keys are scoped per instance (inst-N::originalId)", () => {
+    it("windowStates keys are scoped per instance (instanceId::originalId)", () => {
       const runtime = createTestRuntime();
-      runtime.launchTool({
+      const a = runtime.launchTool({
         manifestId: "a",
         name: "A",
         loader: (api) => {
@@ -455,7 +495,7 @@ describe("runtime", () => {
           };
         },
       });
-      runtime.launchTool({
+      const b = runtime.launchTool({
         manifestId: "b",
         name: "B",
         loader: (api) => {
@@ -466,13 +506,13 @@ describe("runtime", () => {
       });
       runtime.render();
       const keys = [...runtime.windowStates.keys()];
-      expect(keys).toContain("inst-1::__main__");
-      expect(keys).toContain("inst-2::__main__");
+      expect(keys).toContain(`${a.instanceId}::__main__`);
+      expect(keys).toContain(`${b.instanceId}::__main__`);
     });
 
     it("activeWindowId returns the scoped id of the topmost window", () => {
       const runtime = createTestRuntime();
-      runtime.launchTool({
+      const a = runtime.launchTool({
         manifestId: "a",
         name: "A",
         loader: (api) => {
@@ -481,7 +521,7 @@ describe("runtime", () => {
           };
         },
       });
-      runtime.launchTool({
+      const b = runtime.launchTool({
         manifestId: "b",
         name: "B",
         loader: (api) => {
@@ -493,7 +533,7 @@ describe("runtime", () => {
       runtime.render();
       const active = runtime.activeWindowId;
       expect(active).toBeTruthy();
-      expect(active).toMatch(/^inst-\d+::__main__$/u);
+      expect([`${a.instanceId}::__main__`, `${b.instanceId}::__main__`]).toContain(active);
     });
 
     it("toasts from two instances aggregate and can be dismissed", () => {
