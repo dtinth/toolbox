@@ -6,6 +6,42 @@ import { type ToolModule } from "./tool-loader.ts";
 
 const noop = () => {};
 
+const declareLabel = (api: Api): void => {
+  api.onRender = () => {
+    api.ui.label("hi");
+  };
+};
+
+// A tool whose sub-window comes and goes, mirroring tools/multi-window: flip a
+// flag, then ask for a redraw. The declarator decides each frame whether the
+// window exists, and toggling it must not lose where the user put it.
+function toggleTool(): {
+  runtime: ReturnType<typeof createTestRuntime>;
+  open: () => void;
+  shut: () => void;
+} {
+  let showSub = true;
+  let toolApi: Api;
+  const runtime = createTestRuntime();
+  runtime.loadTool((api) => {
+    toolApi = api;
+    api.onRender = () => {
+      api.ui.label("main");
+      if (showSub) {
+        api.ui.window("sub", "Sub", () => {
+          api.ui.label("sub");
+        });
+      }
+    };
+  });
+  const set = (value: boolean) => () => {
+    showSub = value;
+    toolApi.requestUpdate();
+    runtime.render();
+  };
+  return { runtime, open: set(true), shut: set(false) };
+}
+
 describe("runtime", () => {
   it("passes an api object with onRender, ui, and requestUpdate", () => {
     const runtime = createTestRuntime();
@@ -237,6 +273,48 @@ describe("runtime", () => {
     expect(toasts[0].loading).toBeTruthy();
     expect(toasts[1].message).toBe("two");
     expect(toasts[1].loading).toBeFalsy();
+  });
+
+  describe("dormancy", () => {
+    it("keeps the slot when a tool stops declaring a window", () => {
+      const { runtime, open, shut } = toggleTool();
+      open();
+      const id = [...runtime.slots.keys()].find((k) => k.endsWith("::sub"))!;
+      shut();
+      expect(runtime.slots.has(id)).toBeTruthy();
+      expect(runtime.slots.get(id)!.present).toBeFalsy();
+    });
+
+    it("returns a re-declared window to exactly where the user left it", () => {
+      const { runtime, open, shut } = toggleTool();
+      open();
+      const id = [...runtime.slots.keys()].find((k) => k.endsWith("::sub"))!;
+      runtime.moveWindow(id, 412, 314);
+      shut();
+      open();
+      expect(runtime.slots.get(id)).toMatchObject({ x: 412, y: 314, present: true });
+    });
+
+    it("never reports a dormant window as active", () => {
+      const { runtime, open, shut } = toggleTool();
+      open();
+      const subId = [...runtime.slots.keys()].find((k) => k.endsWith("::sub"))!;
+      runtime.focusWindow(subId);
+      expect(runtime.activeWindowId).toBe(subId);
+      shut();
+      expect(runtime.activeWindowId).not.toBe(subId);
+      expect(runtime.activeWindowId).toMatch(/::__main__$/u);
+    });
+
+    it("renderInstance does not make another instance's windows dormant", () => {
+      const runtime = createTestRuntime();
+      const a = runtime.launchTool({ manifestId: "t", name: "A", loader: declareLabel });
+      const b = runtime.launchTool({ manifestId: "t", name: "B", loader: declareLabel });
+      runtime.render();
+      // Per-instance rendering (ADR-0008) redraws one instance on its own.
+      runtime.renderInstance(a.instanceId);
+      expect(runtime.slots.get(`${b.instanceId}::__main__`)!.present).toBeTruthy();
+    });
   });
 
   describe("slots", () => {

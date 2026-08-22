@@ -84,6 +84,62 @@ describe("window-manager", () => {
     });
   });
 
+  describe("presence", () => {
+    it("marks every id in the call present", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a", "win-b"]);
+      expect(wm.slots.get("win-a")!.present).toBeTruthy();
+      expect(wm.slots.get("win-b")!.present).toBeTruthy();
+    });
+
+    it("makes a known slot dormant when its window is no longer declared", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a", "win-b"]);
+      wm.place(["win-a"]);
+      expect(wm.slots.get("win-b")!.present).toBeFalsy();
+    });
+
+    it("keeps a dormant slot's geometry so the window returns where it was", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a", "win-b"]);
+      wm.move("win-b", 640, 480);
+      const z = wm.slots.get("win-b")!.zIndex;
+      wm.place(["win-a"]);
+      wm.place(["win-a", "win-b"]);
+      const b = wm.slots.get("win-b")!;
+      expect(b.present).toBeTruthy();
+      expect(b.x).toBe(640);
+      expect(b.y).toBe(480);
+      expect(b.zIndex).toBe(z);
+    });
+
+    it("keeps a dormant slot in the map rather than deleting it", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a", "win-b"]);
+      wm.place(["win-a"]);
+      expect(wm.slots.has("win-b")).toBeTruthy();
+      expect(wm.slots.size).toBe(2);
+    });
+
+    it("only touches slots under the given scope", () => {
+      // renderInstance() places one instance's windows at a time, so an
+      // unscoped sweep would mark every other instance's windows dormant.
+      const wm = createWindowManager();
+      wm.place(["inst-1::main", "inst-1::sub", "inst-2::main"]);
+      wm.place(["inst-1::main"], "inst-1::");
+      expect(wm.slots.get("inst-1::sub")!.present).toBeFalsy();
+      expect(wm.slots.get("inst-2::main")!.present).toBeTruthy();
+    });
+
+    it("marks an instance's every window dormant when it declares none", () => {
+      const wm = createWindowManager();
+      wm.place(["inst-1::main", "inst-2::main"]);
+      wm.place([], "inst-1::");
+      expect(wm.slots.get("inst-1::main")!.present).toBeFalsy();
+      expect(wm.slots.get("inst-2::main")!.present).toBeTruthy();
+    });
+  });
+
   describe("focus", () => {
     it("raises a window to have the highest zIndex", () => {
       const wm = createWindowManager();
@@ -102,6 +158,33 @@ describe("window-manager", () => {
       const changed = wm.focus("win-b");
       expect(changed).toBeFalsy();
       expect(wm.slots.get("win-b")!.zIndex).toBe(zb);
+    });
+
+    it("focus on a dormant slot is a no-op and returns false", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a", "win-b"]);
+      wm.place(["win-b"]);
+      const z = wm.slots.get("win-a")!.zIndex;
+      expect(wm.focus("win-a")).toBeFalsy();
+      expect(wm.slots.get("win-a")!.zIndex).toBe(z);
+    });
+
+    it("still raises a present slot when a dormant one sits above it", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a", "win-b", "win-c"]);
+      // win-c is on top, then stops being declared.
+      wm.place(["win-a", "win-b"]);
+      expect(wm.focus("win-a")).toBeTruthy();
+      expect(wm.activeId()).toBe("win-a");
+    });
+
+    it("treats the top present slot as top, ignoring a dormant one above it", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a", "win-b", "win-c"]);
+      wm.place(["win-a", "win-b"]);
+      // win-b is now the highest window anyone can see, so there is nothing to
+      // raise — even though dormant win-c still holds a higher zIndex.
+      expect(wm.focus("win-b")).toBeFalsy();
     });
 
     it("focus on an unknown id is a no-op and returns false", () => {
@@ -134,6 +217,21 @@ describe("window-manager", () => {
       wm.place(["win-a", "win-b"]);
       wm.focus("win-a");
       expect(wm.activeId()).toBe("win-a");
+    });
+
+    it("skips dormant slots, so focus never lands on an undrawn window", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a", "win-b"]);
+      expect(wm.activeId()).toBe("win-b");
+      wm.place(["win-a"]);
+      expect(wm.activeId()).toBe("win-a");
+    });
+
+    it("returns null when every slot is dormant", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a", "win-b"]);
+      wm.place([]);
+      expect(wm.activeId()).toBeNull();
     });
 
     it("returns the single window when only one exists", () => {

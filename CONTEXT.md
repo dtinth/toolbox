@@ -22,6 +22,22 @@ Windows are in-app by default; the runtime provides a pop-out control that
 moves a window into a real browser popup. Future: PiP.
 _Avoid_: pane, panel, view, frame
 
+**Slot**:
+The durable, id-keyed seat a **Window** occupies, owned by the **Window
+manager** and keyed by the scoped id `${instanceId}::${originalId}`. A Slot
+outlives the Window it holds: the Window exists only for the frames its
+declarator draws it, while the Slot keeps the geometry the user arranged. Each
+Slot carries a `present` flag, re-derived from the declarator every frame and
+never persisted.
+_Avoid_: window state, placement, cell
+
+**Dormant slot**:
+A **Slot** whose `present` is false — the tool is running but is not declaring
+that **Window** this frame. It renders nothing and can never be focused or
+active, but it keeps its position and z-order, so re-declaring the Window
+returns it to exactly where it was. Only closing the tool deletes a Slot.
+_Avoid_: hidden window, closed window, stale slot
+
 **Tool source**:
 TypeScript/JSX source under `tools/<id>/` in the repo. Compiled to plain ES
 modules under `public/tools/<id>/index.js` by a build step (Vite library mode,

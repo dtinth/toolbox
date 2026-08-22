@@ -384,8 +384,13 @@ function build(): TestRuntime {
     }
     const windows = instanceWindows(instance);
     // Keep lastTree/lastButton coherent for callers that only drive per-instance
-    // rendering; placement is idempotent per id.
-    wm.place(windows.map((w) => w.id));
+    // rendering; placement is idempotent per id. Scope the dormancy sweep to
+    // this instance — these are the only windows this call speaks for, and an
+    // unscoped sweep would declare every other instance's windows dormant.
+    wm.place(
+      windows.map((w) => w.id),
+      instancePrefix(instanceId),
+    );
     const active = wm.activeId();
     return toPreactInstance(windows, wm.slots, active, focusWindow, moveWindow);
   }
