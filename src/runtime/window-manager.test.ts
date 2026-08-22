@@ -18,7 +18,7 @@ describe("window-manager", () => {
     it("places the first window (index 0) centered with offset=0 and zIndex=0", () => {
       const wm = createWindowManager();
       wm.place(["win-a"]);
-      const state = wm.states.get("win-a")!;
+      const state = wm.slots.get("win-a")!;
       const cx = 800 / 2 - 150; // 250
       const cy = 600 / 2 - 100; // 200
       expect(state.x).toBe(cx);
@@ -29,8 +29,8 @@ describe("window-manager", () => {
     it("places the second window (index 1) with offset=(i-1)*30=0 and zIndex > 0", () => {
       const wm = createWindowManager();
       wm.place(["win-a", "win-b"]);
-      const a = wm.states.get("win-a")!;
-      const b = wm.states.get("win-b")!;
+      const a = wm.slots.get("win-a")!;
+      const b = wm.slots.get("win-b")!;
       const cx = 800 / 2 - 150;
       const cy = 600 / 2 - 100;
       // index=1 → offset = (1-1)*30 = 0
@@ -44,7 +44,7 @@ describe("window-manager", () => {
       wm.place(["win-a", "win-b", "win-c"]);
       const cx = 800 / 2 - 150;
       const cy = 600 / 2 - 100;
-      const c = wm.states.get("win-c")!;
+      const c = wm.slots.get("win-c")!;
       expect(c.x).toBe(cx + 30);
       expect(c.y).toBe(cy + 30);
     });
@@ -52,9 +52,9 @@ describe("window-manager", () => {
     it("cascades z-order with each additional window higher than the previous", () => {
       const wm = createWindowManager();
       wm.place(["a", "b", "c"]);
-      const za = wm.states.get("a")!.zIndex;
-      const zb = wm.states.get("b")!.zIndex;
-      const zc = wm.states.get("c")!.zIndex;
+      const za = wm.slots.get("a")!.zIndex;
+      const zb = wm.slots.get("b")!.zIndex;
+      const zc = wm.slots.get("c")!.zIndex;
       expect(za).toBe(0);
       expect(zb).toBeLessThan(zc);
     });
@@ -62,11 +62,11 @@ describe("window-manager", () => {
     it("does not re-place a window that already has state", () => {
       const wm = createWindowManager();
       wm.place(["win-a"]);
-      const original = { ...wm.states.get("win-a")! };
+      const original = { ...wm.slots.get("win-a")! };
       // Move the window so we can detect if place() overwrites it
       wm.move("win-a", 999, 888);
       wm.place(["win-a"]);
-      const after = wm.states.get("win-a")!;
+      const after = wm.slots.get("win-a")!;
       expect(after.x).toBe(999);
       expect(after.y).toBe(888);
       // zIndex unchanged too
@@ -78,9 +78,9 @@ describe("window-manager", () => {
       wm.place(["win-a"]);
       wm.place(["win-a", "win-b"]);
       // win-a should be unchanged
-      expect(wm.states.get("win-a")!.zIndex).toBe(0);
+      expect(wm.slots.get("win-a")!.zIndex).toBe(0);
       // win-b should now exist
-      expect(wm.states.has("win-b")).toBeTruthy();
+      expect(wm.slots.has("win-b")).toBeTruthy();
     });
   });
 
@@ -88,20 +88,20 @@ describe("window-manager", () => {
     it("raises a window to have the highest zIndex", () => {
       const wm = createWindowManager();
       wm.place(["win-a", "win-b"]);
-      const zb = wm.states.get("win-b")!.zIndex;
+      const zb = wm.slots.get("win-b")!.zIndex;
       // win-a starts lower; focus it
       const changed = wm.focus("win-a");
       expect(changed).toBeTruthy();
-      expect(wm.states.get("win-a")!.zIndex).toBeGreaterThan(zb);
+      expect(wm.slots.get("win-a")!.zIndex).toBeGreaterThan(zb);
     });
 
     it("focus on the already-top window leaves zIndex unchanged and returns false", () => {
       const wm = createWindowManager();
       wm.place(["win-a", "win-b"]);
-      const zb = wm.states.get("win-b")!.zIndex;
+      const zb = wm.slots.get("win-b")!.zIndex;
       const changed = wm.focus("win-b");
       expect(changed).toBeFalsy();
-      expect(wm.states.get("win-b")!.zIndex).toBe(zb);
+      expect(wm.slots.get("win-b")!.zIndex).toBe(zb);
     });
 
     it("focus on an unknown id is a no-op and returns false", () => {
@@ -112,7 +112,7 @@ describe("window-manager", () => {
         changed = wm.focus("unknown");
       }).not.toThrow();
       expect(changed).toBeFalsy();
-      expect(wm.states.size).toBe(1);
+      expect(wm.slots.size).toBe(1);
     });
   });
 
@@ -148,8 +148,8 @@ describe("window-manager", () => {
       const wm = createWindowManager();
       wm.place(["win-a"]);
       wm.move("win-a", 123, 456);
-      expect(wm.states.get("win-a")!.x).toBe(123);
-      expect(wm.states.get("win-a")!.y).toBe(456);
+      expect(wm.slots.get("win-a")!.x).toBe(123);
+      expect(wm.slots.get("win-a")!.y).toBe(456);
     });
 
     it("move on an unknown id is a no-op", () => {
@@ -162,9 +162,9 @@ describe("window-manager", () => {
     it("does not change zIndex when moving", () => {
       const wm = createWindowManager();
       wm.place(["win-a"]);
-      const zBefore = wm.states.get("win-a")!.zIndex;
+      const zBefore = wm.slots.get("win-a")!.zIndex;
       wm.move("win-a", 50, 50);
-      expect(wm.states.get("win-a")!.zIndex).toBe(zBefore);
+      expect(wm.slots.get("win-a")!.zIndex).toBe(zBefore);
     });
   });
 
@@ -173,25 +173,25 @@ describe("window-manager", () => {
       const wm = createWindowManager();
       wm.place(["inst-1::main", "inst-1::sub", "inst-2::main"]);
       wm.forget("inst-1::");
-      expect(wm.states.has("inst-1::main")).toBeFalsy();
-      expect(wm.states.has("inst-1::sub")).toBeFalsy();
-      expect(wm.states.has("inst-2::main")).toBeTruthy();
+      expect(wm.slots.has("inst-1::main")).toBeFalsy();
+      expect(wm.slots.has("inst-1::sub")).toBeFalsy();
+      expect(wm.slots.has("inst-2::main")).toBeTruthy();
     });
 
     it("forget with a prefix that matches nothing is a no-op", () => {
       const wm = createWindowManager();
       wm.place(["win-a"]);
       wm.forget("does-not-match::");
-      expect(wm.states.size).toBe(1);
+      expect(wm.slots.size).toBe(1);
     });
   });
 
   describe("reset", () => {
-    it("clears all window states", () => {
+    it("clears all slots", () => {
       const wm = createWindowManager();
       wm.place(["win-a", "win-b"]);
       wm.reset();
-      expect(wm.states.size).toBe(0);
+      expect(wm.slots.size).toBe(0);
     });
 
     it("resets the z counter so the next placed window starts from zIndex 0", () => {
@@ -201,17 +201,17 @@ describe("window-manager", () => {
       wm.focus("win-a");
       wm.reset();
       wm.place(["new-a"]);
-      expect(wm.states.get("new-a")!.zIndex).toBe(0);
+      expect(wm.slots.get("new-a")!.zIndex).toBe(0);
     });
   });
 
   describe("states", () => {
     it("states is a ReadonlyMap that reflects current placements", () => {
       const wm = createWindowManager();
-      expect(wm.states.size).toBe(0);
+      expect(wm.slots.size).toBe(0);
       wm.place(["win-a"]);
-      expect(wm.states.size).toBe(1);
-      expect(wm.states.get("win-a")).toMatchObject({
+      expect(wm.slots.size).toBe(1);
+      expect(wm.slots.get("win-a")).toMatchObject({
         x: expect.any(Number),
         y: expect.any(Number),
         zIndex: 0,

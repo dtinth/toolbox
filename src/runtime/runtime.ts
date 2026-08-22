@@ -9,7 +9,7 @@ import {
   instancePrefix,
   scopeId,
   type WindowManager,
-  type WindowState,
+  type Slot,
 } from "./window-manager.ts";
 import { createToastCenter, type Toast, type ToastHandle } from "./toast-center.ts";
 import {
@@ -19,7 +19,7 @@ import {
   type PickRequest,
 } from "./dialog-center.ts";
 
-export type { WindowState } from "./window-manager.ts";
+export type { Slot } from "./window-manager.ts";
 export type { Toast, ToastHandle } from "./toast-center.ts";
 export type {
   Dialog,
@@ -95,7 +95,7 @@ export interface Runtime {
   resolvePick: (id: number, index: number | null) => void;
   pendingInputs: () => InputRequest[];
   resolveInput: (id: number, value: string | null) => void;
-  windowStates: ReadonlyMap<string, WindowState>;
+  slots: ReadonlyMap<string, Slot>;
   focusWindow: (id: string) => void;
   moveWindow: (id: string, x: number, y: number) => void;
   activeWindowId: string | null;
@@ -371,7 +371,7 @@ function build(): TestRuntime {
     lastButtonRef = findLastButton(allWindows);
     wm.place(allWindows.map((w) => w.id));
     const active = wm.activeId();
-    return toPreact(allWindows, wm.states, active, focusWindow, moveWindow);
+    return toPreact(allWindows, wm.slots, active, focusWindow, moveWindow);
   }
 
   // Per-instance composition (one Preact root per instance, ADR-0008). Returns
@@ -387,7 +387,7 @@ function build(): TestRuntime {
     // rendering; placement is idempotent per id.
     wm.place(windows.map((w) => w.id));
     const active = wm.activeId();
-    return toPreactInstance(windows, wm.states, active, focusWindow, moveWindow);
+    return toPreactInstance(windows, wm.slots, active, focusWindow, moveWindow);
   }
 
   function requestUpdate(): void {
@@ -506,8 +506,8 @@ function build(): TestRuntime {
     get updateCount() {
       return updates;
     },
-    get windowStates() {
-      return wm.states;
+    get slots() {
+      return wm.slots;
     },
     focusWindow,
     moveWindow,

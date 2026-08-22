@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { toPreact, renderNode, windowToPreact, type RenderContext } from "./renderer.tsx";
 import { type WindowNode, type ChildNode } from "./collector.ts";
-import { type WindowState } from "./runtime.ts";
+import { type Slot } from "./runtime.ts";
 import { h, type VNode } from "preact";
 
 const noop = () => {};
@@ -9,8 +9,8 @@ const buttonOnClick = () => {};
 
 // Build a RenderContext + an inert drag (containerRef/handler) for testing the
 // pure window markup directly, without mounting the Window component.
-function makeCtx(states: Map<string, WindowState>, active: string | null = null): RenderContext {
-  return { windowStates: states, activeWindowId: active, onFocusWindow: noop, onMoveWindow: noop };
+function makeCtx(states: Map<string, Slot>, active: string | null = null): RenderContext {
+  return { slots: states, activeWindowId: active, onFocusWindow: noop, onMoveWindow: noop };
 }
 const inertDrag = { containerRef: { current: null }, onTitlePointerDown: noop };
 
@@ -20,7 +20,7 @@ describe("toPreact", () => {
       { kind: "window", id: "a", title: "A", children: [], menus: [] },
       { kind: "window", id: "b", title: "B", children: [], menus: [] },
     ];
-    const states = new Map<string, WindowState>();
+    const states = new Map<string, Slot>();
     const el = toPreact(tree, states, null, noop, noop) as any;
     expect(el.type).toBe("div");
     const children = el.props.children;

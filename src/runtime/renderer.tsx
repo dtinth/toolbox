@@ -2,7 +2,7 @@ import { Fragment, h, render, type VNode } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 import { type ChildNode, type MenuNode, type Node, type WindowNode } from "./collector.ts";
-import { type WindowState } from "./runtime.ts";
+import { type Slot } from "./runtime.ts";
 import { filesFromClipboardItems, filesFromDataTransfer } from "./file-intake.ts";
 
 /**
@@ -10,7 +10,7 @@ import { filesFromClipboardItems, filesFromDataTransfer } from "./file-intake.ts
  * Pure node rendering (labels, buttons, inputs, etc.) does not receive this context.
  */
 export interface RenderContext {
-  windowStates: ReadonlyMap<string, WindowState>;
+  slots: ReadonlyMap<string, Slot>;
   activeWindowId: string | null;
   onFocusWindow: (id: string) => void;
   onMoveWindow: (id: string, x: number, y: number) => void;
@@ -811,7 +811,7 @@ function useWindowDrag(w: WindowNode, ctx: RenderContext): WindowDrag {
       return;
     }
 
-    const state = ctx.windowStates.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
+    const state = ctx.slots.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
     const startX = e.clientX;
     const startY = e.clientY;
     const startLeft = state.x;
@@ -864,8 +864,8 @@ function Window({ w, ctx }: { w: WindowNode; ctx: RenderContext }): VNode {
 }
 
 export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDrag): VNode {
-  const { windowStates, activeWindowId, onFocusWindow } = ctx;
-  const state = windowStates.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
+  const { slots, activeWindowId, onFocusWindow } = ctx;
+  const state = slots.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
   const isActive = w.id === activeWindowId;
 
   const titleBarChildren: VNode[] = [
@@ -916,12 +916,12 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDr
 
 export function toPreact(
   windows: WindowNode[],
-  windowStates: ReadonlyMap<string, WindowState>,
+  slots: ReadonlyMap<string, Slot>,
   activeWindowId: string | null,
   onFocusWindow: (id: string) => void,
   onMoveWindow: (id: string, x: number, y: number) => void,
 ): VNode {
-  const ctx: RenderContext = { windowStates, activeWindowId, onFocusWindow, onMoveWindow };
+  const ctx: RenderContext = { slots, activeWindowId, onFocusWindow, onMoveWindow };
   return h("div", {
     class: "fixed inset-0",
     children: windows.map((w) => h(Window, { w, ctx, key: w.id })),
@@ -937,11 +937,11 @@ export function toPreact(
  */
 export function toPreactInstance(
   windows: WindowNode[],
-  windowStates: ReadonlyMap<string, WindowState>,
+  slots: ReadonlyMap<string, Slot>,
   activeWindowId: string | null,
   onFocusWindow: (id: string) => void,
   onMoveWindow: (id: string, x: number, y: number) => void,
 ): VNode {
-  const ctx: RenderContext = { windowStates, activeWindowId, onFocusWindow, onMoveWindow };
+  const ctx: RenderContext = { slots, activeWindowId, onFocusWindow, onMoveWindow };
   return h(Fragment, null, ...windows.map((w) => h(Window, { w, ctx, key: w.id }))) as VNode;
 }

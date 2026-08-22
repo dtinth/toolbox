@@ -239,7 +239,7 @@ describe("runtime", () => {
     expect(toasts[1].loading).toBeFalsy();
   });
 
-  describe("window states", () => {
+  describe("slots", () => {
     it("focusWindow(id) increases the window's zIndex above all others", () => {
       const runtime = createTestRuntime();
       runtime.loadTool((api) => {
@@ -253,7 +253,7 @@ describe("runtime", () => {
         };
       });
       runtime.render();
-      const wm = runtime.windowStates;
+      const wm = runtime.slots;
       const ids = [...wm.keys()].filter((k) => k.endsWith("::sub1") || k.endsWith("::sub2"));
       const id1 = ids.find((k) => k.endsWith("::sub1"))!;
       const id2 = ids.find((k) => k.endsWith("::sub2"))!;
@@ -276,14 +276,14 @@ describe("runtime", () => {
         };
       });
       runtime.render();
-      const id = [...runtime.windowStates.keys()].find((k) => k.endsWith("::sub1"))!;
-      const state = runtime.windowStates.get(id)!;
+      const id = [...runtime.slots.keys()].find((k) => k.endsWith("::sub1"))!;
+      const state = runtime.slots.get(id)!;
       const zBefore = state.zIndex;
       runtime.focusWindow(id);
       expect(state.zIndex).toBe(zBefore);
     });
 
-    it("windowStates returns positions for all known windows after render", () => {
+    it("slots returns positions for all known windows after render", () => {
       const runtime = createTestRuntime();
       runtime.loadTool((api) => {
         api.onRender = () => {
@@ -295,12 +295,12 @@ describe("runtime", () => {
         };
       });
       runtime.render();
-      const ids = [...runtime.windowStates.keys()];
+      const ids = [...runtime.slots.keys()];
       expect(ids.some((k) => k.endsWith("::__main__"))).toBeTruthy();
       expect(ids.some((k) => k.endsWith("::sub1"))).toBeTruthy();
-      expect(runtime.windowStates.size).toBe(2);
+      expect(runtime.slots.size).toBe(2);
       const mainId = ids.find((k) => k.endsWith("::__main__"))!;
-      const main = runtime.windowStates.get(mainId)!;
+      const main = runtime.slots.get(mainId)!;
       expect(main.x).toBeTypeOf("number");
       expect(main.y).toBeTypeOf("number");
       expect(main.zIndex).toBeTypeOf("number");
@@ -319,13 +319,13 @@ describe("runtime", () => {
         };
       });
       runtime.render();
-      const ids = [...runtime.windowStates.keys()];
+      const ids = [...runtime.slots.keys()];
       const mainId = ids.find((k) => k.endsWith("::__main__"))!;
       const sub1Id = ids.find((k) => k.endsWith("::sub1"))!;
       const sub2Id = ids.find((k) => k.endsWith("::sub2"))!;
-      const main = runtime.windowStates.get(mainId)!;
-      const sub1 = runtime.windowStates.get(sub1Id)!;
-      const sub2 = runtime.windowStates.get(sub2Id)!;
+      const main = runtime.slots.get(mainId)!;
+      const sub1 = runtime.slots.get(sub1Id)!;
+      const sub2 = runtime.slots.get(sub2Id)!;
       const cx = 800 / 2 - 150;
       const cy = 600 / 2 - 100;
       expect(main.x).toBe(cx);
@@ -336,7 +336,7 @@ describe("runtime", () => {
       expect(sub2.y).toBe(cy + 30);
     });
 
-    it("Loading a new tool resets window states", () => {
+    it("Loading a new tool resets slots", () => {
       const runtime = createTestRuntime();
       runtime.loadTool((api) => {
         api.onRender = () => {
@@ -344,11 +344,11 @@ describe("runtime", () => {
         };
       });
       runtime.render();
-      expect(runtime.windowStates.size).toBeGreaterThan(0);
+      expect(runtime.slots.size).toBeGreaterThan(0);
       runtime.loadTool((api) => {
         api.onRender = () => {};
       });
-      expect(runtime.windowStates.size).toBe(0);
+      expect(runtime.slots.size).toBe(0);
     });
   });
 
@@ -382,7 +382,7 @@ describe("runtime", () => {
       expect(runtime.isEmpty).toBeFalsy();
     });
 
-    it("two concurrent instances coexist in render() and windowStates", () => {
+    it("two concurrent instances coexist in render() and slots", () => {
       const runtime = createTestRuntime();
       const a = runtime.launchTool({
         manifestId: "a",
@@ -404,8 +404,8 @@ describe("runtime", () => {
       });
       runtime.render();
       expect(runtime.toolInstances()).toHaveLength(2);
-      expect(runtime.windowStates.size).toBe(2);
-      const ids = [...runtime.windowStates.keys()];
+      expect(runtime.slots.size).toBe(2);
+      const ids = [...runtime.slots.keys()];
       expect(ids.some((k) => k.startsWith(`${a.instanceId}::`))).toBeTruthy();
       expect(ids.some((k) => k.startsWith(`${b.instanceId}::`))).toBeTruthy();
     });
@@ -434,7 +434,7 @@ describe("runtime", () => {
       });
       expect(info.instanceId).toBe(saved);
       runtime.render();
-      expect([...runtime.windowStates.keys()]).toContain(`${saved}::__main__`);
+      expect([...runtime.slots.keys()]).toContain(`${saved}::__main__`);
     });
 
     it("rejects an instanceId that is already in use", () => {
@@ -475,16 +475,14 @@ describe("runtime", () => {
       runtime.closeTool(a.instanceId);
       expect(runtime.toolInstances()).toHaveLength(1);
       expect(runtime.toolInstances()[0].instanceId).toBe(b.instanceId);
-      expect(
-        [...runtime.windowStates.keys()].some((k) => k.startsWith(`${a.instanceId}::`)),
-      ).toBeFalsy();
+      expect([...runtime.slots.keys()].some((k) => k.startsWith(`${a.instanceId}::`))).toBeFalsy();
       runtime.closeTool(b.instanceId);
       expect(runtime.toolInstances()).toHaveLength(0);
-      expect(runtime.windowStates.size).toBe(0);
+      expect(runtime.slots.size).toBe(0);
       expect(runtime.isEmpty).toBeTruthy();
     });
 
-    it("windowStates keys are scoped per instance (instanceId::originalId)", () => {
+    it("slots keys are scoped per instance (instanceId::originalId)", () => {
       const runtime = createTestRuntime();
       const a = runtime.launchTool({
         manifestId: "a",
@@ -505,7 +503,7 @@ describe("runtime", () => {
         },
       });
       runtime.render();
-      const keys = [...runtime.windowStates.keys()];
+      const keys = [...runtime.slots.keys()];
       expect(keys).toContain(`${a.instanceId}::__main__`);
       expect(keys).toContain(`${b.instanceId}::__main__`);
     });
@@ -592,7 +590,7 @@ describe("runtime", () => {
       });
       runtime.render();
       expect(runtime.toolInstances()).toHaveLength(2);
-      expect(runtime.windowStates.size).toBe(2);
+      expect(runtime.slots.size).toBe(2);
       runtime.loadTool((api) => {
         api.onRender = () => {
           api.ui.label("loaded");
@@ -600,7 +598,7 @@ describe("runtime", () => {
       });
       runtime.render();
       expect(runtime.toolInstances()).toHaveLength(1);
-      expect(runtime.windowStates.size).toBe(1);
+      expect(runtime.slots.size).toBe(1);
     });
 
     it("per-instance api.dispose() removes that instance; last disposal flips disposed true", () => {

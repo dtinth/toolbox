@@ -1,7 +1,7 @@
 // Window manager: owns geometry, z-order, focus, placement, and scoped-id encoding
 // for all windows across all tool instances.
 
-export interface WindowState {
+export interface Slot {
   x: number;
   y: number;
   zIndex: number;
@@ -18,7 +18,7 @@ export function instancePrefix(instanceId: string): string {
 
 export interface WindowManager {
   /**
-   * Ensure every id in orderedIds has a WindowState. For ids that don't yet
+   * Ensure every id in orderedIds has a Slot. For ids that don't yet
    * have one, apply the centering + cascade placement rule:
    *  - center: (innerWidth/2 - 150, innerHeight/2 - 100)
    *  - offset: index === 0 → 0, else (index - 1) * 30
@@ -43,25 +43,25 @@ export interface WindowManager {
   /** Drop all windows whose id starts with the given prefix. */
   forget: (prefix: string) => void;
 
-  /** Clear all state and reset the z counter. */
+  /** Clear all slot and reset the z counter. */
   reset: () => void;
 
-  /** Read-only view of all known window states. */
-  readonly states: ReadonlyMap<string, WindowState>;
+  /** Read-only view of all known slots. */
+  readonly slots: ReadonlyMap<string, Slot>;
 }
 
 export function createWindowManager(): WindowManager {
-  const states = new Map<string, WindowState>();
+  const slots = new Map<string, Slot>();
   let zCounter = 0;
 
   function place(orderedIds: string[]): void {
     for (let i = 0; i < orderedIds.length; i++) {
       const id = orderedIds[i];
-      if (!states.has(id)) {
+      if (!slots.has(id)) {
         const cx = (globalThis.window?.innerWidth ?? 800) / 2 - 150;
         const cy = (globalThis.window?.innerHeight ?? 600) / 2 - 100;
         const offset = i === 0 ? 0 : (i - 1) * 30;
-        states.set(id, {
+        slots.set(id, {
           x: cx + offset,
           y: cy + offset,
           zIndex: i === 0 ? 0 : ++zCounter,
@@ -71,32 +71,32 @@ export function createWindowManager(): WindowManager {
   }
 
   function focus(id: string): boolean {
-    const state = states.get(id);
-    if (!state) {
+    const slot = slots.get(id);
+    if (!slot) {
       return false;
     }
-    const maxZ = Math.max(...Array.from(states.values(), (s: WindowState) => s.zIndex), 0);
-    if (state.zIndex < maxZ) {
-      state.zIndex = ++zCounter;
+    const maxZ = Math.max(...Array.from(slots.values(), (s: Slot) => s.zIndex), 0);
+    if (slot.zIndex < maxZ) {
+      slot.zIndex = ++zCounter;
       return true;
     }
     return false;
   }
 
   function move(id: string, x: number, y: number): void {
-    const state = states.get(id);
-    if (state) {
-      state.x = x;
-      state.y = y;
+    const slot = slots.get(id);
+    if (slot) {
+      slot.x = x;
+      slot.y = y;
     }
   }
 
   function activeId(): string | null {
     let maxZ = -1;
     let active: string | null = null;
-    for (const [id, state] of states) {
-      if (state.zIndex > maxZ) {
-        maxZ = state.zIndex;
+    for (const [id, slot] of slots) {
+      if (slot.zIndex > maxZ) {
+        maxZ = slot.zIndex;
         active = id;
       }
     }
@@ -104,15 +104,15 @@ export function createWindowManager(): WindowManager {
   }
 
   function forget(prefix: string): void {
-    for (const key of states.keys()) {
+    for (const key of slots.keys()) {
       if (key.startsWith(prefix)) {
-        states.delete(key);
+        slots.delete(key);
       }
     }
   }
 
   function reset(): void {
-    states.clear();
+    slots.clear();
     zCounter = 0;
   }
 
@@ -123,8 +123,8 @@ export function createWindowManager(): WindowManager {
     activeId,
     forget,
     reset,
-    get states(): ReadonlyMap<string, WindowState> {
-      return states;
+    get slots(): ReadonlyMap<string, Slot> {
+      return slots;
     },
   };
 }

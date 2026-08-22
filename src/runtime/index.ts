@@ -12,7 +12,7 @@ export type {
   Toast,
   ToastHandle,
   ToolInstanceInfo,
-  WindowState,
+  Slot,
 } from "./runtime.ts";
 export type { Node, WindowNode, Ui } from "./collector.ts";
 export { collect } from "./collector.ts";
