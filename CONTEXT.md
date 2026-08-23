@@ -40,6 +40,34 @@ active, but it keeps its position and z-order, so re-declaring the Window
 returns it to exactly where it was. Only closing the tool deletes a Slot.
 _Avoid_: hidden window, closed window, stale slot
 
+**Layout**:
+The tree that gives docked **Windows** their rectangles (`src/runtime/layout-tree.ts`):
+splits that run as a `row` or a `column`, with a **Pane** at each leaf. Owned by
+the user, not by any tool. Sizes are relative weights that add up to 1, never
+pixels, so one tree fits any viewport; `measure` turns them into pixels at draw
+time, lifts a pane that falls under its minimum, and shrinks every pane by the
+same ratio when the minimums cannot all fit. Floating Windows are drawn above
+the Layout and are not part of it. Prototype page: `/?lab=layout`.
+_Avoid_: grid, dock tree, split view, workspace
+
+**Pane**:
+A leaf of the **Layout**: a stack of tabs sharing one rectangle, where each tab
+is a **Slot** id. A stack and not a single Window, so a **Dormant slot** is only
+a tab that is not drawn — the Pane keeps its rectangle and the tree never
+reflows. Which tab is in front is durable state and belongs with the geometry.
+A Slot id appears in the Layout at most once; `normalize` keeps the first copy
+and drops the rest.
+_Avoid_: cell, region, area, editor group, panel
+
+**Divider**:
+The boundary between two children of a split, and the control that moves it.
+The line the user sees is one pixel; the area that takes the drag is twenty,
+invisible, and floats above the boundary so it costs no space. Marked up as the
+ARIA window-splitter pattern — a focusable separator carrying `aria-valuenow` —
+and moved by the two arrow keys of its own axis, Home and End. A drag goes past
+a neighbour that is already at its minimum and takes from the next pane along.
+_Avoid_: sash, gutter, resizer, handle
+
 **Tool source**:
 TypeScript/JSX source under `tools/<id>/` in the repo. Compiled to plain ES
 modules under `public/tools/<id>/index.js` by a build step (Vite library mode,
