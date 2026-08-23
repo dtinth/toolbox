@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   dragDivider,
+  keyDelta,
   leaf,
   measure,
+  MIN_PANE_HEIGHT,
+  MIN_PANE_WIDTH,
+  minSize,
   nodeAt,
   normalize,
   pathOfTab,
+  putTab,
   removeTab,
   split,
   splitPane,
@@ -227,6 +232,41 @@ describe("layout-tree", () => {
     });
   });
 
+  describe("putTab", () => {
+    it("puts a new tab into the pane that holds the named tab, and shows it", () => {
+      const tree = split("row", [leaf(["a"]), leaf(["b"])]);
+      const out = putTab(tree, "b", "c") as Extract<LayoutNode, { type: "split" }>;
+      expect(out.children[1]).toStrictEqual({ type: "leaf", tabs: ["b", "c"], activeTab: 1 });
+      expect(out.children[0]).toStrictEqual(leaf(["a"]));
+    });
+
+    it("moves a tab that is already somewhere else, instead of copying it", () => {
+      const tree = split("row", [leaf(["a", "b"]), leaf(["c"])]);
+      const out = putTab(tree, "c", "b") as Extract<LayoutNode, { type: "split" }>;
+      expect(out.children[0]).toStrictEqual(leaf(["a"]));
+      expect(out.children[1]).toStrictEqual({ type: "leaf", tabs: ["c", "b"], activeTab: 1 });
+    });
+
+    it("collapses the pane the tab came from when it held nothing else", () => {
+      const tree = split("row", [leaf(["a"]), leaf(["b"])]);
+      expect(putTab(tree, "b", "a")).toStrictEqual({
+        type: "leaf",
+        tabs: ["b", "a"],
+        activeTab: 1,
+      });
+    });
+
+    it("does nothing when the tab is already in that pane", () => {
+      const tree = leaf(["a", "b"]);
+      expect(putTab(tree, "a", "b")).toStrictEqual(tree);
+    });
+
+    it("does nothing when no pane holds the named tab", () => {
+      const tree = leaf(["a"]);
+      expect(putTab(tree, "zzz", "b")).toStrictEqual(tree);
+    });
+  });
+
   describe("splitPane", () => {
     it("puts the new pane after the old one", () => {
       const out = splitPane(leaf(["a"]), [], "row", leaf(["b"]), "after") as Extract<
@@ -282,6 +322,61 @@ describe("layout-tree", () => {
     it("does nothing when the path names no pane", () => {
       const tree = leaf(["a"]);
       expect(splitPane(tree, [3], "row", leaf(["b"]), "after")).toStrictEqual(tree);
+    });
+  });
+});
+
+describe("layout-tree sizing helpers", () => {
+  describe("minSize", () => {
+    it("gives a pane the floor for the way it is measured", () => {
+      expect(minSize(leaf(["a"]), "row")).toBe(MIN_PANE_WIDTH);
+      expect(minSize(leaf(["a"]), "column")).toBe(MIN_PANE_HEIGHT);
+    });
+
+    it("adds up the children of a split that runs the way it is measured", () => {
+      const tree = split("row", [leaf(["a"]), leaf(["b"])]);
+      expect(minSize(tree, "row")).toBe(MIN_PANE_WIDTH * 2);
+    });
+
+    it("takes the largest child of a split that runs the other way", () => {
+      // Two panes stacked in a column are as wide as one pane, not two.
+      const tree = split("column", [leaf(["a"]), leaf(["b"])]);
+      expect(minSize(tree, "row")).toBe(MIN_PANE_WIDTH);
+    });
+
+    it("goes down through a deep tree", () => {
+      const inner = split("row", [leaf(["b"]), leaf(["c"])]);
+      const tree = split("column", [leaf(["a"]), inner]);
+      expect(minSize(tree, "row")).toBe(MIN_PANE_WIDTH * 2);
+      expect(minSize(tree, "column")).toBe(MIN_PANE_HEIGHT * 2);
+    });
+  });
+
+  describe("keyDelta", () => {
+    it("moves a divider in a row with the left and right keys", () => {
+      expect(keyDelta("ArrowRight", "row", 16)).toBe(16);
+      expect(keyDelta("ArrowLeft", "row", 16)).toBe(-16);
+    });
+
+    it("moves a divider in a column with the up and down keys", () => {
+      expect(keyDelta("ArrowDown", "column", 16)).toBe(16);
+      expect(keyDelta("ArrowUp", "column", 16)).toBe(-16);
+    });
+
+    it("ignores the keys for the other axis, so the page can still scroll", () => {
+      expect(keyDelta("ArrowUp", "row", 16)).toBeNull();
+      expect(keyDelta("ArrowLeft", "column", 16)).toBeNull();
+      expect(keyDelta("Enter", "row", 16)).toBeNull();
+    });
+
+    it("sends the divider as far as it goes with Home and End", () => {
+      expect(keyDelta("Home", "row", 16)).toBe(-Number.POSITIVE_INFINITY);
+      expect(keyDelta("End", "column", 16)).toBe(Number.POSITIVE_INFINITY);
+    });
+
+    it("a drag as far as it goes stops at the minimum, and does not overshoot", () => {
+      const sizes = dragDivider([0.5, 0.5], [200, 200], 1000, 0, keyDelta("End", "row", 16)!);
+      expect(round(measure(sizes, [200, 200], 1000))).toStrictEqual([800, 200]);
     });
   });
 });

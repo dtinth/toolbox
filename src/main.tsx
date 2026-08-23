@@ -3,6 +3,7 @@ import { useState } from "preact/hooks";
 import "./app.css";
 import { EmbedHost, Host } from "./app.tsx";
 import { findManifestEntry } from "./app/host.ts";
+import { LayoutLab } from "./app/layout-lab.tsx";
 import { createRuntime, loadManifest, type Runtime, type ToolModule } from "./runtime/index.ts";
 
 async function loadToolModule(id: string): Promise<ToolModule> {
@@ -14,6 +15,13 @@ function getEmbedToolFromUrl(): string | null {
 }
 
 async function bootstrap() {
+  // The layout lab is a prototype page for the Layout tree, at `/?lab=layout`.
+  // It needs no tool and no runtime, so it comes before the manifest.
+  if (new URLSearchParams(globalThis.location.search).get("lab") === "layout") {
+    render(<LayoutLab />, document.querySelector("#app")!);
+    return;
+  }
+
   const manifest = await loadManifest(async () => {
     const res = await fetch("/tools.json");
     return res.text();

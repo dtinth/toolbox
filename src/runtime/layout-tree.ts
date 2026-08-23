@@ -280,8 +280,11 @@ export function nodeAt(root: LayoutNode, path: LayoutPath): LayoutNode | null {
   return node;
 }
 
-/** Put `next` at `path`, and give back a new tree. */
-function replaceAt(root: LayoutNode, path: LayoutPath, next: LayoutNode): LayoutNode {
+/**
+ * Put `next` at `path`, and give back a new tree. The nodes that are not on the
+ * path are shared with the old tree, not copied.
+ */
+export function replaceAt(root: LayoutNode, path: LayoutPath, next: LayoutNode): LayoutNode {
   if (path.length === 0) {
     return next;
   }
@@ -306,6 +309,47 @@ export function removeTab(root: LayoutNode, tab: string): LayoutNode | null {
   // Keep the same tab in front: an earlier tab going away shifts its index down.
   const activeTab = at < pane.activeTab ? pane.activeTab - 1 : pane.activeTab;
   return normalize(replaceAt(root, path, { type: "leaf", tabs, activeTab }));
+}
+
+/**
+ * Put `tab` into the pane that holds `targetTab`, in front, and repair the tree.
+ *
+ * A tab that is somewhere else already **moves**; it is not copied. A tab may
+ * be in the tree only once, and `normalize` keeps the first copy it finds — so
+ * a copy would leave the tab where it started and quietly drop the new one.
+ * The pane it came from collapses if it held nothing else.
+ *
+ * The destination is named by a tab it holds, not by a path. Taking the tab out
+ * can collapse a split, and a path taken before that can then point at the
+ * wrong pane; a tab id survives the repair.
+ *
+ * Does nothing when the tab is in that pane already, or when no pane holds
+ * `targetTab`.
+ */
+export function putTab(root: LayoutNode, targetTab: string, tab: string): LayoutNode {
+  if (tab === targetTab) {
+    return root;
+  }
+  const home = pathOfTab(root, targetTab);
+  if (home === null) {
+    return root;
+  }
+  const from = pathOfTab(root, tab);
+  if (from !== null && from.join(",") === home.join(",")) {
+    return root;
+  }
+  const pruned = from === null ? root : removeTab(root, tab);
+  if (pruned === null) {
+    return root;
+  }
+  const path = pathOfTab(pruned, targetTab);
+  if (path === null) {
+    return root;
+  }
+  const pane = nodeAt(pruned, path) as LayoutLeaf;
+  const tabs = [...pane.tabs, tab];
+  const next: LayoutLeaf = { type: "leaf", tabs, activeTab: tabs.length - 1 };
+  return normalize(replaceAt(pruned, path, next)) ?? root;
 }
 
 /**
@@ -343,4 +387,57 @@ export function splitPane(
   }
   const pair = position === "after" ? [target, next] : [next, target];
   return normalize(replaceAt(root, path, split(direction, pair))) ?? root;
+}
+
+/**
+ * The smallest a pane may become on a drag. A pane narrower than this has no
+ * room for its tab bar, and a pane shorter than this has no room for content.
+ */
+export const MIN_PANE_WIDTH = 160;
+export const MIN_PANE_HEIGHT = 80;
+
+/**
+ * The smallest this node may become along one axis.
+ *
+ * A split that runs along the axis needs the sum of its children, because they
+ * stand in a line. A split that runs across it needs only its largest child,
+ * because they stand on top of each other. Without this, a divider could squash
+ * a whole nested tree into the space of one pane.
+ */
+export function minSize(node: LayoutNode, direction: SplitDirection): number {
+  if (node.type === "leaf") {
+    return direction === "row" ? MIN_PANE_WIDTH : MIN_PANE_HEIGHT;
+  }
+  const kids = node.children.map((child) => minSize(child, direction));
+  return node.direction === direction ? sum(kids) : Math.max(...kids);
+}
+
+/**
+ * How far a key moves a divider, or null when the key is not ours.
+ *
+ * Only the two keys along the divider's own axis count. The other two must stay
+ * with the page, or the user cannot scroll away from a divider that has focus.
+ * Home and End send the divider as far as it goes; `dragDivider` stops it at
+ * the minimum of the pane it eats into.
+ */
+export function keyDelta(key: string, direction: SplitDirection, step: number): number | null {
+  const back = direction === "row" ? "ArrowLeft" : "ArrowUp";
+  const forward = direction === "row" ? "ArrowRight" : "ArrowDown";
+  switch (key) {
+    case back: {
+      return -step;
+    }
+    case forward: {
+      return step;
+    }
+    case "Home": {
+      return -Number.POSITIVE_INFINITY;
+    }
+    case "End": {
+      return Number.POSITIVE_INFINITY;
+    }
+    default: {
+      return null;
+    }
+  }
 }
