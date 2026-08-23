@@ -306,6 +306,21 @@ describe("runtime", () => {
       expect(runtime.activeWindowId).toMatch(/::__main__$/u);
     });
 
+    // The two causes mean different things: the tool says "not now", the user
+    // says "not here". Only the second one gives up the seat. Decided on #16.
+    it("keeps the slot when the tool withholds a window, drops it when the user closes the tool", () => {
+      const { runtime, open, shut } = toggleTool();
+      open();
+      const subId = [...runtime.slots.keys()].find((k) => k.endsWith("::sub"))!;
+      const instanceId = subId.slice(0, subId.indexOf("::"));
+
+      shut();
+      expect(runtime.slots.has(subId)).toBeTruthy();
+
+      runtime.closeTool(instanceId);
+      expect(runtime.slots.has(subId)).toBeFalsy();
+    });
+
     it("renderInstance does not make another instance's windows dormant", () => {
       const runtime = createTestRuntime();
       const a = runtime.launchTool({ manifestId: "t", name: "A", loader: declareLabel });
