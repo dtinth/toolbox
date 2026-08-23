@@ -31,6 +31,14 @@ export interface Slot {
 export const MIN_WINDOW_WIDTH = 200;
 export const MIN_WINDOW_HEIGHT = 80;
 
+/** Height of the title bar (`h-9` in the renderer), the only part that must
+ * stay on screen: a window whose title bar is off screen cannot be dragged,
+ * focused by pointer, or closed. */
+export const TITLE_BAR_HEIGHT = 36;
+
+/** How far each new window steps down-right from the one before. */
+const CASCADE_STEP = 30;
+
 // Scoped window id format: `${instanceId}::${originalId}`.
 export function scopeId(instanceId: string, originalId: string): string {
   return `${instanceId}::${originalId}`;
@@ -46,7 +54,8 @@ export interface WindowManager {
    * marked present; mark every other known Slot in scope dormant. A brand-new
    * Slot is centred, then stepped down-right past the seats already taken:
    *  - center: (innerWidth/2 - 150, innerHeight/2 - 100)
-   *  - offset: 30px per Slot that already exists
+   *  - offset: 30px per Slot that already exists, restarting at centre before
+   *    a step would push the title bar off screen (see cascadeOffset)
    *  - zIndex: 0 for the very first Slot, else ++zCounter
    *
    * The cascade counts existing Slots rather than position in the array,
@@ -98,6 +107,29 @@ export interface WindowManager {
   readonly slots: ReadonlyMap<string, Slot>;
 }
 
+/**
+ * How far to step the nth new window from centre.
+ *
+ * The cascade restarts at centre once another step would push the title bar
+ * past an edge, rather than marching on: an unreachable title bar means a
+ * window that cannot be moved, focused, or closed. Restarting means late
+ * windows land exactly on early ones, which is the overlap the cascade exists
+ * to avoid — but an exact overlap is at least reachable, and it only happens
+ * after a screen's worth of windows.
+ *
+ * Viewport-derived rather than a fixed count, so it adapts to a phone and to an
+ * ultrawide. A viewport too small for even one step gives 0, and every window
+ * lands on centre — degenerate, but there is nowhere else to put them.
+ */
+function cascadeOffset(taken: number, cx: number, cy: number, vw: number, vh: number): number {
+  // Keep a grabbable slice of the title bar in view horizontally, and all of
+  // its height in view vertically.
+  const roomX = vw - MIN_WINDOW_WIDTH - cx;
+  const roomY = vh - TITLE_BAR_HEIGHT - cy;
+  const steps = Math.floor(Math.max(0, Math.min(roomX, roomY)) / CASCADE_STEP);
+  return (taken % (steps + 1)) * CASCADE_STEP;
+}
+
 export function createWindowManager(): WindowManager {
   const slots = new Map<string, Slot>();
   let zCounter = 0;
@@ -112,9 +144,11 @@ export function createWindowManager(): WindowManager {
     for (const id of orderedIds) {
       if (!slots.has(id)) {
         const taken = slots.size;
-        const cx = (globalThis.window?.innerWidth ?? 800) / 2 - 150;
-        const cy = (globalThis.window?.innerHeight ?? 600) / 2 - 100;
-        const offset = taken * 30;
+        const vw = globalThis.window?.innerWidth ?? 800;
+        const vh = globalThis.window?.innerHeight ?? 600;
+        const cx = vw / 2 - 150;
+        const cy = vh / 2 - 100;
+        const offset = cascadeOffset(taken, cx, cy, vw, vh);
         slots.set(id, {
           x: cx + offset,
           y: cy + offset,

@@ -70,8 +70,8 @@ _Avoid_: sdk, runtime API
 **Window manager**:
 An internal module of the **Runtime** (`createWindowManager`) that owns each
 **Window**'s position, size, z-order, focus, and initial placement (centring,
-then a 30px step per **Slot** already seated) across frames, plus the scoped-id
-encoding (`${instanceId}::${originalId}`). The Runtime delegates all window geometry to
+then a 30px step per **Slot** already seated, restarting at centre before a step
+would push a title bar off screen) across frames, plus the scoped-id encoding (`${instanceId}::${originalId}`). The Runtime delegates all window geometry to
 it; tools never see it.
 _Avoid_: WM, layout engine, compositor, window service
 

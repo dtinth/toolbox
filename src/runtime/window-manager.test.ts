@@ -5,6 +5,7 @@ import {
   MIN_WINDOW_HEIGHT,
   MIN_WINDOW_WIDTH,
   scopeId,
+  TITLE_BAR_HEIGHT,
 } from "./window-manager.ts";
 
 describe("window-manager", () => {
@@ -91,6 +92,47 @@ describe("window-manager", () => {
       expect(wm.slots.get("win-a")!.zIndex).toBe(0);
       // win-b should now exist
       expect(wm.slots.has("win-b")).toBeTruthy();
+    });
+  });
+
+  describe("cascade bounds", () => {
+    // jsdom has no window, so place() falls back to an 800x600 viewport.
+    const VW = 800;
+    const VH = 600;
+
+    it("never strands a window's title bar off the screen", () => {
+      const wm = createWindowManager();
+      wm.place(Array.from({ length: 40 }, (_, i) => `win-${i}`));
+      for (const slot of wm.slots.values()) {
+        // Enough of the title bar must be reachable to grab, and all of its
+        // height must be on screen — an unreachable title bar means the window
+        // cannot be moved, focused, or closed.
+        expect(slot.x + MIN_WINDOW_WIDTH).toBeLessThanOrEqual(VW);
+        expect(slot.y + TITLE_BAR_HEIGHT).toBeLessThanOrEqual(VH);
+        expect(slot.x).toBeGreaterThanOrEqual(0);
+        expect(slot.y).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it("restarts at centre rather than piling up in the corner", () => {
+      const wm = createWindowManager();
+      wm.place(Array.from({ length: 40 }, (_, i) => `win-${i}`));
+      const first = wm.slots.get("win-0")!;
+      const positions = [...wm.slots.values()].map((s) => `${s.x},${s.y}`);
+      // A clamp would leave every late window at the same corner; a restart
+      // brings one back to exactly where the first window sits.
+      expect(positions.filter((p) => p === `${first.x},${first.y}`).length).toBeGreaterThan(1);
+      // ...and the step before the restart must not be the corner repeated.
+      expect(new Set(positions).size).toBeGreaterThan(5);
+    });
+
+    it("still steps normally while there is room", () => {
+      const wm = createWindowManager();
+      wm.place(["a", "b", "c"]);
+      const a = wm.slots.get("a")!;
+      const c = wm.slots.get("c")!;
+      expect(c.x).toBe(a.x + 60);
+      expect(c.y).toBe(a.y + 60);
     });
   });
 
