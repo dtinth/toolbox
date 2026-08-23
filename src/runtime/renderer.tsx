@@ -3,10 +3,15 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 import { type ChildNode, type MenuNode, type Node, type WindowNode } from "./collector.ts";
 import { type Slot } from "./runtime.ts";
+import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH } from "./window-manager.ts";
 import { filesFromClipboardItems, filesFromDataTransfer } from "./file-intake.ts";
 
+// What a window falls back to before the window manager has seated it. Never
+// stored — it only keeps the first render of a brand-new window from throwing.
+const UNPLACED: Slot = { x: 0, y: 0, zIndex: 0, present: true, width: null, height: null };
+
 /**
- * Bundles the four window-chrome concerns that window rendering needs.
+ * Bundles the window-chrome concerns that window rendering needs.
  * Pure node rendering (labels, buttons, inputs, etc.) does not receive this context.
  */
 export interface RenderContext {
@@ -14,6 +19,7 @@ export interface RenderContext {
   activeWindowId: string | null;
   onFocusWindow: (id: string) => void;
   onMoveWindow: (id: string, x: number, y: number) => void;
+  onResizeWindow: (id: string, width: number, height: number) => void;
 }
 
 /**
@@ -768,9 +774,10 @@ function childToPreact(child: ChildNode, ctx: RenderContext): VNode {
   return renderNode(child, (c) => childToPreact(c, ctx));
 }
 
-interface WindowDrag {
+interface WindowChrome {
   containerRef: { current: HTMLDivElement | null };
   onTitlePointerDown: (e: PointerEvent) => void;
+  onResizePointerDown: (e: PointerEvent) => void;
 }
 
 // Title-bar drag. During the drag the window is moved with a compositor-only
@@ -789,7 +796,10 @@ interface WindowDrag {
 // (plus preventDefault) suppresses the body text-selection that, repainted over
 // the re-rendering DOM, is the other source of jank. The listeners self-remove
 // on release; the unmount cleanup covers a window that closes mid-drag.
-function useWindowDrag(w: WindowNode, ctx: RenderContext): WindowDrag {
+function useWindowDrag(
+  w: WindowNode,
+  ctx: RenderContext,
+): Omit<WindowChrome, "onResizePointerDown"> {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   useEffect(() => () => cleanupRef.current?.(), []);
@@ -811,7 +821,7 @@ function useWindowDrag(w: WindowNode, ctx: RenderContext): WindowDrag {
       return;
     }
 
-    const state = ctx.slots.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
+    const state = ctx.slots.get(w.id) ?? UNPLACED;
     const startX = e.clientX;
     const startY = e.clientY;
     const startLeft = state.x;
@@ -855,18 +865,86 @@ function useWindowDrag(w: WindowNode, ctx: RenderContext): WindowDrag {
   return { containerRef, onTitlePointerDown };
 }
 
-// A floating window. The interaction (drag/focus, and later resize/pop-out)
+// Corner-handle resize. Unlike the drag, size cannot be faked with a
+// compositor-only transform — that would scale the content rather than reflow
+// it — so the width/height are written straight onto the element during the
+// gesture and committed to the window manager on release. Same `window`
+// listener treatment as the drag, and for the same touch reasons.
+function useWindowResize(
+  w: WindowNode,
+  ctx: RenderContext,
+  containerRef: { current: HTMLDivElement | null },
+): (e: PointerEvent) => void {
+  const cleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => cleanupRef.current?.(), []);
+
+  return (e: PointerEvent) => {
+    if (e.button !== 0) {
+      return;
+    }
+    e.preventDefault();
+    // Stop the container's own pointerdown from also running: focusing is
+    // wanted, starting a drag is not.
+    e.stopPropagation();
+    ctx.onFocusWindow(w.id);
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    // Start from what is actually on screen, so the first pixel of the drag
+    // doesn't jump a content-sized window to some other size.
+    const rect = container.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let width = rect.width;
+    let height = rect.height;
+
+    const prevUserSelect = document.documentElement.style.userSelect;
+    document.documentElement.style.userSelect = "none";
+
+    const onPointerMove = (ev: PointerEvent) => {
+      width = Math.max(MIN_WINDOW_WIDTH, rect.width + (ev.clientX - startX));
+      height = Math.max(MIN_WINDOW_HEIGHT, rect.height + (ev.clientY - startY));
+      container.style.width = `${width}px`;
+      container.style.height = `${height}px`;
+    };
+    const cleanup = () => {
+      globalThis.removeEventListener("pointermove", onPointerMove);
+      globalThis.removeEventListener("pointerup", onPointerUp);
+      globalThis.removeEventListener("pointercancel", onPointerUp);
+      document.documentElement.style.userSelect = prevUserSelect;
+      cleanupRef.current = null;
+    };
+    const onPointerUp = () => {
+      cleanup();
+      ctx.onResizeWindow(w.id, width, height);
+    };
+
+    globalThis.addEventListener("pointermove", onPointerMove);
+    globalThis.addEventListener("pointerup", onPointerUp);
+    globalThis.addEventListener("pointercancel", onPointerUp);
+    cleanupRef.current = cleanup;
+  };
+}
+
+// A floating window. The interaction (drag/resize/focus, and later pop-out)
 // lives here as a component so it has a real lifecycle + a container ref; the
 // pure markup is built by windowToPreact (kept separate and unit-testable).
 function Window({ w, ctx }: { w: WindowNode; ctx: RenderContext }): VNode {
   const drag = useWindowDrag(w, ctx);
-  return windowToPreact(w, ctx, drag);
+  const onResizePointerDown = useWindowResize(w, ctx, drag.containerRef);
+  return windowToPreact(w, ctx, { ...drag, onResizePointerDown });
 }
 
-export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDrag): VNode {
+export function windowToPreact(w: WindowNode, ctx: RenderContext, chrome: WindowChrome): VNode {
   const { slots, activeWindowId, onFocusWindow } = ctx;
-  const state = slots.get(w.id) ?? { x: 0, y: 0, zIndex: 0 };
+  const slot = slots.get(w.id) ?? UNPLACED;
   const isActive = w.id === activeWindowId;
+  // The user's size outranks the tool's `ui.window.setWidth`: otherwise a tool
+  // that re-declares its width every frame would undo the resize immediately.
+  const width = slot.width ?? w.width;
+  const height = slot.height ?? undefined;
 
   const titleBarChildren: VNode[] = [
     h("span", { class: "flex-1 text-xs text-toolbox-muted truncate" }, w.title || w.id) as VNode,
@@ -884,14 +962,14 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDr
     );
   }
 
-  // A declared width is authoritative (drop the min-width floor so it's exact);
+  // A chosen width is authoritative (drop the min-width floor so it's exact);
   // otherwise the window sizes to its content above a sensible minimum.
-  const containerClass = `fixed ${w.width === undefined ? "min-w-72" : ""} flex flex-col rounded-lg overflow-hidden ${isActive ? "ring-1 ring-focused" : ""}`;
+  const containerClass = `fixed ${width === undefined ? "min-w-72" : ""} flex flex-col rounded-lg overflow-hidden ${isActive ? "ring-1 ring-focused" : ""}`;
 
   const titleBar = h("div", {
     class:
       "flex items-center h-9 bg-toolbox-deepest border-b border-toolbox-border px-3 cursor-move select-none touch-none",
-    onPointerDown: drag.onTitlePointerDown,
+    onPointerDown: chrome.onTitlePointerDown,
     children: titleBarChildren,
   });
 
@@ -902,15 +980,25 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, drag: WindowDr
 
   const menuBar = w.menus.length > 0 ? h(WindowMenuBar, { menus: w.menus }) : null;
 
+  // Sits above the body so it stays grabbable whatever the window contains.
+  const resizeHandle = h("div", {
+    class: "absolute bottom-0 right-0 z-10 w-4 h-4 cursor-se-resize touch-none",
+    onPointerDown: chrome.onResizePointerDown,
+    "data-toolbox-resize": w.id,
+    "aria-hidden": "true",
+  }) as VNode;
+
+  const children = menuBar ? [titleBar, menuBar, body] : [titleBar, body];
+
   return h("div", {
-    ref: drag.containerRef,
+    ref: chrome.containerRef,
     class: containerClass,
-    style: { left: state.x, top: state.y, zIndex: state.zIndex, width: w.width } as any,
+    style: { left: slot.x, top: slot.y, zIndex: slot.zIndex, width, height } as any,
     "data-toolbox-window": w.id,
     onPointerDown: () => {
       onFocusWindow(w.id);
     },
-    children: menuBar ? [titleBar, menuBar, body] : [titleBar, body],
+    children: [...children, resizeHandle],
   }) as VNode;
 }
 
@@ -920,8 +1008,15 @@ export function toPreact(
   activeWindowId: string | null,
   onFocusWindow: (id: string) => void,
   onMoveWindow: (id: string, x: number, y: number) => void,
+  onResizeWindow: (id: string, width: number, height: number) => void,
 ): VNode {
-  const ctx: RenderContext = { slots, activeWindowId, onFocusWindow, onMoveWindow };
+  const ctx: RenderContext = {
+    slots,
+    activeWindowId,
+    onFocusWindow,
+    onMoveWindow,
+    onResizeWindow,
+  };
   return h("div", {
     class: "fixed inset-0",
     children: windows.map((w) => h(Window, { w, ctx, key: w.id })),
@@ -941,7 +1036,14 @@ export function toPreactInstance(
   activeWindowId: string | null,
   onFocusWindow: (id: string) => void,
   onMoveWindow: (id: string, x: number, y: number) => void,
+  onResizeWindow: (id: string, width: number, height: number) => void,
 ): VNode {
-  const ctx: RenderContext = { slots, activeWindowId, onFocusWindow, onMoveWindow };
+  const ctx: RenderContext = {
+    slots,
+    activeWindowId,
+    onFocusWindow,
+    onMoveWindow,
+    onResizeWindow,
+  };
   return h(Fragment, null, ...windows.map((w) => h(Window, { w, ctx, key: w.id }))) as VNode;
 }

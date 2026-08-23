@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
-import { createWindowManager, instancePrefix, scopeId } from "./window-manager.ts";
+import {
+  createWindowManager,
+  instancePrefix,
+  MIN_WINDOW_HEIGHT,
+  MIN_WINDOW_WIDTH,
+  scopeId,
+} from "./window-manager.ts";
 
 describe("window-manager", () => {
   describe("scopeId / instancePrefix helpers", () => {
@@ -26,27 +32,31 @@ describe("window-manager", () => {
       expect(state.zIndex).toBe(0);
     });
 
-    it("places the second window (index 1) with offset=(i-1)*30=0 and zIndex > 0", () => {
-      const wm = createWindowManager();
-      wm.place(["win-a", "win-b"]);
-      const a = wm.slots.get("win-a")!;
-      const b = wm.slots.get("win-b")!;
-      const cx = 800 / 2 - 150;
-      const cy = 600 / 2 - 100;
-      // index=1 → offset = (1-1)*30 = 0
-      expect(b.x).toBe(cx);
-      expect(b.y).toBe(cy);
-      expect(b.zIndex).toBeGreaterThan(a.zIndex);
-    });
-
-    it("places the third window (index 2) with offset=(2-1)*30=30", () => {
+    it("steps each further window 30px down-right so none lands on another", () => {
       const wm = createWindowManager();
       wm.place(["win-a", "win-b", "win-c"]);
       const cx = 800 / 2 - 150;
       const cy = 600 / 2 - 100;
+      const a = wm.slots.get("win-a")!;
+      const b = wm.slots.get("win-b")!;
       const c = wm.slots.get("win-c")!;
-      expect(c.x).toBe(cx + 30);
-      expect(c.y).toBe(cy + 30);
+      expect([a.x, a.y]).toStrictEqual([cx, cy]);
+      expect([b.x, b.y]).toStrictEqual([cx + 30, cy + 30]);
+      expect([c.x, c.y]).toStrictEqual([cx + 60, cy + 60]);
+      expect(b.zIndex).toBeGreaterThan(a.zIndex);
+    });
+
+    it("cascades from the seats already taken, not from position in the call", () => {
+      // Per-instance rendering places one instance's windows at a time, so the
+      // index within a call says nothing about how many windows already exist.
+      // Two tools each placing their first window must not both land on centre.
+      const wm = createWindowManager();
+      wm.place(["inst-1::__main__"], "inst-1::");
+      wm.place(["inst-2::__main__"], "inst-2::");
+      const first = wm.slots.get("inst-1::__main__")!;
+      const second = wm.slots.get("inst-2::__main__")!;
+      expect([second.x, second.y]).toStrictEqual([first.x + 30, first.y + 30]);
+      expect(second.zIndex).toBeGreaterThan(first.zIndex);
     });
 
     it("cascades z-order with each additional window higher than the previous", () => {
@@ -137,6 +147,58 @@ describe("window-manager", () => {
       wm.place([], "inst-1::");
       expect(wm.slots.get("inst-1::main")!.present).toBeFalsy();
       expect(wm.slots.get("inst-2::main")!.present).toBeTruthy();
+    });
+  });
+
+  describe("resize", () => {
+    it("starts a slot unsized so the window keeps sizing to its content", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a"]);
+      const slot = wm.slots.get("win-a")!;
+      expect(slot.width).toBeNull();
+      expect(slot.height).toBeNull();
+    });
+
+    it("records a width and height", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a"]);
+      wm.resize("win-a", 640, 480);
+      expect(wm.slots.get("win-a")).toMatchObject({ width: 640, height: 480 });
+    });
+
+    it("refuses to shrink a window into nothing", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a"]);
+      wm.resize("win-a", 1, 1);
+      expect(wm.slots.get("win-a")).toMatchObject({
+        width: MIN_WINDOW_WIDTH,
+        height: MIN_WINDOW_HEIGHT,
+      });
+    });
+
+    it("leaves position and z-order alone", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a"]);
+      const { x, y, zIndex } = wm.slots.get("win-a")!;
+      wm.resize("win-a", 500, 400);
+      expect(wm.slots.get("win-a")).toMatchObject({ x, y, zIndex });
+    });
+
+    it("survives going dormant and coming back", () => {
+      const wm = createWindowManager();
+      wm.place(["win-a", "win-b"]);
+      wm.resize("win-b", 500, 400);
+      wm.place(["win-a"]);
+      wm.place(["win-a", "win-b"]);
+      expect(wm.slots.get("win-b")).toMatchObject({ width: 500, height: 400 });
+    });
+
+    it("resize on an unknown id is a no-op", () => {
+      const wm = createWindowManager();
+      expect(() => {
+        wm.resize("unknown", 500, 400);
+      }).not.toThrow();
+      expect(wm.slots.size).toBe(0);
     });
   });
 

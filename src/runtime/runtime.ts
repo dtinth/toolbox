@@ -98,6 +98,7 @@ export interface Runtime {
   slots: ReadonlyMap<string, Slot>;
   focusWindow: (id: string) => void;
   moveWindow: (id: string, x: number, y: number) => void;
+  resizeWindow: (id: string, width: number, height: number) => void;
   activeWindowId: string | null;
   dispose: () => void;
   readonly disposed: boolean;
@@ -371,7 +372,7 @@ function build(): TestRuntime {
     lastButtonRef = findLastButton(allWindows);
     wm.place(allWindows.map((w) => w.id));
     const active = wm.activeId();
-    return toPreact(allWindows, wm.slots, active, focusWindow, moveWindow);
+    return toPreact(allWindows, wm.slots, active, focusWindow, moveWindow, resizeWindow);
   }
 
   // Per-instance composition (one Preact root per instance, ADR-0008). Returns
@@ -392,7 +393,7 @@ function build(): TestRuntime {
       instancePrefix(instanceId),
     );
     const active = wm.activeId();
-    return toPreactInstance(windows, wm.slots, active, focusWindow, moveWindow);
+    return toPreactInstance(windows, wm.slots, active, focusWindow, moveWindow, resizeWindow);
   }
 
   function requestUpdate(): void {
@@ -448,6 +449,16 @@ function build(): TestRuntime {
 
   function moveWindow(id: string, x: number, y: number) {
     wm.move(id, x, y);
+  }
+
+  // Unlike moveWindow this does need a redraw. The handle sets width/height on
+  // the element live, but an unsized window also carries a `min-w-72` floor in
+  // its class — and a floor of 288px silently wins over an inline width of 200.
+  // Only a re-render drops that class, so the first resize below the floor does
+  // nothing at all without this.
+  function resizeWindow(id: string, width: number, height: number) {
+    wm.resize(id, width, height);
+    requestUpdate();
   }
 
   return {
@@ -516,6 +527,7 @@ function build(): TestRuntime {
     },
     focusWindow,
     moveWindow,
+    resizeWindow,
     get activeWindowId() {
       return wm.activeId();
     },

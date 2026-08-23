@@ -16,7 +16,20 @@ export interface Slot {
    * `present: false` is dormant: invisible, but still holding its place.
    */
   present: boolean;
+  /**
+   * The size the user dragged this window to, or null while they have not.
+   * Null is not "zero" — it means nobody has an opinion, so the window sizes
+   * to its content (or to the width the tool asked for via `ui.window.setWidth`).
+   * A user's size outranks the tool's, otherwise a tool that calls `setWidth`
+   * every frame would undo the resize the moment it redrew.
+   */
+  width: number | null;
+  height: number | null;
 }
+
+/** Floor for a user resize, so a window can never be dragged into nothing. */
+export const MIN_WINDOW_WIDTH = 200;
+export const MIN_WINDOW_HEIGHT = 80;
 
 // Scoped window id format: `${instanceId}::${originalId}`.
 export function scopeId(instanceId: string, originalId: string): string {
@@ -30,13 +43,16 @@ export function instancePrefix(instanceId: string): string {
 export interface WindowManager {
   /**
    * Seat this frame's windows. Ensure every id in orderedIds has a Slot and is
-   * marked present; mark every other known Slot in scope dormant. For ids that
-   * don't yet have a Slot, apply the centering + cascade placement rule:
+   * marked present; mark every other known Slot in scope dormant. A brand-new
+   * Slot is centred, then stepped down-right past the seats already taken:
    *  - center: (innerWidth/2 - 150, innerHeight/2 - 100)
-   *  - offset: index === 0 → 0, else (index - 1) * 30
-   *  - zIndex:  index === 0 → 0, else ++zCounter
-   * The ordering is by position in the array (i.e. the order windows appear in
-   * the render output).
+   *  - offset: 30px per Slot that already exists
+   *  - zIndex: 0 for the very first Slot, else ++zCounter
+   *
+   * The cascade counts existing Slots rather than position in the array,
+   * because per-instance rendering calls this once per instance — so array
+   * position says nothing about how many windows are already on screen, and
+   * counting it would drop every tool's first window on the same spot.
    *
    * Absence means dormant, not deleted: an existing Slot keeps its geometry and
    * z-order, so a window that stops being declared drops back into exactly the
@@ -58,6 +74,12 @@ export interface WindowManager {
 
   /** Update the position of a window. */
   move: (id: string, x: number, y: number) => void;
+
+  /**
+   * Set the size of a window, clamped to MIN_WINDOW_WIDTH/HEIGHT. Position and
+   * z-order are untouched. No-op for an unknown id.
+   */
+  resize: (id: string, width: number, height: number) => void;
 
   /**
    * Return the id of the present window with the highest zIndex, or null if no
@@ -87,17 +109,19 @@ export function createWindowManager(): WindowManager {
         slot.present = declared.has(id);
       }
     }
-    for (let i = 0; i < orderedIds.length; i++) {
-      const id = orderedIds[i];
+    for (const id of orderedIds) {
       if (!slots.has(id)) {
+        const taken = slots.size;
         const cx = (globalThis.window?.innerWidth ?? 800) / 2 - 150;
         const cy = (globalThis.window?.innerHeight ?? 600) / 2 - 100;
-        const offset = i === 0 ? 0 : (i - 1) * 30;
+        const offset = taken * 30;
         slots.set(id, {
           x: cx + offset,
           y: cy + offset,
-          zIndex: i === 0 ? 0 : ++zCounter,
+          zIndex: taken === 0 ? 0 : ++zCounter,
           present: true,
+          width: null,
+          height: null,
         });
       }
     }
@@ -131,6 +155,14 @@ export function createWindowManager(): WindowManager {
     }
   }
 
+  function resize(id: string, width: number, height: number): void {
+    const slot = slots.get(id);
+    if (slot) {
+      slot.width = Math.max(MIN_WINDOW_WIDTH, width);
+      slot.height = Math.max(MIN_WINDOW_HEIGHT, height);
+    }
+  }
+
   function activeId(): string | null {
     let maxZ = -1;
     let active: string | null = null;
@@ -160,6 +192,7 @@ export function createWindowManager(): WindowManager {
     place,
     focus,
     move,
+    resize,
     activeId,
     forget,
     reset,

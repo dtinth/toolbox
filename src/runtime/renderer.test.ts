@@ -10,9 +10,29 @@ const buttonOnClick = () => {};
 // Build a RenderContext + an inert drag (containerRef/handler) for testing the
 // pure window markup directly, without mounting the Window component.
 function makeCtx(states: Map<string, Slot>, active: string | null = null): RenderContext {
-  return { slots: states, activeWindowId: active, onFocusWindow: noop, onMoveWindow: noop };
+  return {
+    slots: states,
+    activeWindowId: active,
+    onFocusWindow: noop,
+    onMoveWindow: noop,
+    onResizeWindow: noop,
+  };
 }
-const inertDrag = { containerRef: { current: null }, onTitlePointerDown: noop };
+const slotAt = (over: Partial<Slot> = {}): Slot => ({
+  x: 10,
+  y: 20,
+  zIndex: 1,
+  present: true,
+  width: null,
+  height: null,
+  ...over,
+});
+
+const inertDrag = {
+  containerRef: { current: null },
+  onTitlePointerDown: noop,
+  onResizePointerDown: noop,
+};
 
 describe("toPreact", () => {
   it("renders one keyed Window component per window in the desktop container", () => {
@@ -21,7 +41,7 @@ describe("toPreact", () => {
       { kind: "window", id: "b", title: "B", children: [], menus: [] },
     ];
     const states = new Map<string, Slot>();
-    const el = toPreact(tree, states, null, noop, noop) as any;
+    const el = toPreact(tree, states, null, noop, noop, noop) as any;
     expect(el.type).toBe("div");
     const children = el.props.children;
     expect(children).toHaveLength(2);
@@ -34,9 +54,73 @@ describe("toPreact", () => {
 });
 
 describe("windowToPreact (pure window markup)", () => {
+  it("sizes to content, with a floor, until someone picks a size", () => {
+    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [], menus: [] };
+    const el = windowToPreact(w, makeCtx(new Map([["w", slotAt()]])), inertDrag) as any;
+    expect(el.props.class).toContain("min-w-72");
+    expect(el.props.style.width).toBeUndefined();
+    expect(el.props.style.height).toBeUndefined();
+  });
+
+  it("applies the size the user dragged to, dropping the min-width floor", () => {
+    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [], menus: [] };
+    const slots = new Map([["w", slotAt({ width: 640, height: 480 })]]);
+    const el = windowToPreact(w, makeCtx(slots), inertDrag) as any;
+    expect(el.props.style.width).toBe(640);
+    expect(el.props.style.height).toBe(480);
+    expect(el.props.class).not.toContain("min-w-72");
+  });
+
+  it("lets the user's width beat the width the tool declared", () => {
+    // A tool calling ui.window.setWidth every frame must not undo a resize.
+    const w: WindowNode = {
+      kind: "window",
+      id: "w",
+      title: "W",
+      children: [],
+      menus: [],
+      width: 300,
+    };
+    const slots = new Map([["w", slotAt({ width: 640 })]]);
+    const el = windowToPreact(w, makeCtx(slots), inertDrag) as any;
+    expect(el.props.style.width).toBe(640);
+  });
+
+  it("falls back to the tool's declared width when the user has not resized", () => {
+    const w: WindowNode = {
+      kind: "window",
+      id: "w",
+      title: "W",
+      children: [],
+      menus: [],
+      width: 300,
+    };
+    const el = windowToPreact(w, makeCtx(new Map([["w", slotAt()]])), inertDrag) as any;
+    expect(el.props.style.width).toBe(300);
+  });
+
+  it("gives the window a resize handle wired to the resize gesture", () => {
+    const w: WindowNode = { kind: "window", id: "w", title: "W", children: [], menus: [] };
+    let started = false;
+    const chrome = {
+      ...inertDrag,
+      onResizePointerDown: () => {
+        started = true;
+      },
+    };
+    const el = windowToPreact(w, makeCtx(new Map([["w", slotAt()]])), chrome) as any;
+    const handle = el.props.children.at(-1);
+    expect(handle.props["data-toolbox-resize"]).toBe("w");
+    expect(handle.props.class).toContain("cursor-se-resize");
+    // Touch must not be claimed for scrolling, same as the title bar drag.
+    expect(handle.props.class).toContain("touch-none");
+    handle.props.onPointerDown();
+    expect(started).toBeTruthy();
+  });
+
   it("marks the window container with data-toolbox-window and wires the container ref", () => {
     const w: WindowNode = { kind: "window", id: "win1", title: "Win", children: [], menus: [] };
-    const drag = { containerRef: { current: null }, onTitlePointerDown: noop };
+    const drag = { ...inertDrag };
     const el = windowToPreact(w, makeCtx(new Map()), drag) as any;
     expect(el.props["data-toolbox-window"]).toBe("win1");
     // preact lifts `ref` onto the vnode, not into props
@@ -46,7 +130,7 @@ describe("windowToPreact (pure window markup)", () => {
   it("wires the title bar's pointer-down to the drag handler", () => {
     const w: WindowNode = { kind: "window", id: "w", title: "W", children: [], menus: [] };
     let down = false;
-    const drag = { containerRef: { current: null }, onTitlePointerDown: () => (down = true) };
+    const drag = { ...inertDrag, onTitlePointerDown: () => (down = true) };
     const el = windowToPreact(w, makeCtx(new Map()), drag) as any;
     const titleBar = el.props.children[0];
     titleBar.props.onPointerDown(new Event("pointerdown") as PointerEvent);

@@ -332,6 +332,31 @@ describe("runtime", () => {
     });
   });
 
+  describe("resize", () => {
+    it("records the new size and asks for a redraw", () => {
+      // The redraw is not cosmetic: an unsized window carries a min-width class
+      // that outranks a smaller inline width, and only a re-render drops it.
+      const runtime = createTestRuntime();
+      runtime.loadTool(declareLabel);
+      runtime.render();
+      const id = [...runtime.slots.keys()][0];
+      const before = runtime.updateCount;
+      runtime.resizeWindow(id, 640, 480);
+      expect(runtime.slots.get(id)).toMatchObject({ width: 640, height: 480 });
+      expect(runtime.updateCount).toBeGreaterThan(before);
+    });
+
+    it("keeps the size when the window goes dormant and comes back", () => {
+      const { runtime, open, shut } = toggleTool();
+      open();
+      const id = [...runtime.slots.keys()].find((k) => k.endsWith("::sub"))!;
+      runtime.resizeWindow(id, 500, 400);
+      shut();
+      open();
+      expect(runtime.slots.get(id)).toMatchObject({ width: 500, height: 400, present: true });
+    });
+  });
+
   describe("slots", () => {
     it("focusWindow(id) increases the window's zIndex above all others", () => {
       const runtime = createTestRuntime();
@@ -399,7 +424,7 @@ describe("runtime", () => {
       expect(main.zIndex).toBeTypeOf("number");
     });
 
-    it("Window positions center initially and cascade for sub-windows", () => {
+    it("centers the first window and steps every later one clear of it", () => {
       const runtime = createTestRuntime();
       runtime.loadTool((api) => {
         api.onRender = () => {
@@ -421,12 +446,9 @@ describe("runtime", () => {
       const sub2 = runtime.slots.get(sub2Id)!;
       const cx = 800 / 2 - 150;
       const cy = 600 / 2 - 100;
-      expect(main.x).toBe(cx);
-      expect(main.y).toBe(cy);
-      expect(sub1.x).toBe(cx);
-      expect(sub1.y).toBe(cy);
-      expect(sub2.x).toBe(cx + 30);
-      expect(sub2.y).toBe(cy + 30);
+      expect([main.x, main.y]).toStrictEqual([cx, cy]);
+      expect([sub1.x, sub1.y]).toStrictEqual([cx + 30, cy + 30]);
+      expect([sub2.x, sub2.y]).toStrictEqual([cx + 60, cy + 60]);
     });
 
     it("Loading a new tool resets slots", () => {

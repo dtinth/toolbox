@@ -28,7 +28,9 @@ manager** and keyed by the scoped id `${instanceId}::${originalId}`. A Slot
 outlives the Window it holds: the Window exists only for the frames its
 declarator draws it, while the Slot keeps the geometry the user arranged. Each
 Slot carries a `present` flag, re-derived from the declarator every frame and
-never persisted.
+never persisted, plus the `width`/`height` the user dragged it to — null until
+they do, meaning the Window sizes to its content. A user's size outranks the
+width a tool asks for with `ui.window.setWidth`.
 _Avoid_: window state, placement, cell
 
 **Dormant slot**:
@@ -67,9 +69,9 @@ _Avoid_: sdk, runtime API
 
 **Window manager**:
 An internal module of the **Runtime** (`createWindowManager`) that owns each
-**Window**'s position, z-order, focus, and initial placement (centering +
-cascade offset) across frames, plus the scoped-id encoding
-(`${instanceId}::${originalId}`). The Runtime delegates all window geometry to
+**Window**'s position, size, z-order, focus, and initial placement (centring,
+then a 30px step per **Slot** already seated) across frames, plus the scoped-id
+encoding (`${instanceId}::${originalId}`). The Runtime delegates all window geometry to
 it; tools never see it.
 _Avoid_: WM, layout engine, compositor, window service
 
