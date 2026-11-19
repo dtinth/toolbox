@@ -132,6 +132,16 @@ export function DockLayer({ runtime }: { runtime: Runtime }) {
             onFloatTab={(id) => {
               runtime.undockWindow(id);
             }}
+            onPopOutTab={(id) => {
+              const el = document.querySelector(`[data-toolbox-window="${CSS.escape(id)}"]`);
+              const r = el?.getBoundingClientRect();
+              runtime.popOutWindow(id, runtime.windowTitle(id), {
+                x: r?.x ?? 0,
+                y: r?.y ?? 0,
+                w: Math.max(r?.width ?? 0, 320),
+                h: Math.max(r?.height ?? 0, 200),
+              });
+            }}
             onTabPointerDown={onTabPointerDown}
           />
         </div>

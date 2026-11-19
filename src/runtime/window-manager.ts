@@ -29,6 +29,13 @@ export interface Slot {
    */
   present: boolean;
   /**
+   * Whether the Window is shown in its own browser popup (issue #29). The Slot
+   * keeps its place, floating or docked, so bringing the Window back puts it
+   * where it was. Transient like `present`: never stored, never restored, since
+   * reopening a popup on load would need a click nobody made.
+   */
+  poppedOut: boolean;
+  /**
    * The size the user dragged this window to, or null while they have not.
    * Null is not "zero" — it means nobody has an opinion, so the window sizes
    * to its content (or to the width the tool asked for via `ui.window.setWidth`).
@@ -39,8 +46,8 @@ export interface Slot {
   height: number | null;
 }
 
-/** A Slot as a Workspace stores it: everything but `present`, which is never stored. */
-export type SavedSlot = Omit<Slot, "present">;
+/** A Slot as a Workspace stores it: everything but the two flags that are never stored. */
+export type SavedSlot = Omit<Slot, "present" | "poppedOut">;
 
 /** What the user arranged: every Slot, and the Layout tree. */
 export interface Arrangement {
@@ -158,6 +165,9 @@ export interface WindowManager {
   /** Replace the tree whole: after a divider drag, or a click on a tab. */
   setLayout: (next: LayoutNode | null) => void;
 
+  /** Mark a Window as shown in its own popup, or back in this page. */
+  setPoppedOut: (id: string, poppedOut: boolean) => void;
+
   /**
    * A copy of what the user arranged, for a Workspace to store. With `keep`,
    * only the Slots it accepts, and the tree without the tabs of the rest.
@@ -260,6 +270,7 @@ export function createWindowManager(onChange: () => void = () => {}): WindowMana
           y: cy + offset,
           zIndex: taken === 0 ? 0 : ++zCounter,
           present: true,
+          poppedOut: false,
           width: null,
           height: null,
         });
@@ -385,7 +396,7 @@ export function createWindowManager(onChange: () => void = () => {}): WindowMana
 
   function adopt(saved: Arrangement): void {
     for (const [id, slot] of Object.entries(saved.slots)) {
-      slots.set(id, { ...slot, present: false });
+      slots.set(id, { ...slot, present: false, poppedOut: false });
       zCounter = Math.max(zCounter, slot.zIndex);
     }
     let next = normalize(saved.layout);
@@ -418,6 +429,12 @@ export function createWindowManager(onChange: () => void = () => {}): WindowMana
     setLayout: (next) => {
       layout = next;
       onChange();
+    },
+    setPoppedOut: (id, poppedOut) => {
+      const slot = slots.get(id);
+      if (slot !== undefined) {
+        slot.poppedOut = poppedOut;
+      }
     },
     arrangement,
     adopt,

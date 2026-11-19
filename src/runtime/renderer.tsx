@@ -1,15 +1,24 @@
 import { Fragment, h, render, type VNode } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { autoUpdate, computePosition, flip, offset, shift } from "@floating-ui/dom";
 import { type ChildNode, type MenuNode, type Node, type WindowNode } from "./collector.ts";
 import { type Slot } from "./runtime.ts";
 import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH } from "./window-manager.ts";
 import { filesFromClipboardItems, filesFromDataTransfer } from "./file-intake.ts";
 import { type DockTarget, type Rect } from "./docking.ts";
+import { type PopoutContext } from "./popout.ts";
 
 // What a window falls back to before the window manager has seated it. Never
 // stored — it only keeps the first render of a brand-new window from throwing.
-const UNPLACED: Slot = { x: 0, y: 0, zIndex: 0, present: true, width: null, height: null };
+const UNPLACED: Slot = {
+  x: 0,
+  y: 0,
+  zIndex: 0,
+  present: true,
+  poppedOut: false,
+  width: null,
+  height: null,
+};
 
 /**
  * Bundles the window-chrome concerns that window rendering needs.
@@ -23,6 +32,8 @@ export interface RenderContext {
   onResizeWindow: (id: string, width: number, height: number) => void;
   /** Docking, when the host has a Layout. Absent, every window floats. */
   dock?: DockContext;
+  /** Pop-out, when the host offers it. Absent, no window has a pop-out button. */
+  popout?: PopoutContext;
 }
 
 /** Where a docked Window is drawn. */
@@ -427,9 +438,11 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
       return undefined;
     }
 
-    const host = document.createElement("div");
+    // The anchor's own document: a popped-out window's menu opens in its popup.
+    const doc = anchor.ownerDocument;
+    const host = doc.createElement("div");
     host.dataset.toolboxChrome = "";
-    document.body.append(host);
+    doc.body.append(host);
 
     const run = (fn: () => void) => () => {
       setOpen(false);
@@ -537,13 +550,13 @@ function FileMenu({ node }: { node: Extract<Node, { kind: "file" }> }): VNode {
         setOpen(false);
       }
     };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("keydown", onKey);
+    doc.addEventListener("pointerdown", onPointerDown, true);
+    doc.addEventListener("keydown", onKey);
 
     return () => {
       stop();
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("keydown", onKey);
+      doc.removeEventListener("pointerdown", onPointerDown, true);
+      doc.removeEventListener("keydown", onKey);
       render(null, host);
       host.remove();
     };
@@ -693,9 +706,11 @@ function MenuBarItem({ menu }: { menu: MenuNode }): VNode {
       return undefined;
     }
 
-    const host = document.createElement("div");
+    // The anchor's own document: a popped-out window's menu opens in its popup.
+    const doc = anchor.ownerDocument;
+    const host = doc.createElement("div");
     host.dataset.toolboxChrome = "";
-    document.body.append(host);
+    doc.body.append(host);
 
     const renderDropdown = () => {
       const items = menuRef.current.items.map((item) => {
@@ -762,13 +777,13 @@ function MenuBarItem({ menu }: { menu: MenuNode }): VNode {
         setOpen(false);
       }
     };
-    document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("keydown", onKey);
+    doc.addEventListener("pointerdown", onPointerDown, true);
+    doc.addEventListener("keydown", onKey);
 
     return () => {
       stop();
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("keydown", onKey);
+      doc.removeEventListener("pointerdown", onPointerDown, true);
+      doc.removeEventListener("keydown", onKey);
       render(null, host);
       host.remove();
     };
@@ -980,10 +995,105 @@ function useWindowResize(
   };
 }
 
+/**
+ * A hand-rolled portal (ADR-0002). The content renders into a host element this
+ * component owns, and the host sits under an anchor here — or, while `target`
+ * is set, in the popup. Moving the host between them moves DOM; it never
+ * unmounts, so custom widgets keep their state on the way out and back. Both
+ * the anchor and the host are `display: contents`, so the content lays out as
+ * if it were a direct child of the window body.
+ */
+function Projected({ content, target }: { content: VNode[]; target: HTMLElement | null }): VNode {
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    if (hostRef.current === null) {
+      hostRef.current = document.createElement("div");
+      hostRef.current.className = "contents";
+    }
+    const host = hostRef.current;
+    const place = target ?? anchorRef.current;
+    if (place !== null && host.parentNode !== place) {
+      place.append(host);
+    }
+    render(h(Fragment, null, ...content), host);
+  });
+  useLayoutEffect(
+    () => () => {
+      const host = hostRef.current;
+      if (host !== null) {
+        render(null, host);
+        host.remove();
+      }
+    },
+    [],
+  );
+  return h("div", { ref: anchorRef, class: "contents" }) as VNode;
+}
+
+/**
+ * What goes in a window's body: the content, through a Projected. While the
+ * window is popped out, the menu bar goes with it, and a note stays behind.
+ */
+function windowBody(w: WindowNode, ctx: RenderContext, menuBar: VNode | null): VNode[] {
+  const target = ctx.popout?.targetOf(w.id) ?? null;
+  const children = mapChildren(w.children, (child) => childToPreact(child, ctx));
+  if (target === null) {
+    return [h(Projected, { content: children, target, key: "content" }) as VNode];
+  }
+  const menus =
+    menuBar === null
+      ? []
+      : [h("div", { key: "__menus", class: "-mx-3 -mt-3 mb-1" }, menuBar) as VNode];
+  return [
+    h(Projected, { content: [...menus, ...children], target, key: "content" }) as VNode,
+    h(
+      "div",
+      { key: "note", class: "flex flex-col items-start gap-2 text-sm text-toolbox-muted" },
+      "Shown in its own window.",
+      h(
+        "button",
+        {
+          type: "button",
+          class:
+            "bg-toolbox-content border border-toolbox-border-light rounded px-3 py-1.5 text-sm text-toolbox-text hover:bg-[#454443] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused",
+          onClick: () => {
+            ctx.popout?.popIn(w.id);
+          },
+        },
+        "Bring it back",
+      ),
+    ) as VNode,
+  ];
+}
+
+/** Pop a window out from its own chrome, sized like it is now. */
+function popOutFrom(w: WindowNode, ctx: RenderContext, el: HTMLElement | null): void {
+  const r = el?.getBoundingClientRect();
+  ctx.popout?.popOut(w.id, w.title || w.id, {
+    x: r?.x ?? 0,
+    y: r?.y ?? 0,
+    w: Math.max(r?.width ?? 0, MIN_WINDOW_WIDTH),
+    h: Math.max(r?.height ?? 0, MIN_WINDOW_HEIGHT),
+  });
+}
+
 // A floating window. The interaction (drag/resize/focus, and later pop-out)
 // lives here as a component so it has a real lifecycle + a container ref; the
 // pure markup is built by windowToPreact (kept separate and unit-testable).
 function Window({ w, ctx }: { w: WindowNode; ctx: RenderContext }): VNode {
+  // A window that goes away takes its popup with it: a dormant window has
+  // nothing to show, and a closed tool has nothing left at all.
+  const popoutRef = useRef(ctx.popout);
+  popoutRef.current = ctx.popout;
+  useEffect(
+    () => () => {
+      if ((popoutRef.current?.targetOf(w.id) ?? null) !== null) {
+        popoutRef.current?.popIn(w.id);
+      }
+    },
+    [w.id],
+  );
   const drag = useWindowDrag(w, ctx);
   const onResizePointerDown = useWindowResize(w, ctx, drag.containerRef);
   return windowToPreact(w, ctx, { ...drag, onResizePointerDown });
@@ -1005,6 +1115,24 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, chrome: Window
   const titleBarChildren: VNode[] = [
     h("span", { class: "flex-1 text-xs text-toolbox-muted truncate" }, w.title || w.id) as VNode,
   ];
+  const poppedOut = (ctx.popout?.targetOf(w.id) ?? null) !== null;
+  if (ctx.popout !== undefined && !poppedOut) {
+    titleBarChildren.push(
+      h(
+        "button",
+        {
+          type: "button",
+          class: "text-toolbox-muted hover:text-toolbox-accent-yellow text-sm leading-none px-1",
+          "aria-label": `Pop out ${w.title || w.id}`,
+          title: "Pop out into its own window",
+          onClick: () => {
+            popOutFrom(w, ctx, chrome.containerRef.current);
+          },
+        },
+        "⧉",
+      ) as VNode,
+    );
+  }
   if (w.onClose) {
     titleBarChildren.push(
       h(
@@ -1031,12 +1159,12 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, chrome: Window
     children: titleBarChildren,
   });
 
+  const menuBar = w.menus.length > 0 ? (h(WindowMenuBar, { menus: w.menus }) as VNode) : null;
+
   const body = h("div", {
     class: "flex-1 bg-toolbox-surface p-3 flex flex-col gap-1 min-h-0",
-    children: mapChildren(w.children, (child) => childToPreact(child, ctx)),
+    children: windowBody(w, ctx, menuBar),
   });
-
-  const menuBar = w.menus.length > 0 ? h(WindowMenuBar, { menus: w.menus }) : null;
 
   // Sits above the body so it stays grabbable whatever the window contains.
   const resizeHandle = h("div", {
@@ -1046,7 +1174,7 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, chrome: Window
     "aria-hidden": "true",
   }) as VNode;
 
-  const children = menuBar ? [titleBar, menuBar, body] : [titleBar, body];
+  const children = menuBar && !poppedOut ? [titleBar, menuBar, body] : [titleBar, body];
 
   return h("div", {
     ref: chrome.containerRef,
@@ -1076,11 +1204,12 @@ function dockedWindowToPreact(
   docked: DockPlacement,
 ): VNode {
   const isActive = w.id === ctx.activeWindowId;
+  const poppedOut = (ctx.popout?.targetOf(w.id) ?? null) !== null;
+  const menuBar = w.menus.length > 0 ? (h(WindowMenuBar, { menus: w.menus }) as VNode) : null;
   const body = h("div", {
     class: "flex-1 bg-toolbox-surface p-3 flex flex-col gap-1 min-h-0 overflow-auto",
-    children: mapChildren(w.children, (child) => childToPreact(child, ctx)),
+    children: windowBody(w, ctx, menuBar),
   });
-  const menuBar = w.menus.length > 0 ? h(WindowMenuBar, { menus: w.menus }) : null;
   const { x, y, w: width, h: height } = docked.rect;
   return h("div", {
     ref: chrome.containerRef,
@@ -1098,7 +1227,7 @@ function dockedWindowToPreact(
     onPointerDown: () => {
       ctx.onFocusWindow(w.id);
     },
-    children: menuBar ? [menuBar, body] : [body],
+    children: menuBar && !poppedOut ? [menuBar, body] : [body],
   }) as VNode;
 }
 
@@ -1110,6 +1239,7 @@ export function toPreact(
   onMoveWindow: (id: string, x: number, y: number) => void,
   onResizeWindow: (id: string, width: number, height: number) => void,
   dock?: DockContext,
+  popout?: PopoutContext,
 ): VNode {
   const ctx: RenderContext = {
     slots,
@@ -1118,6 +1248,7 @@ export function toPreact(
     onMoveWindow,
     onResizeWindow,
     dock,
+    popout,
   };
   return h("div", {
     class: "fixed inset-0",
@@ -1140,6 +1271,7 @@ export function toPreactInstance(
   onMoveWindow: (id: string, x: number, y: number) => void,
   onResizeWindow: (id: string, width: number, height: number) => void,
   dock?: DockContext,
+  popout?: PopoutContext,
 ): VNode {
   const ctx: RenderContext = {
     slots,
@@ -1148,6 +1280,7 @@ export function toPreactInstance(
     onMoveWindow,
     onResizeWindow,
     dock,
+    popout,
   };
   return h(Fragment, null, ...windows.map((w) => h(Window, { w, ctx, key: w.id }))) as VNode;
 }

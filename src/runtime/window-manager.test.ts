@@ -520,3 +520,16 @@ describe("window-manager", () => {
     });
   });
 });
+
+describe("pop-out flag", () => {
+  it("marks a Slot popped out without moving it, and never stores the flag", () => {
+    const wm = createWindowManager();
+    wm.place(["a"]);
+    const before = { ...wm.slots.get("a") };
+    wm.setPoppedOut("a", true);
+    expect(wm.slots.get("a")).toStrictEqual({ ...before, poppedOut: true });
+    expect(wm.arrangement().slots.a).not.toHaveProperty("poppedOut");
+    wm.setPoppedOut("a", false);
+    expect(wm.slots.get("a")?.poppedOut).toBeFalsy();
+  });
+});

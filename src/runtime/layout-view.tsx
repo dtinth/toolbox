@@ -42,6 +42,8 @@ export interface LayoutViewProps {
   canCloseTab?: (tabId: string) => boolean;
   /** Called when the user asks for a tab to float. Omit it to hide the button. */
   onFloatTab?: (tabId: string) => void;
+  /** Called when the user asks for a tab to pop out into its own window. Omit it to hide the button. */
+  onPopOutTab?: (tabId: string) => void;
   /** A press on a tab, which may turn into a drag that pulls it out. */
   onTabPointerDown?: (tabId: string, e: PointerEvent) => void;
   /** Whether a tab is drawn. A dormant Window keeps its tab, but hides it. */
@@ -60,6 +62,7 @@ interface ViewContext {
   onCloseTab?: (tabId: string) => void;
   canCloseTab?: (tabId: string) => boolean;
   onFloatTab?: (tabId: string) => void;
+  onPopOutTab?: (tabId: string) => void;
   onTabPointerDown?: (tabId: string, e: PointerEvent) => void;
   isTabShown?: (tabId: string) => boolean;
   chromeOnly?: boolean;
@@ -83,6 +86,7 @@ export function LayoutView({
   empty,
   canCloseTab,
   onFloatTab,
+  onPopOutTab,
   onTabPointerDown,
   isTabShown,
   chromeOnly,
@@ -100,6 +104,7 @@ export function LayoutView({
     onCloseTab,
     canCloseTab,
     onFloatTab,
+    onPopOutTab,
     onTabPointerDown,
     isTabShown,
     chromeOnly,
@@ -364,6 +369,17 @@ function PaneView({
                   class="h-9 w-7 text-toolbox-muted hover:text-toolbox-text"
                 >
                   ⇱
+                </button>
+              )}
+              {ctx.onPopOutTab === undefined ? null : (
+                <button
+                  type="button"
+                  aria-label={`Pop out ${ctx.labelOf(tab)}`}
+                  title="Pop out into its own window"
+                  onClick={() => ctx.onPopOutTab?.(tab)}
+                  class="h-9 w-7 text-toolbox-muted hover:text-toolbox-text"
+                >
+                  ⧉
                 </button>
               )}
               {closable(tab) ? (

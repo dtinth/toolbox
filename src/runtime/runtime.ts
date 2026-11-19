@@ -1,5 +1,13 @@
-import { collect, ui, type ChildNode, type Node, type Ui, type WindowNode } from "./collector.ts";
-import { preactApi } from "./preact-api.ts";
+import {
+  collect,
+  ui,
+  type ChildNode,
+  type Node,
+  type Ui,
+  type WindowNode,
+  type WindowPersistence,
+} from "./collector.ts";
+import { preactApi, type Preact } from "./preact-api.ts";
 import { tw } from "./tw.ts";
 import { toPreact, toPreactInstance } from "./renderer.tsx";
 import {
@@ -8,7 +16,6 @@ import {
   type DockTarget,
   type LayoutNode,
 } from "./dock-controller.ts";
-import type { Preact, WindowPersistence } from "../../api.d.ts";
 import { type VNode } from "preact";
 import {
   createWindowManager,
@@ -19,6 +26,7 @@ import {
   type Slot,
 } from "./window-manager.ts";
 import { createToastCenter, type Toast, type ToastHandle } from "./toast-center.ts";
+import { createPopoutController, type PopoutRect } from "./popout.ts";
 import {
   createDialogCenter,
   type Dialog,
@@ -143,6 +151,13 @@ export interface Runtime {
   /** Be told when the drag changes. Kept apart from `subscribe`, which redraws every tool. */
   subscribeDockDrag: (onChange: () => void) => () => void;
   /**
+   * Show a Window in its own browser popup, about where it sits now. Call it
+   * from a click: browsers only open a popup for a user gesture.
+   */
+  popOutWindow: (id: string, title: string, rect: PopoutRect) => void;
+  /** Bring a popped-out Window back, and close its popup. */
+  popInWindow: (id: string) => void;
+  /**
    * A copy of the Slots and the Layout tree, for a Workspace to store. Only the
    * Slots each window's persistence policy lets through (issue #28).
    */
@@ -254,6 +269,9 @@ function build(): TestRuntime {
     requestUpdate();
   });
   let dockingEnabled = false;
+  const popout = createPopoutController(wm, () => {
+    requestUpdate();
+  });
   /** What each Window drew last: its title, and how to close it. */
   const windowInfo = new Map<
     string,
@@ -262,6 +280,7 @@ function build(): TestRuntime {
 
   function remember(windows: WindowNode[]): void {
     for (const w of windows) {
+      popout.setTitle(w.id, w.title || w.id);
       windowInfo.set(w.id, {
         title: w.title || w.id,
         onClose: w.onClose,
@@ -431,6 +450,7 @@ function build(): TestRuntime {
     toastCenter.dismissForInstance(instanceId);
     dialogCenter.cancelForInstance(instanceId);
     instance.tickSubscribers.clear();
+    popout.popInAll(instancePrefix(instanceId));
     wm.forget(instancePrefix(instanceId));
     for (const id of windowInfo.keys()) {
       if (id.startsWith(instancePrefix(instanceId))) {
@@ -485,6 +505,7 @@ function build(): TestRuntime {
       moveWindow,
       resizeWindow,
       dockingEnabled ? docking.context : undefined,
+      popout.context,
     );
   }
 
@@ -515,6 +536,7 @@ function build(): TestRuntime {
       moveWindow,
       resizeWindow,
       dockingEnabled ? docking.context : undefined,
+      popout.context,
     );
   }
 
@@ -678,6 +700,8 @@ function build(): TestRuntime {
     dockDragMove: docking.move,
     dockDragEnd: docking.end,
     subscribeDockDrag: docking.subscribe,
+    popOutWindow: popout.context.popOut,
+    popInWindow: popout.context.popIn,
     arrangement: () => wm.arrangement(persists),
     adoptArrangement: (saved) => {
       wm.adopt(saved);

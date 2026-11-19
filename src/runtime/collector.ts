@@ -2,6 +2,8 @@ import { chooseFile } from "./file-intake.ts";
 import { type Dialog } from "./dialog-center.ts";
 import type { VNode, WindowPersistence } from "../../api.d.ts";
 
+export type { WindowPersistence } from "../../api.d.ts";
+
 export type Node =
   | { kind: "label"; text: string }
   | { kind: "button"; label: string; onClick?: () => void }

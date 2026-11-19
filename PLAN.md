@@ -64,9 +64,8 @@ has yet rendered:
   would drive the `ui.menu` / `ui.menuItem` renderer.~~ **Done:** the
   **uploader** tool drives `ui.menu` / `ui.menuItem` / `ui.menuSeparator`
   (see [ADR-0006](docs/adr/0006-menu-as-collector-primitive.md)).
-- A **pop-out / projector implementation** would let the user tear off a
-  window into a real browser popup (ADR 0002 is the plan; not yet
-  implemented).
+- ~~A **pop-out / projector implementation** would let the user tear off a
+  window into a real browser popup.~~ **Done** (#29, ADR 0002 amended).
 
 After those primitives come **embed mode polish** (currently `?tool=<id>` only),
 **per-tool config** (a tool that has settings), and **persistence beyond
@@ -133,7 +132,7 @@ surface**, **Signal**, **Identity group**, and **Instance root** terms in
       `DesktopRoots` host that mounts each instance into its own root. (ADR-0008)
 - [x] **First `ui.custom` driver** — Tap BPM reworked into a single tap pad
       (Custom widget) with a linear-regression tempo estimator + confidence.
-- [ ] **(future)** Pop-out as a live Portal of a window subtree into a popup
+- [x] **Pop-out** as a live Portal of a window subtree into a popup
       document — supersedes ADR-0002's serialized projection (caveats: inject the
       stylesheet, confirm Preact creates nodes in the target `ownerDocument`).
 
@@ -172,7 +171,7 @@ surface**, **Signal**, **Identity group**, and **Instance root** terms in
 
 - [ ] **Resizable windows** — at least a bottom-right handle. Postponed
       from v1. Position persistence decision still needed.
-- [ ] **Pop-out button** — appears in the window chrome. Opens the
+- [x] **Pop-out button** — appears in the window chrome. Opens the
       window in a real browser popup via `window.open`, then the
       runtime drives the popup as a projector (ADR 0002).
 - [ ] **PiP** — `document.pictureInPictureWindow` for a video-style

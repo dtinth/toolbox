@@ -46,3 +46,16 @@ down every widget's component instance.
 Caveats to handle when pop-out is actually built (it is still unbuilt): inject the
 Tailwind stylesheet into the popup document, and confirm Preact creates nodes in
 the target `ownerDocument`.
+
+## Built (issue #29)
+
+Both caveats came out fine. The popup gets a copy of every `<style>` and
+stylesheet `<link>` in this page's `<head>`. Preact creates nodes with the
+global `document`, so new nodes are born in this document; inserting them into
+the popup adopts them, and their listeners still run here. A test in the browser
+moved a text field out and back and kept the very same element, value and all.
+
+Each Window's content renders into a host element of its own, under an anchor in
+the window body. Popping out moves that host into the popup; nothing unmounts.
+Popovers (menus, the file `…` menu) open in their anchor's `ownerDocument`, so
+they appear in the popup too.

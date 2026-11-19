@@ -13,6 +13,8 @@ import {
 } from "@preact/signals";
 import type { Preact } from "../../api.d.ts";
 
+export type { Preact } from "../../api.d.ts";
+
 export const preactApi: Preact = {
   h,
   Fragment,

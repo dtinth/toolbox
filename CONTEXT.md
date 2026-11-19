@@ -183,7 +183,12 @@ into the popup document (a hand-rolled `render`-into-host, _not_ Preact/compat's
 `createPortal`), so the tool's JS, closures, and **Signals** never leave the main
 document and event handlers fire there for free. (Earlier this was a _serialized_
 vDOM projection; revised once **Custom widgets** made live Preact unserializable —
-see ADR-0002, amended.)
+see ADR-0002, amended.) Built in `src/runtime/popout.ts` (issue #29): the
+title bar's ⧉ button, or a docked tab's, opens the popup. The **Slot** carries a
+`poppedOut` flag and keeps its place, floating or docked, with a note and a
+"Bring it back" button. Closing the popup brings the Window back; it never
+closes it. A **Workspace** never stores pop-out, since reopening a popup on load
+would need a click nobody made.
 _Avoid_: mirror, replica, child window, serialized projection
 
 **Blob**:

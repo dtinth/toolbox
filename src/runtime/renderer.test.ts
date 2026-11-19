@@ -23,10 +23,14 @@ const slotAt = (over: Partial<Slot> = {}): Slot => ({
   y: 20,
   zIndex: 1,
   present: true,
+  poppedOut: false,
   width: null,
   height: null,
   ...over,
 });
+
+/** The vnodes a window's body renders, through its portal. */
+const bodyContent = (el: any): any[] => el.props.children[1].props.children[0].props.content;
 
 const inertDrag = {
   containerRef: { current: null },
@@ -173,9 +177,7 @@ describe("windowToPreact (pure window markup)", () => {
       menus: [],
     };
     const el = windowToPreact(w, makeCtx(new Map(), "w"), inertDrag) as any;
-    const body = el.props.children[1];
-    const children = body.props.children;
-    const spinnerContainer = Array.isArray(children) ? children[0] : children;
+    const spinnerContainer = bodyContent(el)[0];
     expect(spinnerContainer.props["data-toolbox-spinner"]).toBe("");
   });
 });
@@ -466,8 +468,7 @@ describe("custom widgets and identity groups", () => {
       children: [{ kind: "custom", render: () => marker }],
     };
     const el = windowToPreact(w, makeCtx(new Map()), inertDrag) as any;
-    const body = el.props.children[1];
-    const custom = body.props.children[0];
+    const custom = bodyContent(el)[0];
     // A stable component wrapper (so the live Preact mount survives redraws).
     expect(custom.type).toBeTypeOf("function");
     expect(custom.key).toBe("1:0");
@@ -490,7 +491,7 @@ describe("custom widgets and identity groups", () => {
       ],
     };
     const el = windowToPreact(w, makeCtx(new Map()), inertDrag) as any;
-    const kids = el.props.children[1].props.children;
+    const kids = bodyContent(el);
     expect(kids).toHaveLength(3);
     expect(kids.map((k: any) => k.key)).toStrictEqual(["1:0", "editors:0", "2:0"]);
   });
