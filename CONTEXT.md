@@ -59,6 +59,24 @@ A Slot id appears in the Layout at most once; `normalize` keeps the first copy
 and drops the rest.
 _Avoid_: cell, region, area, editor group, panel
 
+**Docked**:
+A **Window** is docked exactly when its **Slot** id is in the **Layout**. There
+is no flag on the Slot: two records of one fact can disagree. A docked Window is
+still drawn by its own tool's root, as a fixed element, and only takes its
+rectangle from its **Pane** (`src/runtime/dock-controller.ts`). Its Slot keeps
+the floating `x`, `y`, `width` and `height`, which are not the truth while it is
+docked, so floating it again puts it back where it last floated. The cascade
+skips docked Slots. Docking is off in the embed host, which draws no Layout.
+_Avoid_: snapped, attached, tiled, pinned
+
+**Compass**:
+The buttons a drag can dock onto (`src/runtime/docking.ts`, issue #20): five in
+the **Pane** under the pointer (a tab in the middle, a split on each side), and
+one per edge of the **Layout** when the pointer comes near that edge. Only a
+button is a target; let go anywhere else and the Window floats there. An outline
+shows the rectangle the Window would get. Escape cancels.
+_Avoid_: drop zone, snap zone, dock guide, overlay
+
 **Divider**:
 The boundary between two children of a split, and the control that moves it.
 The line the user sees is one pixel; the area that takes the drag is twenty,

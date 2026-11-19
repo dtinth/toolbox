@@ -5,6 +5,7 @@ import { type ChildNode, type MenuNode, type Node, type WindowNode } from "./col
 import { type Slot } from "./runtime.ts";
 import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH } from "./window-manager.ts";
 import { filesFromClipboardItems, filesFromDataTransfer } from "./file-intake.ts";
+import { type DockTarget, type Rect } from "./docking.ts";
 
 // What a window falls back to before the window manager has seated it. Never
 // stored — it only keeps the first render of a brand-new window from throwing.
@@ -20,7 +21,38 @@ export interface RenderContext {
   onFocusWindow: (id: string) => void;
   onMoveWindow: (id: string, x: number, y: number) => void;
   onResizeWindow: (id: string, width: number, height: number) => void;
+  /** Docking, when the host has a Layout. Absent, every window floats. */
+  dock?: DockContext;
 }
+
+/** Where a docked Window is drawn. */
+export interface DockPlacement {
+  /** The Pane's rectangle under its tab bar, in viewport pixels. */
+  rect: Rect;
+  /** Whether its tab is the one in front. A Window behind another tab is not drawn. */
+  shown: boolean;
+}
+
+export interface DockContext {
+  /** Where a docked Window goes, or null when it floats. */
+  placeOf: (id: string) => DockPlacement | null;
+  /** A floating Window is being dragged by its title; the pointer is at x, y. */
+  dragMove: (id: string, x: number, y: number) => void;
+  /**
+   * The drag is over. Returns the target it docked at (or went back to), or
+   * null when it should simply float where it was let go.
+   */
+  dragEnd: (commit: boolean) => DockTarget | null;
+}
+
+/**
+ * Stacking. Docked windows sit at one level; the Layout's tab bars and dividers
+ * (drawn by the host) sit just above them, so a divider can be grabbed where it
+ * overlaps a window's edge; floating windows sit above both.
+ */
+export const DOCKED_Z = 1;
+export const LAYOUT_CHROME_Z = 2;
+const FLOATING_Z = 3;
 
 /**
  * Pure node renderer: converts a single leaf/row Node to a VNode.
@@ -836,29 +868,49 @@ function useWindowDrag(
       dx = ev.clientX - startX;
       dy = ev.clientY - startY;
       container.style.transform = `translate(${dx}px, ${dy}px)`;
+      ctx.dock?.dragMove(w.id, ev.clientX, ev.clientY);
     };
     const cleanup = () => {
       globalThis.removeEventListener("pointermove", onPointerMove);
       globalThis.removeEventListener("pointerup", onPointerUp);
       globalThis.removeEventListener("pointercancel", onPointerUp);
+      globalThis.removeEventListener("keydown", onKeyDown, true);
       document.documentElement.style.userSelect = prevUserSelect;
       cleanupRef.current = null;
     };
     const onPointerUp = () => {
       cleanup();
+      container.style.transform = "";
+      // Let go on a compass button: the window docks, and the next render
+      // gives it the Pane's rectangle. Its floating seat stays as it was.
+      const landed = ctx.dock?.dragEnd(true) ?? null;
+      if (landed !== null) {
+        return;
+      }
       // Bake the transform offset into left/top in one shot, then commit to the
       // window manager so future re-renders agree with the DOM.
       const finalLeft = startLeft + dx;
       const finalTop = startTop + dy;
-      container.style.transform = "";
       container.style.left = `${finalLeft}px`;
       container.style.top = `${finalTop}px`;
       ctx.onMoveWindow(w.id, finalLeft, finalTop);
+    };
+    // Escape puts the window back where the drag began, and docks nothing.
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape") {
+        return;
+      }
+      ev.preventDefault();
+      ev.stopPropagation();
+      cleanup();
+      container.style.transform = "";
+      ctx.dock?.dragEnd(false);
     };
 
     globalThis.addEventListener("pointermove", onPointerMove);
     globalThis.addEventListener("pointerup", onPointerUp);
     globalThis.addEventListener("pointercancel", onPointerUp);
+    globalThis.addEventListener("keydown", onKeyDown, true);
     cleanupRef.current = cleanup;
   };
 
@@ -941,6 +993,10 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, chrome: Window
   const { slots, activeWindowId, onFocusWindow } = ctx;
   const slot = slots.get(w.id) ?? UNPLACED;
   const isActive = w.id === activeWindowId;
+  const docked = ctx.dock?.placeOf(w.id) ?? null;
+  if (docked !== null) {
+    return dockedWindowToPreact(w, ctx, chrome, docked);
+  }
   // The user's size outranks the tool's `ui.window.setWidth`: otherwise a tool
   // that re-declares its width every frame would undo the resize immediately.
   const width = slot.width ?? w.width;
@@ -964,7 +1020,9 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, chrome: Window
 
   // A chosen width is authoritative (drop the min-width floor so it's exact);
   // otherwise the window sizes to its content above a sensible minimum.
-  const containerClass = `fixed ${width === undefined ? "min-w-72" : ""} flex flex-col rounded-lg overflow-hidden ${isActive ? "ring-1 ring-focused" : ""}`;
+  // A border and a shadow lift a floating window off whatever is docked below it,
+  // which shares its background colour.
+  const containerClass = `fixed ${width === undefined ? "min-w-72" : ""} flex flex-col rounded-lg overflow-hidden border border-toolbox-border shadow-xl ${isActive ? "ring-1 ring-focused" : ""}`;
 
   const titleBar = h("div", {
     class:
@@ -993,12 +1051,54 @@ export function windowToPreact(w: WindowNode, ctx: RenderContext, chrome: Window
   return h("div", {
     ref: chrome.containerRef,
     class: containerClass,
-    style: { left: slot.x, top: slot.y, zIndex: slot.zIndex, width, height } as any,
+    style: { left: slot.x, top: slot.y, zIndex: FLOATING_Z + slot.zIndex, width, height } as any,
     "data-toolbox-window": w.id,
     onPointerDown: () => {
       onFocusWindow(w.id);
     },
     children: [...children, resizeHandle],
+  }) as VNode;
+}
+
+/**
+ * A docked window. It stays a `position: fixed` element in its own instance's
+ * root, exactly like a floating one, and only takes its rectangle from the
+ * Pane. Moving it into the Pane's DOM instead would mean re-parenting a tool's
+ * render tree, which per-instance rendering (ADR-0008) exists to avoid.
+ *
+ * It has no title bar: the Pane's tab is its title, its close button and its
+ * handle. And no resize handle: the dividers size it.
+ */
+function dockedWindowToPreact(
+  w: WindowNode,
+  ctx: RenderContext,
+  chrome: WindowChrome,
+  docked: DockPlacement,
+): VNode {
+  const isActive = w.id === ctx.activeWindowId;
+  const body = h("div", {
+    class: "flex-1 bg-toolbox-surface p-3 flex flex-col gap-1 min-h-0 overflow-auto",
+    children: mapChildren(w.children, (child) => childToPreact(child, ctx)),
+  });
+  const menuBar = w.menus.length > 0 ? h(WindowMenuBar, { menus: w.menus }) : null;
+  const { x, y, w: width, h: height } = docked.rect;
+  return h("div", {
+    ref: chrome.containerRef,
+    class: `fixed flex flex-col overflow-hidden ${isActive ? "ring-1 ring-inset ring-focused" : ""}`,
+    style: {
+      left: x,
+      top: y,
+      width,
+      height,
+      zIndex: DOCKED_Z,
+      display: docked.shown ? undefined : "none",
+    } as any,
+    "data-toolbox-window": w.id,
+    "data-toolbox-docked": "",
+    onPointerDown: () => {
+      ctx.onFocusWindow(w.id);
+    },
+    children: menuBar ? [menuBar, body] : [body],
   }) as VNode;
 }
 
@@ -1009,6 +1109,7 @@ export function toPreact(
   onFocusWindow: (id: string) => void,
   onMoveWindow: (id: string, x: number, y: number) => void,
   onResizeWindow: (id: string, width: number, height: number) => void,
+  dock?: DockContext,
 ): VNode {
   const ctx: RenderContext = {
     slots,
@@ -1016,6 +1117,7 @@ export function toPreact(
     onFocusWindow,
     onMoveWindow,
     onResizeWindow,
+    dock,
   };
   return h("div", {
     class: "fixed inset-0",
@@ -1037,6 +1139,7 @@ export function toPreactInstance(
   onFocusWindow: (id: string) => void,
   onMoveWindow: (id: string, x: number, y: number) => void,
   onResizeWindow: (id: string, width: number, height: number) => void,
+  dock?: DockContext,
 ): VNode {
   const ctx: RenderContext = {
     slots,
@@ -1044,6 +1147,7 @@ export function toPreactInstance(
     onFocusWindow,
     onMoveWindow,
     onResizeWindow,
+    dock,
   };
   return h(Fragment, null, ...windows.map((w) => h(Window, { w, ctx, key: w.id }))) as VNode;
 }

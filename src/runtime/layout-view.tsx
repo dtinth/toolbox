@@ -38,12 +38,31 @@ export interface LayoutViewProps {
   onCloseTab?: (tabId: string) => void;
   /** What to draw when the tree is empty. */
   empty?: ComponentChildren;
+  /** Whether a tab gets a close button. Omit it to give every tab one. */
+  canCloseTab?: (tabId: string) => boolean;
+  /** Called when the user asks for a tab to float. Omit it to hide the button. */
+  onFloatTab?: (tabId: string) => void;
+  /** A press on a tab, which may turn into a drag that pulls it out. */
+  onTabPointerDown?: (tabId: string, e: PointerEvent) => void;
+  /** Whether a tab is drawn. A dormant Window keeps its tab, but hides it. */
+  isTabShown?: (tabId: string) => boolean;
+  /**
+   * Draw only the chrome: tab bars and dividers. The panes are see-through and
+   * let the pointer through, because the content is drawn by someone else, in
+   * the same place, underneath. This is how the desktop uses it.
+   */
+  chromeOnly?: boolean;
 }
 
 interface ViewContext {
   renderTab: (tabId: string) => ComponentChildren;
   labelOf: (tabId: string) => string;
   onCloseTab?: (tabId: string) => void;
+  canCloseTab?: (tabId: string) => boolean;
+  onFloatTab?: (tabId: string) => void;
+  onTabPointerDown?: (tabId: string, e: PointerEvent) => void;
+  isTabShown?: (tabId: string) => boolean;
+  chromeOnly?: boolean;
   /** Put a changed node back into the tree at its path. */
   update: (path: LayoutPath, next: LayoutNode) => void;
 }
@@ -62,6 +81,11 @@ export function LayoutView({
   onChange,
   onCloseTab,
   empty,
+  canCloseTab,
+  onFloatTab,
+  onTabPointerDown,
+  isTabShown,
+  chromeOnly,
 }: LayoutViewProps) {
   if (root === null) {
     return (
@@ -74,6 +98,11 @@ export function LayoutView({
     renderTab,
     labelOf,
     onCloseTab,
+    canCloseTab,
+    onFloatTab,
+    onTabPointerDown,
+    isTabShown,
+    chromeOnly,
     update: (path, next) => {
       onChange(replaceAt(root, path, next));
     },
@@ -271,7 +300,7 @@ function Divider({
       // would have no height at all to grab. The line
       // the user sees is the `::before`, one pixel wide inside a grab area of
       // twenty. The element itself stays invisible.
-      class={`absolute z-10 m-0 border-0 touch-none select-none focus:outline-none before:absolute before:bg-toolbox-border before:content-[''] hover:before:bg-toolbox-border-light focus:before:bg-focused ${
+      class={`pointer-events-auto absolute z-10 m-0 border-0 touch-none select-none focus:outline-none before:absolute before:bg-toolbox-border before:content-[''] hover:before:bg-toolbox-border-light focus:before:bg-focused ${
         row
           ? "top-0 bottom-0 h-auto cursor-col-resize before:top-0 before:bottom-0 before:left-1/2 before:-ml-px before:w-px"
           : "right-0 left-0 cursor-row-resize before:top-1/2 before:right-0 before:left-0 before:-mt-px before:h-px"
@@ -296,38 +325,64 @@ function PaneView({
   ctx: ViewContext;
 }) {
   const active = node.tabs[node.activeTab] ?? node.tabs[0];
+  const shown = (tab: string) => ctx.isTabShown?.(tab) ?? true;
+  const closable = (tab: string) =>
+    ctx.onCloseTab !== undefined && (ctx.canCloseTab?.(tab) ?? true);
   return (
-    <div class="absolute inset-0 flex flex-col overflow-hidden rounded bg-toolbox-surface">
-      <div role="tablist" class="flex shrink-0 overflow-x-auto bg-toolbox-content">
-        {node.tabs.map((tab, i) => (
-          <div key={tab} class="flex items-center">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === active}
-              onClick={() => {
-                ctx.update(path, { ...node, activeTab: i });
-              }}
-              class={`h-9 px-3 text-sm whitespace-nowrap ${
-                tab === active ? "bg-toolbox-surface text-toolbox-text" : "text-toolbox-muted"
-              }`}
-            >
-              {ctx.labelOf(tab)}
-            </button>
-            {ctx.onCloseTab === undefined ? null : (
+    <div
+      class={`absolute inset-0 flex flex-col overflow-hidden rounded ${
+        ctx.chromeOnly === true ? "" : "bg-toolbox-surface"
+      }`}
+    >
+      <div
+        role="tablist"
+        class="pointer-events-auto flex h-9 shrink-0 overflow-x-auto bg-toolbox-content"
+      >
+        {node.tabs.map((tab, i) =>
+          shown(tab) ? (
+            <div key={tab} class="flex items-center">
               <button
                 type="button"
-                aria-label={`Close ${ctx.labelOf(tab)}`}
-                onClick={() => ctx.onCloseTab?.(tab)}
-                class="h-9 w-7 text-toolbox-muted hover:text-toolbox-text"
+                role="tab"
+                aria-selected={tab === active}
+                onPointerDown={(e) => ctx.onTabPointerDown?.(tab, e)}
+                onClick={() => {
+                  ctx.update(path, { ...node, activeTab: i });
+                }}
+                class={`h-9 px-3 text-sm whitespace-nowrap ${ctx.onTabPointerDown === undefined ? "" : "touch-none"} ${
+                  tab === active ? "bg-toolbox-surface text-toolbox-text" : "text-toolbox-muted"
+                }`}
               >
-                ×
+                {ctx.labelOf(tab)}
               </button>
-            )}
-          </div>
-        ))}
+              {ctx.onFloatTab === undefined ? null : (
+                <button
+                  type="button"
+                  aria-label={`Float ${ctx.labelOf(tab)}`}
+                  title="Float"
+                  onClick={() => ctx.onFloatTab?.(tab)}
+                  class="h-9 w-7 text-toolbox-muted hover:text-toolbox-text"
+                >
+                  ⇱
+                </button>
+              )}
+              {closable(tab) ? (
+                <button
+                  type="button"
+                  aria-label={`Close ${ctx.labelOf(tab)}`}
+                  onClick={() => ctx.onCloseTab?.(tab)}
+                  class="h-9 w-7 text-toolbox-muted hover:text-toolbox-text"
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+          ) : null,
+        )}
       </div>
-      <div class="min-h-0 flex-1 overflow-auto p-3">{ctx.renderTab(active)}</div>
+      {ctx.chromeOnly === true ? null : (
+        <div class="min-h-0 flex-1 overflow-auto p-3">{ctx.renderTab(active)}</div>
+      )}
     </div>
   );
 }

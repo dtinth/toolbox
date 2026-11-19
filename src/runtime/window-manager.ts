@@ -1,5 +1,9 @@
 // Window manager: owns geometry, z-order, focus, placement, and scoped-id encoding
-// for all windows across all tool instances.
+// for all windows across all tool instances — and the Layout tree that docked
+// windows take their place from.
+
+import { dock as dockInto, type DockTarget, isDocked as inTree } from "./docking.ts";
+import { type LayoutNode, nodeAt, pathOfTab, removeTab, replaceAt } from "./layout-tree.ts";
 
 /**
  * The durable seat a Window occupies, keyed by scoped id. A Slot outlives the
@@ -105,6 +109,37 @@ export interface WindowManager {
 
   /** Read-only view of all known slots. */
   readonly slots: ReadonlyMap<string, Slot>;
+
+  /**
+   * The Layout tree, or null when nothing is docked. Its tabs are Slot ids.
+   *
+   * A window is docked exactly when its id is in this tree. There is no flag
+   * on the Slot: two records of one fact can disagree, and one cannot.
+   */
+  readonly layout: LayoutNode | null;
+
+  /**
+   * Dock a window at `target`, or move it there if it is docked already.
+   *
+   * The Slot keeps its floating `x`, `y`, `width` and `height` untouched while
+   * docked. They are not the truth while the tree places the window, so every
+   * reader must ask `isDocked` first — but keeping them is what lets `undock`
+   * put the window back where it last floated (issue #24).
+   */
+  dock: (id: string, target: DockTarget) => void;
+
+  /**
+   * Take a window out of the tree, and raise it. With `at`, it floats there —
+   * for a window dragged out by its tab. Without, it goes back to where it
+   * floated before it was docked.
+   */
+  undock: (id: string, at?: { x: number; y: number }) => void;
+
+  /** Whether the window's id is in the Layout tree. */
+  isDocked: (id: string) => boolean;
+
+  /** Replace the tree whole: after a divider drag, or a click on a tab. */
+  setLayout: (next: LayoutNode | null) => void;
 }
 
 /**
@@ -133,6 +168,39 @@ function cascadeOffset(taken: number, cx: number, cy: number, vw: number, vh: nu
 export function createWindowManager(): WindowManager {
   const slots = new Map<string, Slot>();
   let zCounter = 0;
+  let layout: LayoutNode | null = null;
+
+  /** Slots that hold a seat in the cascade: the floating ones. */
+  function floatingCount(): number {
+    let count = 0;
+    for (const id of slots.keys()) {
+      if (!inTree(layout, id)) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /** Bring a docked window's tab to the front. True when that changed anything. */
+  function showTab(id: string): boolean {
+    if (layout === null) {
+      return false;
+    }
+    const path = pathOfTab(layout, id);
+    if (path === null) {
+      return false;
+    }
+    const pane = nodeAt(layout, path);
+    if (pane === null || pane.type !== "leaf") {
+      return false;
+    }
+    const index = pane.tabs.indexOf(id);
+    if (index === pane.activeTab) {
+      return false;
+    }
+    layout = replaceAt(layout, path, { ...pane, activeTab: index });
+    return true;
+  }
 
   function place(orderedIds: string[], scope = ""): void {
     const declared = new Set(orderedIds);
@@ -143,7 +211,7 @@ export function createWindowManager(): WindowManager {
     }
     for (const id of orderedIds) {
       if (!slots.has(id)) {
-        const taken = slots.size;
+        const taken = floatingCount();
         const vw = globalThis.window?.innerWidth ?? 800;
         const vh = globalThis.window?.innerHeight ?? 600;
         const cx = vw / 2 - 150;
@@ -166,6 +234,7 @@ export function createWindowManager(): WindowManager {
     if (slot === undefined || !slot.present) {
       return false;
     }
+    const tabChanged = showTab(id);
     // Compare against the present windows only: a dormant window sitting on top
     // would otherwise pin everything below it, unfocusable.
     let maxZ = 0;
@@ -178,7 +247,7 @@ export function createWindowManager(): WindowManager {
       slot.zIndex = ++zCounter;
       return true;
     }
-    return false;
+    return tabChanged;
   }
 
   function move(id: string, x: number, y: number): void {
@@ -213,6 +282,9 @@ export function createWindowManager(): WindowManager {
     for (const key of slots.keys()) {
       if (key.startsWith(prefix)) {
         slots.delete(key);
+        if (layout !== null) {
+          layout = removeTab(layout, key);
+        }
       }
     }
   }
@@ -220,6 +292,28 @@ export function createWindowManager(): WindowManager {
   function reset(): void {
     slots.clear();
     zCounter = 0;
+    layout = null;
+  }
+
+  function dock(id: string, target: DockTarget): void {
+    if (!slots.has(id)) {
+      return;
+    }
+    layout = dockInto(layout, id, target);
+    showTab(id);
+  }
+
+  function undock(id: string, at?: { x: number; y: number }): void {
+    const slot = slots.get(id);
+    if (slot === undefined || layout === null) {
+      return;
+    }
+    layout = removeTab(layout, id);
+    if (at !== undefined) {
+      slot.x = at.x;
+      slot.y = at.y;
+    }
+    slot.zIndex = ++zCounter;
   }
 
   return {
@@ -232,6 +326,15 @@ export function createWindowManager(): WindowManager {
     reset,
     get slots(): ReadonlyMap<string, Slot> {
       return slots;
+    },
+    get layout(): LayoutNode | null {
+      return layout;
+    },
+    dock,
+    undock,
+    isDocked: (id) => inTree(layout, id),
+    setLayout: (next) => {
+      layout = next;
     },
   };
 }

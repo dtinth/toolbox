@@ -420,4 +420,103 @@ describe("window-manager", () => {
       });
     });
   });
+
+  describe("docking", () => {
+    it("starts with nothing docked", () => {
+      const wm = createWindowManager();
+      expect(wm.layout).toBeNull();
+    });
+
+    it("docks a window into the Layout tree", () => {
+      const wm = createWindowManager();
+      wm.place(["a", "b"]);
+      wm.dock("a", { kind: "edge", side: "left" });
+      wm.dock("b", { kind: "split", pane: "a", side: "right" });
+      expect(wm.isDocked("a")).toBeTruthy();
+      expect(wm.isDocked("b")).toBeTruthy();
+      expect(wm.layout).toMatchObject({ type: "split", direction: "row" });
+    });
+
+    it("keeps the floating geometry of a docked window, so undocking can put it back", () => {
+      const wm = createWindowManager();
+      wm.place(["a"]);
+      wm.move("a", 40, 60);
+      wm.resize("a", 300, 200);
+      wm.dock("a", { kind: "edge", side: "left" });
+      wm.undock("a");
+      expect(wm.isDocked("a")).toBeFalsy();
+      expect(wm.slots.get("a")).toMatchObject({ x: 40, y: 60, width: 300, height: 200 });
+    });
+
+    it("undocks to a given spot, for a window dragged out by its tab", () => {
+      const wm = createWindowManager();
+      wm.place(["a"]);
+      wm.dock("a", { kind: "edge", side: "left" });
+      wm.undock("a", { x: 500, y: 300 });
+      expect(wm.slots.get("a")).toMatchObject({ x: 500, y: 300 });
+    });
+
+    it("raises an undocked window, so it does not land under the others", () => {
+      const wm = createWindowManager();
+      wm.place(["a", "b"]);
+      wm.dock("a", { kind: "edge", side: "left" });
+      wm.undock("a");
+      expect(wm.activeId()).toBe("a");
+    });
+
+    it("cascades a new window past the floating windows only", () => {
+      // A docked window takes its place from the tree, so it holds no seat in
+      // the cascade.
+      const wm = createWindowManager();
+      wm.place(["a"]);
+      wm.dock("a", { kind: "edge", side: "left" });
+      wm.place(["b"]);
+      expect(wm.slots.get("b")).toMatchObject({ x: 800 / 2 - 150, y: 600 / 2 - 100 });
+    });
+
+    it("keeps a dormant window docked, so it comes back as the same tab", () => {
+      const wm = createWindowManager();
+      wm.place(["a", "b"]);
+      wm.dock("a", { kind: "edge", side: "left" });
+      wm.dock("b", { kind: "tab", pane: "a" });
+      wm.place(["a"]);
+      expect(wm.isDocked("b")).toBeTruthy();
+    });
+
+    it("takes a closed tool's windows out of the tree", () => {
+      const wm = createWindowManager();
+      wm.place(["i1::a", "i2::b"]);
+      wm.dock("i1::a", { kind: "edge", side: "left" });
+      wm.dock("i2::b", { kind: "split", pane: "i1::a", side: "right" });
+      wm.forget("i1::");
+      expect(wm.isDocked("i1::a")).toBeFalsy();
+      expect(wm.layout).toMatchObject({ type: "leaf", tabs: ["i2::b"] });
+    });
+
+    it("empties the tree on reset", () => {
+      const wm = createWindowManager();
+      wm.place(["a"]);
+      wm.dock("a", { kind: "edge", side: "left" });
+      wm.reset();
+      expect(wm.layout).toBeNull();
+    });
+
+    it("takes a new tree whole, for a divider drag or a tab switch", () => {
+      const wm = createWindowManager();
+      wm.place(["a", "b"]);
+      wm.dock("a", { kind: "edge", side: "left" });
+      wm.dock("b", { kind: "tab", pane: "a" });
+      wm.setLayout({ type: "leaf", tabs: ["a", "b"], activeTab: 0 });
+      expect(wm.layout).toMatchObject({ activeTab: 0 });
+    });
+
+    it("brings a docked window's tab to the front when it is focused", () => {
+      const wm = createWindowManager();
+      wm.place(["a", "b"]);
+      wm.dock("a", { kind: "edge", side: "left" });
+      wm.dock("b", { kind: "tab", pane: "a" });
+      wm.focus("a");
+      expect(wm.layout).toMatchObject({ tabs: ["a", "b"], activeTab: 0 });
+    });
+  });
 });

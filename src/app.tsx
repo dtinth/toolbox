@@ -14,6 +14,7 @@ import { shouldInterceptClick } from "./app/click.ts";
 import { runningManifestIds } from "./app/host.ts";
 import { computePaletteVisibility } from "./app/palette-visibility.ts";
 import { FilterableList } from "./app/filterable-list.tsx";
+import { DockLayer } from "./app/dock-layer.tsx";
 
 export interface PaletteProps {
   open: boolean;
@@ -485,6 +486,7 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
   return (
     <div class="toolbox-host fixed inset-0">
       <DesktopRoots runtime={runtime} />
+      <DockLayer runtime={runtime} />
       <ToastLayer
         toasts={toasts}
         onDismiss={(id) => {

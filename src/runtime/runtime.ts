@@ -2,6 +2,12 @@ import { collect, ui, type ChildNode, type Node, type Ui, type WindowNode } from
 import { preactApi } from "./preact-api.ts";
 import { tw } from "./tw.ts";
 import { toPreact, toPreactInstance } from "./renderer.tsx";
+import {
+  createDockController,
+  type DockDrag,
+  type DockTarget,
+  type LayoutNode,
+} from "./dock-controller.ts";
 import type { Preact } from "../../api.d.ts";
 import { type VNode } from "preact";
 import {
@@ -65,6 +71,8 @@ export interface ToolInstanceInfo {
   name: string;
 }
 
+export type { DockDrag } from "./dock-controller.ts";
+
 export interface Runtime {
   launchTool: (opts: {
     /**
@@ -100,6 +108,39 @@ export interface Runtime {
   moveWindow: (id: string, x: number, y: number) => void;
   resizeWindow: (id: string, width: number, height: number) => void;
   activeWindowId: string | null;
+  /**
+   * Turn docking on. Off by default, so a host that draws no Layout — the
+   * embed host — never has a Window dock into a tree nobody can see.
+   */
+  setDockingEnabled: (enabled: boolean) => void;
+  /** The Layout tree the docked Windows sit in, or null when nothing is docked. */
+  readonly layout: LayoutNode | null;
+  /** Replace the tree: after a divider drag, or a click on a tab. */
+  setLayout: (next: LayoutNode | null) => void;
+  /** Dock a Window, or move a docked one. */
+  dockWindow: (id: string, target: DockTarget) => void;
+  /** Float a docked Window: at `at`, or where it last floated. */
+  undockWindow: (id: string, at?: { x: number; y: number }) => void;
+  /** The title a Window drew last, for its tab. Falls back to the id. */
+  windowTitle: (id: string) => string;
+  /** Close a Window the way its own close button would, if it has one. */
+  closeWindow: (id: string) => void;
+  /** Whether a Window has a close button. */
+  canCloseWindow: (id: string) => boolean;
+  /** Whether a Window is drawn right now. A dormant one is not. */
+  isWindowPresent: (id: string) => boolean;
+  /** The drag in progress, for the overlay. */
+  readonly dockDrag: DockDrag | null;
+  /** Follow a drag: the pointer is at x, y in the viewport. */
+  dockDragMove: (id: string, x: number, y: number) => void;
+  /**
+   * End a drag. With `commit`, a drop on a button docks the Window. Returns
+   * the target it dropped on, or null when it was let go over nothing (or the
+   * drag was cancelled).
+   */
+  dockDragEnd: (commit: boolean) => DockTarget | null;
+  /** Be told when the drag changes. Kept apart from `subscribe`, which redraws every tool. */
+  subscribeDockDrag: (onChange: () => void) => () => void;
   dispose: () => void;
   readonly disposed: boolean;
 }
@@ -188,6 +229,18 @@ function build(): TestRuntime {
   const subscribers = new Set<() => void>();
   const wm: WindowManager = createWindowManager();
   let disposed = false;
+  const docking = createDockController(wm, () => {
+    requestUpdate();
+  });
+  let dockingEnabled = false;
+  /** What each Window drew last: its title, and how to close it. */
+  const windowInfo = new Map<string, { title: string; onClose?: () => void }>();
+
+  function remember(windows: WindowNode[]): void {
+    for (const w of windows) {
+      windowInfo.set(w.id, { title: w.title || w.id, onClose: w.onClose });
+    }
+  }
 
   const toastCenter = createToastCenter({
     onChange: () => {
@@ -333,6 +386,11 @@ function build(): TestRuntime {
     dialogCenter.cancelForInstance(instanceId);
     instance.tickSubscribers.clear();
     wm.forget(instancePrefix(instanceId));
+    for (const id of windowInfo.keys()) {
+      if (id.startsWith(instancePrefix(instanceId))) {
+        windowInfo.delete(id);
+      }
+    }
     instances.delete(instanceId);
     const orderIdx = instanceOrder.indexOf(instanceId);
     if (orderIdx !== -1) {
@@ -371,8 +429,17 @@ function build(): TestRuntime {
     lastTree = allWindows;
     lastButtonRef = findLastButton(allWindows);
     wm.place(allWindows.map((w) => w.id));
+    remember(allWindows);
     const active = wm.activeId();
-    return toPreact(allWindows, wm.slots, active, focusWindow, moveWindow, resizeWindow);
+    return toPreact(
+      allWindows,
+      wm.slots,
+      active,
+      focusWindow,
+      moveWindow,
+      resizeWindow,
+      dockingEnabled ? docking.context : undefined,
+    );
   }
 
   // Per-instance composition (one Preact root per instance, ADR-0008). Returns
@@ -392,8 +459,17 @@ function build(): TestRuntime {
       windows.map((w) => w.id),
       instancePrefix(instanceId),
     );
+    remember(windows);
     const active = wm.activeId();
-    return toPreactInstance(windows, wm.slots, active, focusWindow, moveWindow, resizeWindow);
+    return toPreactInstance(
+      windows,
+      wm.slots,
+      active,
+      focusWindow,
+      moveWindow,
+      resizeWindow,
+      dockingEnabled ? docking.context : undefined,
+    );
   }
 
   function requestUpdate(): void {
@@ -531,6 +607,31 @@ function build(): TestRuntime {
     get activeWindowId() {
       return wm.activeId();
     },
+    setDockingEnabled: (enabled) => {
+      dockingEnabled = enabled;
+      requestUpdate();
+    },
+    get layout() {
+      return wm.layout;
+    },
+    setLayout: (next) => {
+      wm.setLayout(next);
+      requestUpdate();
+    },
+    dockWindow: docking.dock,
+    undockWindow: docking.undock,
+    windowTitle: (id) => windowInfo.get(id)?.title ?? id,
+    closeWindow: (id) => {
+      windowInfo.get(id)?.onClose?.();
+    },
+    canCloseWindow: (id) => windowInfo.get(id)?.onClose !== undefined,
+    isWindowPresent: (id) => wm.slots.get(id)?.present ?? false,
+    get dockDrag() {
+      return docking.drag;
+    },
+    dockDragMove: docking.move,
+    dockDragEnd: docking.end,
+    subscribeDockDrag: docking.subscribe,
     get windowTree() {
       return lastTree as readonly WindowNode[];
     },
