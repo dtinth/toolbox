@@ -441,3 +441,11 @@ export function keyDelta(key: string, direction: SplitDirection, step: number): 
     }
   }
 }
+
+/** Every tab in the tree, pane by pane, in order. */
+export function tabsOf(node: LayoutNode): string[] {
+  if (node.type === "leaf") {
+    return [...node.tabs];
+  }
+  return node.children.flatMap((child) => tabsOf(child));
+}

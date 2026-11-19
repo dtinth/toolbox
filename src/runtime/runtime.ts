@@ -14,6 +14,7 @@ import {
   createWindowManager,
   instancePrefix,
   scopeId,
+  type Arrangement,
   type WindowManager,
   type Slot,
 } from "./window-manager.ts";
@@ -25,7 +26,7 @@ import {
   type PickRequest,
 } from "./dialog-center.ts";
 
-export type { Slot } from "./window-manager.ts";
+export type { Arrangement, SavedSlot, Slot } from "./window-manager.ts";
 export type { Toast, ToastHandle } from "./toast-center.ts";
 export type {
   Dialog,
@@ -141,6 +142,18 @@ export interface Runtime {
   dockDragEnd: (commit: boolean) => DockTarget | null;
   /** Be told when the drag changes. Kept apart from `subscribe`, which redraws every tool. */
   subscribeDockDrag: (onChange: () => void) => () => void;
+  /** A copy of every Slot and the Layout tree, for a Workspace to store. */
+  arrangement: () => Arrangement;
+  /**
+   * Take a saved arrangement before its tools launch. Each Slot waits, dormant,
+   * for the tool whose instance id it names. Pass the same ids to `launchTool`.
+   */
+  adoptArrangement: (saved: Arrangement) => void;
+  /**
+   * Be told when the arrangement changes — including a move, which redraws
+   * nothing and so never reaches `subscribe`. Called often; debounce it.
+   */
+  subscribeArrangement: (onChange: () => void) => () => void;
   dispose: () => void;
   readonly disposed: boolean;
 }
@@ -227,7 +240,12 @@ function build(): TestRuntime {
   let updates = 0;
   let pendingRender = false;
   const subscribers = new Set<() => void>();
-  const wm: WindowManager = createWindowManager();
+  const arrangementSubscribers = new Set<() => void>();
+  const wm: WindowManager = createWindowManager(() => {
+    for (const sub of arrangementSubscribers) {
+      sub();
+    }
+  });
   let disposed = false;
   const docking = createDockController(wm, () => {
     requestUpdate();
@@ -632,6 +650,17 @@ function build(): TestRuntime {
     dockDragMove: docking.move,
     dockDragEnd: docking.end,
     subscribeDockDrag: docking.subscribe,
+    arrangement: () => wm.arrangement(),
+    adoptArrangement: (saved) => {
+      wm.adopt(saved);
+      requestUpdate();
+    },
+    subscribeArrangement(onChange) {
+      arrangementSubscribers.add(onChange);
+      return () => {
+        arrangementSubscribers.delete(onChange);
+      };
+    },
     get windowTree() {
       return lastTree as readonly WindowNode[];
     },

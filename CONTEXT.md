@@ -86,6 +86,18 @@ and moved by the two arrow keys of its own axis, Home and End. A drag goes past
 a neighbour that is already at its minimum and takes from the next pane along.
 _Avoid_: sash, gutter, resizer, handle
 
+**Workspace**:
+A stored set of running **Tools** plus how their **Windows** are arranged: each
+Tool by its instance id and **Manifest** id, every **Slot** without `present`,
+and the **Layout** (`src/runtime/workspace.ts`, issue #26). Kept as JSON in
+`localStorage`, one key per Workspace; last write wins. Restoring puts the Slots
+in first, dormant, then launches each Tool under its saved instance id, so its
+Windows find their Slots. A Tool gone from the Manifest is dropped on restore,
+with its Slots and tabs. The `version` field has a migration hook; a stored
+Workspace with no migration to the current version loads as empty, which is
+the reset. Pop-out state is never stored.
+_Avoid_: session, project, profile, layout
+
 **Tool source**:
 TypeScript/JSX source under `tools/<id>/` in the repo. Compiled to plain ES
 modules under `public/tools/<id>/index.js` by a build step (Vite library mode,

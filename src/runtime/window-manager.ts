@@ -3,7 +3,15 @@
 // windows take their place from.
 
 import { dock as dockInto, type DockTarget, isDocked as inTree } from "./docking.ts";
-import { type LayoutNode, nodeAt, pathOfTab, removeTab, replaceAt } from "./layout-tree.ts";
+import {
+  type LayoutNode,
+  nodeAt,
+  normalize,
+  pathOfTab,
+  removeTab,
+  replaceAt,
+  tabsOf,
+} from "./layout-tree.ts";
 
 /**
  * The durable seat a Window occupies, keyed by scoped id. A Slot outlives the
@@ -29,6 +37,15 @@ export interface Slot {
    */
   width: number | null;
   height: number | null;
+}
+
+/** A Slot as a Workspace stores it: everything but `present`, which is never stored. */
+export type SavedSlot = Omit<Slot, "present">;
+
+/** What the user arranged: every Slot, and the Layout tree. */
+export interface Arrangement {
+  slots: Record<string, SavedSlot>;
+  layout: LayoutNode | null;
 }
 
 /** Floor for a user resize, so a window can never be dragged into nothing. */
@@ -140,6 +157,19 @@ export interface WindowManager {
 
   /** Replace the tree whole: after a divider drag, or a click on a tab. */
   setLayout: (next: LayoutNode | null) => void;
+
+  /** A copy of what the user arranged, for a Workspace to store. */
+  arrangement: () => Arrangement;
+
+  /**
+   * Take a saved arrangement, for a Workspace being restored.
+   *
+   * Each saved Slot comes in dormant. It holds its place until a tool whose
+   * instance id it names draws it — and on a fresh page no tool has yet. A
+   * saved Slot replaces a live one with the same id. Tree tabs with no Slot
+   * are dropped, so the tree never names a window nobody can seat.
+   */
+  adopt: (saved: Arrangement) => void;
 }
 
 /**
@@ -165,7 +195,12 @@ function cascadeOffset(taken: number, cx: number, cy: number, vw: number, vh: nu
   return (taken % (steps + 1)) * CASCADE_STEP;
 }
 
-export function createWindowManager(): WindowManager {
+/**
+ * `onChange` hears about every change to what the user arranged: a move, a
+ * resize, a raise, a dock, a new or forgotten Slot. A Workspace saves on it.
+ * Moves reach here without any redraw, so a redraw is not a signal for it.
+ */
+export function createWindowManager(onChange: () => void = () => {}): WindowManager {
   const slots = new Map<string, Slot>();
   let zCounter = 0;
   let layout: LayoutNode | null = null;
@@ -225,6 +260,7 @@ export function createWindowManager(): WindowManager {
           width: null,
           height: null,
         });
+        onChange();
       }
     }
   }
@@ -245,7 +281,11 @@ export function createWindowManager(): WindowManager {
     }
     if (slot.zIndex < maxZ) {
       slot.zIndex = ++zCounter;
+      onChange();
       return true;
+    }
+    if (tabChanged) {
+      onChange();
     }
     return tabChanged;
   }
@@ -255,6 +295,7 @@ export function createWindowManager(): WindowManager {
     if (slot) {
       slot.x = x;
       slot.y = y;
+      onChange();
     }
   }
 
@@ -263,6 +304,7 @@ export function createWindowManager(): WindowManager {
     if (slot) {
       slot.width = Math.max(MIN_WINDOW_WIDTH, width);
       slot.height = Math.max(MIN_WINDOW_HEIGHT, height);
+      onChange();
     }
   }
 
@@ -279,13 +321,18 @@ export function createWindowManager(): WindowManager {
   }
 
   function forget(prefix: string): void {
+    let changed = false;
     for (const key of slots.keys()) {
       if (key.startsWith(prefix)) {
         slots.delete(key);
+        changed = true;
         if (layout !== null) {
           layout = removeTab(layout, key);
         }
       }
+    }
+    if (changed) {
+      onChange();
     }
   }
 
@@ -293,6 +340,7 @@ export function createWindowManager(): WindowManager {
     slots.clear();
     zCounter = 0;
     layout = null;
+    onChange();
   }
 
   function dock(id: string, target: DockTarget): void {
@@ -301,6 +349,7 @@ export function createWindowManager(): WindowManager {
     }
     layout = dockInto(layout, id, target);
     showTab(id);
+    onChange();
   }
 
   function undock(id: string, at?: { x: number; y: number }): void {
@@ -314,6 +363,30 @@ export function createWindowManager(): WindowManager {
       slot.y = at.y;
     }
     slot.zIndex = ++zCounter;
+    onChange();
+  }
+
+  function arrangement(): Arrangement {
+    const saved: Record<string, SavedSlot> = {};
+    for (const [id, { x, y, zIndex, width, height }] of slots) {
+      saved[id] = { x, y, zIndex, width, height };
+    }
+    return { slots: saved, layout };
+  }
+
+  function adopt(saved: Arrangement): void {
+    for (const [id, slot] of Object.entries(saved.slots)) {
+      slots.set(id, { ...slot, present: false });
+      zCounter = Math.max(zCounter, slot.zIndex);
+    }
+    let next = normalize(saved.layout);
+    for (const tab of next === null ? [] : tabsOf(next)) {
+      if (next !== null && !slots.has(tab)) {
+        next = removeTab(next, tab);
+      }
+    }
+    layout = next;
+    onChange();
   }
 
   return {
@@ -335,6 +408,9 @@ export function createWindowManager(): WindowManager {
     isDocked: (id) => inTree(layout, id),
     setLayout: (next) => {
       layout = next;
+      onChange();
     },
+    arrangement,
+    adopt,
   };
 }
