@@ -67,6 +67,9 @@ rectangle from its **Pane** (`src/runtime/dock-controller.ts`). Its Slot keeps
 the floating `x`, `y`, `width` and `height`, which are not the truth while it is
 docked, so floating it again puts it back where it last floated. The cascade
 skips docked Slots. Docking is off in the embed host, which draws no Layout.
+A new sub-window floats at the cascade spot even when its main window is
+docked (issue #30): it is often a preview meant to sit beside the main one, and
+one drag docks it.
 _Avoid_: snapped, attached, tiled, pinned
 
 **Compass**:

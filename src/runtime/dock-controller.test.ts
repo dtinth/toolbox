@@ -128,4 +128,28 @@ describe("runtime docking", () => {
     runtime.undockWindow(id);
     expect(runtime.layout).toBeNull();
   });
+
+  it("floats a new sub-window, even when its main window is docked", async () => {
+    const runtime = createTestRuntime();
+    runtime.setDockingEnabled(true);
+    let open = false;
+    let update: (() => void) | undefined;
+    runtime.loadTool((api) => {
+      update = api.requestUpdate;
+      api.onRender = () => {
+        if (open) {
+          api.ui.window("sub", "Sub", () => {});
+        }
+      };
+    });
+    runtime.render();
+    const main = runtime.windowTree[0].id;
+    runtime.dockWindow(main, { kind: "edge", side: "left" });
+    open = true;
+    update?.();
+    await Promise.resolve();
+    const sub = main.replace("__main__", "sub");
+    expect(runtime.isWindowPresent(sub)).toBeTruthy();
+    expect(runtime.layout).toStrictEqual({ type: "leaf", tabs: [main], activeTab: 0 });
+  });
 });
