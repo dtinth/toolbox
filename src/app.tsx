@@ -291,6 +291,12 @@ export interface HostProps {
   paletteOpen: boolean;
   onPaletteOpenChange: (open: boolean) => void;
   onLaunch: (id: string) => void;
+  /**
+   * Save the scratch bench as a named Workspace. Returns an error message to
+   * show, or null once saved. Absent when there is nothing to promote: the page
+   * is a Workspace already.
+   */
+  onSaveWorkspace?: (name: string) => string | null;
 }
 
 export interface EmbedHostProps {
@@ -409,7 +415,48 @@ export function EmbedHost({ runtime }: EmbedHostProps) {
   );
 }
 
-export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLaunch }: HostProps) {
+/** Ask for a Workspace name, and ask again with the reason when it is refused. */
+function SaveWorkspaceModal({
+  onSave,
+  onClose,
+}: {
+  onSave: (name: string) => string | null;
+  onClose: () => void;
+}) {
+  const [attempt, setAttempt] = useState({ id: 1, title: "Save as workspace", value: "" });
+  return (
+    <InputModal
+      key={attempt.id}
+      request={{
+        id: attempt.id,
+        options: { title: attempt.title, placeholder: "Name, like “work”" },
+        value: attempt.value,
+      }}
+      onResolve={(_, name) => {
+        if (name === null) {
+          onClose();
+          return;
+        }
+        const error = onSave(name);
+        if (error === null) {
+          onClose();
+          return;
+        }
+        setAttempt({ id: attempt.id + 1, title: error, value: name });
+      }}
+    />
+  );
+}
+
+export function Host({
+  runtime,
+  manifest,
+  paletteOpen,
+  onPaletteOpenChange,
+  onLaunch,
+  onSaveWorkspace,
+}: HostProps) {
+  const [saving, setSaving] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [picks, setPicks] = useState<PickRequest[]>(() => runtime.pendingPicks());
   const [inputs, setInputs] = useState<InputRequest[]>(() => runtime.pendingInputs());
@@ -505,6 +552,27 @@ export function Host({ runtime, manifest, paletteOpen, onPaletteOpenChange, onLa
           runtime.resolveInput(id, v);
         }}
       />
+      {!visibility.isOpen && onSaveWorkspace !== undefined && instances.length > 0 ? (
+        <button
+          type="button"
+          data-toolbox-chrome
+          title="Keep these tools and this layout at their own URL"
+          class="fixed bottom-4 right-20 z-40 h-12 px-4 rounded-full bg-toolbox-surface border border-toolbox-border text-toolbox-text text-sm shadow-xl hover:bg-toolbox-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focused"
+          onClick={() => {
+            setSaving(true);
+          }}
+        >
+          Save as workspace
+        </button>
+      ) : null}
+      {saving && onSaveWorkspace !== undefined ? (
+        <SaveWorkspaceModal
+          onSave={onSaveWorkspace}
+          onClose={() => {
+            setSaving(false);
+          }}
+        />
+      ) : null}
       {!visibility.isOpen ? (
         <button
           type="button"

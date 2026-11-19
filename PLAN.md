@@ -24,10 +24,14 @@ on any lint warning.
   place; right-click / cmd-click / middle-click follow the item's
   `<a href="?tool=<id>">` and open the tool in a new tab (embed mode).
   No URL is written — the desktop URL stays as `/` regardless of which
-  tools are running.
-- **Embed mode** (`?tool=<id>`): a single tool runs in a clean desktop
-  with no launcher. Cmd-K is a no-op; the palette is never shown. The
-  URL is the source of truth for which tool is running.
+  tools are running, and nothing at `/` is saved. "Save as workspace"
+  moves the bench to `?workspace=<id>`.
+- **Workspace** (`?workspace=<id>`): desktop mode that restores a saved
+  Workspace on load and saves it as you go (`src/runtime/workspace.ts`).
+- **Embed mode** (`?tool=<id>`, or `?tool=a,b` for several): only those
+  tools run, in a clean desktop with no launcher. Cmd-K is a no-op; the
+  palette is never shown. The URL is the source of truth for which tools
+  are running.
 
 **Window chrome is now implemented:**
 

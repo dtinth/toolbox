@@ -95,7 +95,8 @@ in first, dormant, then launches each Tool under its saved instance id, so its
 Windows find their Slots. A Tool gone from the Manifest is dropped on restore,
 with its Slots and tabs. The `version` field has a migration hook; a stored
 Workspace with no migration to the current version loads as empty, which is
-the reset. Pop-out state is never stored.
+the reset. Pop-out state is never stored. Opened at `?workspace=<id>`; the
+scratch bench at `/` saves nothing until "Save as workspace" gives it an id.
 _Avoid_: session, project, profile, layout
 
 **Tool source**:
@@ -162,8 +163,9 @@ _Avoid_: retained mode, immediate mode GUI (those have different technical
 connotations; here we borrow the _vibe_, not the engine-loop semantics)
 
 **Embed mode**:
-Runtime running a single tool full-window with no launcher chrome, activated
-by `?tool=<id>` query param.
+Runtime running only the tools the URL names, with no launcher chrome, activated
+by the `?tool=<id>` query param. Commas name more than one: `?tool=a,b`. Locked:
+no palette, no Cmd-K, no docking, and nothing persists. Wins over `?workspace=`.
 _Avoid_: single-tool mode, kiosk
 
 **Projector**:
@@ -396,9 +398,11 @@ _Avoid_: radio, tabs, toggle group, button group, switch
 > **Dev:** "What happens if I open `/?tool=qr-code-reader`?"
 > **Domain expert:** "The runtime loads, sees the query param, and
 > launches the QR reader via `runtime.launchTool` — the QR reader
-> becomes a running tool instance. The param names one manifest id;
-> commas are not split. Nothing writes the URL back, so it does not
-> change as tools are launched and closed. The cmd-k palette
+> becomes a running tool instance. `?tool=qr-code-reader,counter`
+> launches both. Nothing writes the URL back: `/` stays `/` as tools
+> are launched and closed, and nothing there is saved. To keep a
+> bench, save it as a **Workspace**; the URL becomes
+> `?workspace=<id>`, and from then on it saves as you go. The cmd-k palette
 > auto-opens on the home page (no `?tool=`); the embed-mode URL also
 > works in a new tab, since each palette item is an `<a href="?tool=…">`."
 >
