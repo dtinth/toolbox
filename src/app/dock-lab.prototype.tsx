@@ -1,13 +1,18 @@
 // PROTOTYPE, throwaway. Issue #20: what should drag-to-dock feel like?
 //
-// Three variants of docking a Window into the Layout tree, on one page at
-// `/?lab=dock`, switched with `?variant=A|B|C` or the bar at the bottom:
+// Variants of docking a Window into the Layout tree, on one page at
+// `/?lab=dock`, switched with `?variant=A|A2|B|B2|C` or the bar at the bottom:
 //
 //   A  Edge zones.  Drag a window over a pane. Where you are in the pane picks
 //                   the spot: near an edge splits, the middle adds a tab. A
 //                   tinted box shows the pane you would get.
 //   B  Compass.     Drag a window, and five buttons appear in each pane. Only a
 //                   button is a target. An outline shows the pane you would get.
+//   A2 Armed zones. As A, but a pane's zones only work after the pointer has
+//                   touched that pane's tab bar, and only until it leaves the
+//                   pane. Anywhere else, the window just moves.
+//   B2 Slim compass. As B, but only the pane under the pointer shows its five
+//                   buttons, and an edge button shows only near that edge.
 //   C  Place mode.  No drag at all. Press "Dock", then pick the spot with the
 //                   keyboard or with big buttons. The tree itself moves to show
 //                   the result before you commit.
@@ -29,11 +34,13 @@ import {
 } from "../runtime/layout-tree.ts";
 import { LayoutView } from "../runtime/layout-view.tsx";
 
-type Variant = "A" | "B" | "C";
-const VARIANTS: Variant[] = ["A", "B", "C"];
+type Variant = "A" | "A2" | "B" | "B2" | "C";
+const VARIANTS: Variant[] = ["A", "A2", "B", "B2", "C"];
 const VARIANT_NAMES: Record<Variant, string> = {
   A: "Edge zones",
+  A2: "Armed zones",
   B: "Compass",
+  B2: "Slim compass",
   C: "Place mode",
 };
 
@@ -233,6 +240,9 @@ interface CompassButton {
   rect: Rect;
   target: Target;
   glyph: string;
+  /** The pane it sits in, or the screen edge it stands for. */
+  pane?: Rect;
+  edge?: Side;
 }
 
 function compassButtons(
@@ -249,47 +259,77 @@ function compassButtons(
   });
   if (tree === null) {
     return [
-      {
-        rect: at(area.w / 2, area.h / 2),
-        target: { kind: "root", side: "left" },
-        glyph: "▣",
-      },
+      { rect: at(area.w / 2, area.h / 2), target: { kind: "root", side: "left" }, glyph: "▣" },
     ];
   }
   const out: CompassButton[] = [];
   const step = BUTTON + GAP;
+  const spots: [Side, number, number, string][] = [
+    ["left", -step, 0, "◧"],
+    ["right", step, 0, "◨"],
+    ["top", 0, -step, "⬒"],
+    ["bottom", 0, step, "⬓"],
+  ];
   for (const pane of panes) {
-    const cx = pane.rect.x + pane.rect.w / 2;
-    const cy = pane.rect.y + pane.rect.h / 2;
+    const r = pane.rect;
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
     const other = pane.tabs.find((t) => t !== id);
     if (other === undefined) {
-      out.push({ rect: at(cx, cy), target: { kind: "back" }, glyph: "↩" });
+      out.push({ rect: at(cx, cy), target: { kind: "back" }, glyph: "↩", pane: r });
       continue;
     }
-    out.push(
-      { rect: at(cx, cy), target: { kind: "tab", pane: other }, glyph: "▣" },
-      { rect: at(cx - step, cy), target: { kind: "split", pane: other, side: "left" }, glyph: "◧" },
-      {
-        rect: at(cx + step, cy),
-        target: { kind: "split", pane: other, side: "right" },
-        glyph: "◨",
-      },
-      { rect: at(cx, cy - step), target: { kind: "split", pane: other, side: "top" }, glyph: "⬒" },
-      {
-        rect: at(cx, cy + step),
-        target: { kind: "split", pane: other, side: "bottom" },
-        glyph: "⬓",
-      },
-    );
+    out.push({ rect: at(cx, cy), target: { kind: "tab", pane: other }, glyph: "▣", pane: r });
+    for (const [side, dx, dy, glyph] of spots) {
+      out.push({
+        rect: at(cx + dx, cy + dy),
+        target: { kind: "split", pane: other, side },
+        glyph,
+        pane: r,
+      });
+    }
   }
   const edge = GAP + BUTTON / 2;
-  out.push(
-    { rect: at(edge, area.h / 2), target: { kind: "root", side: "left" }, glyph: "⇤" },
-    { rect: at(area.w - edge, area.h / 2), target: { kind: "root", side: "right" }, glyph: "⇥" },
-    { rect: at(area.w / 2, edge), target: { kind: "root", side: "top" }, glyph: "⤒" },
-    { rect: at(area.w / 2, area.h - edge), target: { kind: "root", side: "bottom" }, glyph: "⤓" },
-  );
+  const edges: [Side, number, number, string][] = [
+    ["left", edge, area.h / 2, "⇤"],
+    ["right", area.w - edge, area.h / 2, "⇥"],
+    ["top", area.w / 2, edge, "⤒"],
+    ["bottom", area.w / 2, area.h - edge, "⤓"],
+  ];
+  for (const [side, x, y, glyph] of edges) {
+    out.push({ rect: at(x, y), target: { kind: "root", side }, glyph, edge: side });
+  }
   return out;
+}
+
+/** How near a screen edge the pointer must be for B2 to show that edge's button. */
+const EDGE_NEAR = 96;
+
+/** B2: only the buttons near the pointer. */
+function slimCompass(buttons: CompassButton[], area: Rect, x: number, y: number): CompassButton[] {
+  const near: Record<Side, boolean> = {
+    left: x < EDGE_NEAR,
+    right: area.w - x < EDGE_NEAR,
+    top: y < EDGE_NEAR,
+    bottom: area.h - y < EDGE_NEAR,
+  };
+  return buttons.filter((b) =>
+    b.edge === undefined ? b.pane === undefined || contains(b.pane, x, y) : near[b.edge],
+  );
+}
+
+/** The buttons a variant shows with the pointer at x, y. */
+function shownCompass(
+  variant: Variant,
+  tree: LayoutNode | null,
+  panes: PaneRect[],
+  area: Rect,
+  id: string,
+  x: number,
+  y: number,
+): CompassButton[] {
+  const all = compassButtons(tree, panes, area, id);
+  return variant === "B2" ? slimCompass(all, area, x, y) : all;
 }
 
 const sameTarget = (a: Target | null, b: Target | null) => JSON.stringify(a) === JSON.stringify(b);
@@ -308,6 +348,8 @@ interface Drag {
   grabX: number;
   grabY: number;
   target: Target | null;
+  /** A2 only: the first tab of the pane whose zones are armed. */
+  armed: string | null;
 }
 
 interface Place {
@@ -323,7 +365,7 @@ const DRAG_START = 10;
 
 function readVariant(): Variant {
   const v = new URLSearchParams(globalThis.location.search).get("variant");
-  return v === "B" || v === "C" ? v : "A";
+  return VARIANTS.find((k) => k === v) ?? "A";
 }
 
 function useAreaRect(ref: { current: HTMLElement | null }): Rect {
@@ -367,16 +409,40 @@ export function DockLab() {
     return { x: e.clientX - b.left, y: e.clientY - b.top };
   };
 
-  const targetAt = (id: string, x: number, y: number): Target | null => {
+  const targetAt = (
+    id: string,
+    x: number,
+    y: number,
+    armed: string | null,
+  ): { target: Target | null; armed: string | null } => {
     const s = live.current;
     if (s.variant === "A") {
-      return zoneTarget(s.tree, s.panes, s.area, id, x, y);
+      return { target: zoneTarget(s.tree, s.panes, s.area, id, x, y), armed: null };
     }
-    if (s.variant === "B") {
-      const hit = compassButtons(s.tree, s.panes, s.area, id).find((b) => contains(b.rect, x, y));
-      return hit?.target ?? null;
+    if (s.variant === "A2") {
+      // The tab bar arms its pane. Leaving the pane disarms it.
+      const pane = s.panes.find((p) => contains(p.rect, x, y));
+      const next = pane !== undefined && pane.tabs[0] === armed ? armed : null;
+      if (pane !== undefined && y - pane.rect.y < TAB_BAR) {
+        // On the tab bar itself, the bar wins over the screen's top edge.
+        const other = pane.tabs.find((t) => t !== id);
+        return {
+          target: other === undefined ? { kind: "back" } : { kind: "tab", pane: other },
+          armed: pane.tabs[0],
+        };
+      }
+      return {
+        target: next === null ? null : zoneTarget(s.tree, s.panes, s.area, id, x, y),
+        armed: next,
+      };
     }
-    return null;
+    if (s.variant === "B" || s.variant === "B2") {
+      const hit = shownCompass(s.variant, s.tree, s.panes, s.area, id, x, y).find((b) =>
+        contains(b.rect, x, y),
+      );
+      return { target: hit?.target ?? null, armed: null };
+    }
+    return { target: null, armed: null };
   };
 
   /** Follow the pointer until it lets go. Escape cancels. */
@@ -385,8 +451,7 @@ export function DockLab() {
     let current = first;
     const onMove = (ev: PointerEvent) => {
       const p = toArea(ev);
-      const target = targetAt(current.id, p.x, p.y);
-      current = { ...current, ...p, target };
+      current = { ...current, ...p, ...targetAt(current.id, p.x, p.y, current.armed) };
       setDrag(current);
       if (current.source === "float") {
         setFloats((fs) =>
@@ -473,7 +538,15 @@ export function DockLab() {
     const original = { ...win };
     // In place mode (C) nothing is a target, so this drag only moves the window.
     follow(
-      { id: win.id, source: "float", ...p, grabX: p.x - win.x, grabY: p.y - win.y, target: null },
+      {
+        id: win.id,
+        source: "float",
+        ...p,
+        grabX: p.x - win.x,
+        grabY: p.y - win.y,
+        target: null,
+        armed: null,
+      },
       original,
     );
   };
@@ -517,7 +590,7 @@ export function DockLab() {
           ...p,
           grabX: 40,
           grabY: 18,
-          target: targetAt(id, p.x, p.y),
+          ...targetAt(id, p.x, p.y, null),
         },
         null,
       );
@@ -650,7 +723,9 @@ export function DockLab() {
 
   const hint = {
     A: "Drag a window by its title, or a tab out of its pane. Near an edge splits; the middle or the tab bar adds a tab. Escape cancels.",
+    A2: "Drag a window by its title, or a tab out of its pane. Touch a pane's tab bar to arm it; then its edges split and its middle adds a tab. Elsewhere the window just moves. Escape cancels.",
     B: "Drag a window by its title, or a tab out of its pane. Let go on a button to dock; anywhere else floats. Escape cancels.",
+    B2: "Drag a window by its title, or a tab out of its pane. The pane under your finger shows buttons; screen edges show one when you come near. Escape cancels.",
     C: "Press Dock on a floating window. Tab picks the pane, arrows pick the side, Space picks the middle, Enter places, Escape cancels.",
   }[variant];
 
@@ -788,7 +863,7 @@ export function DockLab() {
         {dragPreview === null ? null : (
           <div
             class={`pointer-events-none absolute z-30 flex items-center justify-center rounded text-sm ${
-              variant === "A"
+              variant === "A" || variant === "A2"
                 ? "border border-toolbox-accent bg-toolbox-accent/25 text-toolbox-accent"
                 : "border-2 border-dashed border-toolbox-accent text-toolbox-accent"
             }`}
@@ -803,8 +878,20 @@ export function DockLab() {
           </div>
         )}
 
-        {variant === "B" && drag !== null
-          ? compassButtons(tree, panes, area, drag.id).map((b) => {
+        {variant === "A2" && drag !== null && drag.armed !== null
+          ? panes
+              .filter((p) => p.tabs[0] === drag.armed)
+              .map((p) => (
+                <div
+                  key="armed"
+                  class="pointer-events-none absolute z-20 rounded border-2 border-toolbox-accent-cyan"
+                  style={{ left: p.rect.x, top: p.rect.y, width: p.rect.w, height: p.rect.h }}
+                />
+              ))
+          : null}
+
+        {(variant === "B" || variant === "B2") && drag !== null
+          ? shownCompass(variant, tree, panes, area, drag.id, drag.x, drag.y).map((b) => {
               const on = sameTarget(b.target, drag.target);
               return (
                 <div
