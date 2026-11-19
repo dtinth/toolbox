@@ -3,7 +3,6 @@ import { useState } from "preact/hooks";
 import "./app.css";
 import { EmbedHost, Host } from "./app.tsx";
 import { findManifestEntry } from "./app/host.ts";
-import { DockLab } from "./app/dock-lab.prototype.tsx";
 import { LayoutLab } from "./app/layout-lab.tsx";
 import { createRuntime, loadManifest, type Runtime, type ToolModule } from "./runtime/index.ts";
 
@@ -20,11 +19,6 @@ async function bootstrap() {
   // It needs no tool and no runtime, so it comes before the manifest.
   if (new URLSearchParams(globalThis.location.search).get("lab") === "layout") {
     render(<LayoutLab />, document.querySelector("#app")!);
-    return;
-  }
-  // PROTOTYPE for issue #20, at `/?lab=dock`. Goes away when #20 is resolved.
-  if (new URLSearchParams(globalThis.location.search).get("lab") === "dock") {
-    render(<DockLab />, document.querySelector("#app")!);
     return;
   }
 
