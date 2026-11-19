@@ -384,9 +384,9 @@ _Avoid_: radio, tabs, toggle group, button group, switch
 > **Dev:** "What happens if I open `/?tool=qr-code-reader`?"
 > **Domain expert:** "The runtime loads, sees the query param, and
 > launches the QR reader via `runtime.launchTool` — the QR reader
-> becomes a running tool instance. The URL is also kept in sync as tools
-> are launched and closed, so `/?tool=qr-code-reader,counter` is a
-> normal form (comma-separated manifest ids). The cmd-k palette
+> becomes a running tool instance. The param names one manifest id;
+> commas are not split. Nothing writes the URL back, so it does not
+> change as tools are launched and closed. The cmd-k palette
 > auto-opens on the home page (no `?tool=`); the embed-mode URL also
 > works in a new tab, since each palette item is an `<a href="?tool=…">`."
 >
