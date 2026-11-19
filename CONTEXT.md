@@ -95,7 +95,11 @@ in first, dormant, then launches each Tool under its saved instance id, so its
 Windows find their Slots. A Tool gone from the Manifest is dropped on restore,
 with its Slots and tabs. The `version` field has a migration hook; a stored
 Workspace with no migration to the current version loads as empty, which is
-the reset. Pop-out state is never stored. Opened at `?workspace=<id>`; the
+the reset. Pop-out state is never stored. Each **Window** has a persistence
+policy, set with `ui.window.setPersistence` (issue #28): `always` keeps its Slot
+even while dormant (the main window's default), `onlyOpen` only while drawn (a
+sub-window's default), and `never` not at all. The policy only decides what is
+saved; a running tool still keeps every dormant Slot. Opened at `?workspace=<id>`; the
 scratch bench at `/` saves nothing until "Save as workspace" gives it an id.
 _Avoid_: session, project, profile, layout
 

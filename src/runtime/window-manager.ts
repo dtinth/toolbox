@@ -158,8 +158,11 @@ export interface WindowManager {
   /** Replace the tree whole: after a divider drag, or a click on a tab. */
   setLayout: (next: LayoutNode | null) => void;
 
-  /** A copy of what the user arranged, for a Workspace to store. */
-  arrangement: () => Arrangement;
+  /**
+   * A copy of what the user arranged, for a Workspace to store. With `keep`,
+   * only the Slots it accepts, and the tree without the tabs of the rest.
+   */
+  arrangement: (keep?: (id: string, slot: Slot) => boolean) => Arrangement;
 
   /**
    * Take a saved arrangement, for a Workspace being restored.
@@ -366,12 +369,18 @@ export function createWindowManager(onChange: () => void = () => {}): WindowMana
     onChange();
   }
 
-  function arrangement(): Arrangement {
+  function arrangement(keep: (id: string, slot: Slot) => boolean = () => true): Arrangement {
     const saved: Record<string, SavedSlot> = {};
-    for (const [id, { x, y, zIndex, width, height }] of slots) {
-      saved[id] = { x, y, zIndex, width, height };
+    let tree = layout;
+    for (const [id, slot] of slots) {
+      if (keep(id, slot)) {
+        const { x, y, zIndex, width, height } = slot;
+        saved[id] = { x, y, zIndex, width, height };
+      } else if (tree !== null) {
+        tree = removeTab(tree, id);
+      }
     }
-    return { slots: saved, layout };
+    return { slots: saved, layout: tree };
   }
 
   function adopt(saved: Arrangement): void {

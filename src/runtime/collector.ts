@@ -1,6 +1,6 @@
 import { chooseFile } from "./file-intake.ts";
 import { type Dialog } from "./dialog-center.ts";
-import type { VNode } from "../../api.d.ts";
+import type { VNode, WindowPersistence } from "../../api.d.ts";
 
 export type Node =
   | { kind: "label"; text: string }
@@ -64,6 +64,7 @@ export interface WindowNode {
   menus: MenuNode[];
   width?: number;
   onClose?: () => void;
+  persistence?: WindowPersistence;
 }
 
 export interface Ui {
@@ -73,6 +74,7 @@ export interface Ui {
     setTitle: (newTitle: string) => void;
     setWidth: (width: number) => void;
     onClose: (handler: () => void) => void;
+    setPersistence: (policy: WindowPersistence) => void;
   };
   label: (text: string) => void;
   button: (label: string, opts?: { onClick?: () => void }) => void;
@@ -192,6 +194,9 @@ export const ui: Ui = {
       },
       onClose(handler: () => void) {
         currentWindow(need()).onClose = handler;
+      },
+      setPersistence(policy: WindowPersistence) {
+        currentWindow(need()).persistence = policy;
       },
     },
   ),

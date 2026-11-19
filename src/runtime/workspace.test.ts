@@ -313,3 +313,79 @@ describe("autosave", () => {
     }
   });
 });
+
+/** A tool whose sub-window draws while `open.value` is on, with this policy. */
+function policyTool(open: { value: boolean; api?: Api }, policy?: "always" | "onlyOpen" | "never") {
+  return (api: Api) => {
+    open.api = api;
+    api.onRender = () => {
+      if (open.value) {
+        api.ui.window("sub", "Sub", () => {
+          if (policy !== undefined) {
+            api.ui.window.setPersistence(policy);
+          }
+        });
+      }
+    };
+  };
+}
+
+describe("persistence policy", () => {
+  async function run(policy?: "always" | "onlyOpen" | "never") {
+    const runtime = createTestRuntime();
+    runtime.setDockingEnabled(true);
+    const open: { value: boolean; api?: Api } = { value: true };
+    runtime.launchTool({
+      instanceId: "i1",
+      manifestId: "t",
+      name: "t",
+      loader: policyTool(open, policy),
+    });
+    await settle(runtime);
+    runtime.dockWindow("i1::sub", { kind: "edge", side: "left" });
+    const whileOpen = snapshot(runtime);
+    open.value = false;
+    open.api?.requestUpdate();
+    await settle(runtime);
+    return { whileOpen, whileClosed: snapshot(runtime) };
+  }
+
+  it("remembers a sub-window only while it is open, by default", async () => {
+    const { whileOpen, whileClosed } = await run();
+    expect(Object.keys(whileOpen.slots)).toContain("i1::sub");
+    expect(Object.keys(whileClosed.slots)).toStrictEqual(["i1::__main__"]);
+    expect(whileClosed.layout).toBeNull();
+  });
+
+  it("remembers an `always` sub-window while it is closed too", async () => {
+    const { whileClosed } = await run("always");
+    expect(Object.keys(whileClosed.slots)).toContain("i1::sub");
+    expect(whileClosed.layout).toStrictEqual(leaf(["i1::sub"]));
+  });
+
+  it("never remembers a `never` window, open or not", async () => {
+    const { whileOpen, whileClosed } = await run("never");
+    expect(Object.keys(whileOpen.slots)).toStrictEqual(["i1::__main__"]);
+    expect(whileOpen.layout).toBeNull();
+    expect(Object.keys(whileClosed.slots)).toStrictEqual(["i1::__main__"]);
+  });
+
+  it("keeps a restored Slot while its tool is still loading", async () => {
+    const runtime = createTestRuntime();
+    runtime.adoptArrangement(
+      workspace({ slots: { "i1::__main__": slot, "i1::sub": slot }, layout: leaf(["i1::sub"]) }),
+    );
+    runtime.launchTool({ instanceId: "i1", manifestId: "counter", name: "Counter" });
+    await settle(runtime);
+    expect(Object.keys(snapshot(runtime).slots)).toContain("i1::sub");
+    expect(snapshot(runtime).layout).toStrictEqual(leaf(["i1::sub"]));
+  });
+
+  it("lets go of a restored sub-window its loaded tool does not draw", async () => {
+    const runtime = createTestRuntime();
+    runtime.adoptArrangement(workspace({ slots: { "i1::__main__": slot, "i1::sub": slot } }));
+    launcher(runtime)({ instanceId: "i1", manifestId: "counter" });
+    await settle(runtime);
+    expect(Object.keys(snapshot(runtime).slots)).toStrictEqual(["i1::__main__"]);
+  });
+});

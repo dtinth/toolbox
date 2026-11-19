@@ -111,6 +111,14 @@ export interface Preact {
 }
 
 /**
+ * How a saved Workspace treats a window's place:
+ * - `"always"`: remember it, even while the tool is not drawing the window.
+ * - `"onlyOpen"`: remember it only while the window is drawn.
+ * - `"never"`: never remember it. The window starts fresh on every load.
+ */
+export type WindowPersistence = "always" | "onlyOpen" | "never";
+
+/**
  * The IMGUI primitive surface. Calls are collected by the runtime during the
  * tool's declarator and turned into a vDOM tree. The current window is the one
  * whose `window(...)` callback is on the call stack (the implicit main window
@@ -133,6 +141,13 @@ export interface Ui {
     setWidth: (width: number) => void;
     /** Set the current window's close handler. */
     onClose: (handler: () => void) => void;
+    /**
+     * Say whether a saved Workspace remembers where the current window sits.
+     * The default is `"always"` for the main window and `"onlyOpen"` for a
+     * sub-window. Use `"never"` for a window that is only passing through, like
+     * a preview or a scratch panel.
+     */
+    setPersistence: (policy: WindowPersistence) => void;
   };
   label: (text: string) => void;
   button: (label: string, opts?: { onClick?: () => void }) => void;

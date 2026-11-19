@@ -67,6 +67,16 @@ describe("collector", () => {
     expect(result[0].width).toBeUndefined();
   });
 
+  it("records a window's persistence policy only when it sets one", () => {
+    const result = collect((ui) => {
+      ui.window("sub", () => {
+        ui.window.setPersistence("never");
+      });
+    });
+    expect(result[1].persistence).toBe("never");
+    expect(result[0].persistence).toBeUndefined();
+  });
+
   it("creates a sub-window with id as default title", () => {
     const result = collect((ui) => {
       ui.window("sub", () => {

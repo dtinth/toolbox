@@ -18,7 +18,12 @@ describe("loadTool", () => {
     const api: Api = {
       onRender: () => {},
       ui: {
-        window: Object.assign(() => {}, { setTitle() {}, setWidth() {}, onClose() {} }),
+        window: Object.assign(() => {}, {
+          setTitle() {},
+          setWidth() {},
+          onClose() {},
+          setPersistence() {},
+        }),
         label() {},
         button() {},
         row() {},

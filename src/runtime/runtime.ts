@@ -8,7 +8,7 @@ import {
   type DockTarget,
   type LayoutNode,
 } from "./dock-controller.ts";
-import type { Preact } from "../../api.d.ts";
+import type { Preact, WindowPersistence } from "../../api.d.ts";
 import { type VNode } from "preact";
 import {
   createWindowManager,
@@ -142,7 +142,10 @@ export interface Runtime {
   dockDragEnd: (commit: boolean) => DockTarget | null;
   /** Be told when the drag changes. Kept apart from `subscribe`, which redraws every tool. */
   subscribeDockDrag: (onChange: () => void) => () => void;
-  /** A copy of every Slot and the Layout tree, for a Workspace to store. */
+  /**
+   * A copy of the Slots and the Layout tree, for a Workspace to store. Only the
+   * Slots each window's persistence policy lets through (issue #28).
+   */
   arrangement: () => Arrangement;
   /**
    * Take a saved arrangement before its tools launch. Each Slot waits, dormant,
@@ -252,12 +255,37 @@ function build(): TestRuntime {
   });
   let dockingEnabled = false;
   /** What each Window drew last: its title, and how to close it. */
-  const windowInfo = new Map<string, { title: string; onClose?: () => void }>();
+  const windowInfo = new Map<
+    string,
+    { title: string; onClose?: () => void; persistence?: WindowPersistence }
+  >();
 
   function remember(windows: WindowNode[]): void {
     for (const w of windows) {
-      windowInfo.set(w.id, { title: w.title || w.id, onClose: w.onClose });
+      windowInfo.set(w.id, {
+        title: w.title || w.id,
+        onClose: w.onClose,
+        persistence: w.persistence,
+      });
     }
+  }
+
+  /**
+   * Whether a saved Workspace keeps this Slot (issue #28). A window keeps the
+   * policy it last drew with, so a dormant one is still judged by its own word.
+   */
+  function persists(id: string, slot: Slot): boolean {
+    const info = windowInfo.get(id);
+    if (info === undefined) {
+      // Never drawn on this page. While its tool is still loading, or not
+      // launched yet, this is a restored Slot waiting for its window: keep it.
+      const instanceId = id.slice(0, id.indexOf("::"));
+      if (instances.get(instanceId)?.state !== "ready") {
+        return true;
+      }
+    }
+    const policy = info?.persistence ?? (id.endsWith("::__main__") ? "always" : "onlyOpen");
+    return policy === "always" || (policy === "onlyOpen" && slot.present);
   }
 
   const toastCenter = createToastCenter({
@@ -650,7 +678,7 @@ function build(): TestRuntime {
     dockDragMove: docking.move,
     dockDragEnd: docking.end,
     subscribeDockDrag: docking.subscribe,
-    arrangement: () => wm.arrangement(),
+    arrangement: () => wm.arrangement(persists),
     adoptArrangement: (saved) => {
       wm.adopt(saved);
       requestUpdate();
